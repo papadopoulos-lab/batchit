@@ -1,3 +1,18 @@
+# batchit 26.7.19
+
+`runner_package` is now a **required** envelope field, with no consumer fallback.
+Previously the worker validated `meta$runner_package` only when present and, when
+absent, fell back to the consumer package for `.batch_execute` — so a malformed
+envelope could make the *consumer* namespace supply the runner's executor, the
+exact runner/consumer confusion the extraction seam exists to prevent. The shared
+`.batch_check_envelope()` also omitted `runner_package`, so the two transports
+accepted an incomplete schema. Now: the worker's pre-load structural check treats
+`runner_package` like `package`/`hash`/`id` (a non-empty string or die before any
+code loads), the worker resolves `.batch_execute` from the runner namespace
+unconditionally, and `.batch_check_envelope()` requires `runner_package` too.
+Regression tests cover both the checker and a real worker invocation on an
+envelope missing the field.
+
 # batchit 26.7.18
 
 Initial release. `batchit` is the one subprocess dispatcher extracted from
@@ -37,9 +52,10 @@ consumer were the same package):
 - `meta$runner_package` carries the runner name across the boundary.
 
 Every security property from swereg is preserved: exact `[[` field extraction, a
-pre-load structural check of the load-deciding fields (now including
-`runner_package`), source-tree-vs-installed `dev_path` discrimination, child-side
-hash re-verification, a total `.batch_execute`, and a total result inspector.
+pre-load structural check of the load-deciding fields (including a required,
+non-empty `runner_package` as of 26.7.19), source-tree-vs-installed `dev_path`
+discrimination, child-side hash re-verification, a total `.batch_execute`, and a
+total result inspector.
 
 `test-batch_seam.R` is new and has no swereg ancestor: it builds and installs a
 throwaway consumer package and dispatches through the real worker and a real

@@ -266,7 +266,11 @@ batch_target <- function(package, symbol, version = NULL) {
   if (anyDuplicated(names(meta))) {
     stop(".batch envelope meta has duplicate field names", call. = FALSE)
   }
-  for (f in c("package", "symbol", "hash", "id")) {
+  # runner_package is a load-deciding field (it names the namespace that supplies
+  # .batch_execute), so it is required and non-empty like the rest -- both
+  # transports must accept the SAME complete schema, or one could pass an envelope
+  # the other's worker rejects.
+  for (f in c("package", "symbol", "hash", "id", "runner_package")) {
     v <- meta[[f]]
     if (!is.character(v) || length(v) != 1L || is.na(v) || !nzchar(v)) {
       stop(sprintf(".batch envelope meta$%s is missing or not a non-empty string", f),

@@ -246,7 +246,7 @@ test_that("a FAILING run also leaves no temp files behind", {
 
 test_that(".batch_check_envelope() rejects malformed input envelopes", {
   good <- list(protocol = 1L, meta = list(package = "batchit", symbol = "s",
-    hash = "h", id = "1", collect = TRUE), args = list())
+    hash = "h", id = "1", runner_package = "batchit", collect = TRUE), args = list())
   expect_true(batchit:::.batch_check_envelope(good))
   expect_error(batchit:::.batch_check_envelope(42), "not a list")
   expect_error(batchit:::.batch_check_envelope(within(good, protocol <- 99L)),
@@ -256,6 +256,25 @@ test_that(".batch_check_envelope() rejects malformed input envelopes", {
   expect_error(batchit:::.batch_check_envelope(bad_pkg), "package")
   bad_col <- good; bad_col$meta$collect <- "yes"
   expect_error(batchit:::.batch_check_envelope(bad_col), "collect")
+})
+
+test_that(".batch_check_envelope() REQUIRES a non-empty runner_package", {
+  # runner_package is the field that carries the runner-vs-consumer split; if the
+  # checker omits it, a malformed envelope with no runner_package passes the shared
+  # structural gate and the worker falls back to the CONSUMER namespace for
+  # .batch_execute -- exactly the runner/consumer confusion the seam must prevent.
+  good <- list(protocol = 1L, meta = list(package = "batchit", symbol = "s",
+    hash = "h", id = "1", runner_package = "batchit", collect = TRUE), args = list())
+  expect_true(batchit:::.batch_check_envelope(good))
+  # absent
+  no_rp <- good; no_rp$meta$runner_package <- NULL
+  expect_error(batchit:::.batch_check_envelope(no_rp), "runner_package")
+  # empty string
+  empty_rp <- good; empty_rp$meta$runner_package <- ""
+  expect_error(batchit:::.batch_check_envelope(empty_rp), "runner_package")
+  # NA
+  na_rp <- good; na_rp$meta$runner_package <- NA_character_
+  expect_error(batchit:::.batch_check_envelope(na_rp), "runner_package")
 })
 
 test_that(".batch_execute() is TOTAL: a malformed envelope yields an error envelope, not a throw", {
@@ -430,6 +449,40 @@ test_that("the REAL worker validates envelope structure BEFORE loading any code"
   expect_match(err, "duplicate field names")
   # proof it did NOT load first: the error is structural, not about the bad path
   expect_no_match(err, "nonexistent|load_all|devtools")
+})
+
+test_that("the REAL worker REQUIRES runner_package -- missing it dies WITHOUT running the target", {
+  # runner_package must be REQUIRED at the pre-load structural check, exactly like
+  # package/hash/id. This envelope is otherwise a perfectly valid echo dispatch
+  # (correct hash, a dev_path that loads) with ONLY meta$runner_package absent.
+  # The OLD worker fell back to the consumer package for .batch_execute and ran the
+  # target to success (exit 0, output written) -- letting a malformed envelope make
+  # the consumer namespace supply .batch_execute. The worker must now reject it
+  # BEFORE loading any code: write NOTHING, exit non-zero.
+  skip_if_not(have_tree, "package source tree not available")
+  worker <- file.path(dev_tree, "inst", "batch_worker.R")
+  rscript <- file.path(R.home("bin"), "Rscript")
+  meta <- list(package = "batchit", symbol = ".batch_fixture_echo",
+    hash = mk(".batch_fixture_echo")$hash, id = "1", collect = TRUE,
+    dev_path = dev_tree)  # NOTE: no runner_package
+  env <- list(protocol = 1L, meta = meta, args = list(x = "SHOULD-NOT-RUN"))
+  inp <- withr::local_tempfile(fileext = ".qs2")
+  outp <- withr::local_tempfile(fileext = ".qs2")
+  errf <- withr::local_tempfile(fileext = ".txt")
+  qs2::qs_save(env, inp)
+
+  p <- processx::process$new(rscript, c("--vanilla", worker, inp, outp),
+    env = c("current", R_LIBS = paste(.libPaths(), collapse = .Platform$path.sep)),
+    stdout = "|", stderr = errf)
+  p$wait(timeout = 30000)
+
+  # failure contract: writes NOTHING, exits non-zero
+  expect_false(file.exists(outp))
+  expect_false(identical(p$get_exit_status(), 0L))
+  err <- paste(readLines(errf, warn = FALSE), collapse = "\n")
+  expect_match(err, "runner_package")
+  # proof it rejected BEFORE loading: the error is structural, not about dev_path
+  expect_no_match(err, "load_all|devtools")
 })
 
 test_that("the REAL worker uses EXACT field extraction (no `$` partial-match steering loading)", {

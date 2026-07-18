@@ -37,13 +37,15 @@ output_path <- argv[2L]
     stop("batch_worker: envelope meta is not a list, or has duplicate field names")
   }
   is_str1 <- function(v) is.character(v) && length(v) == 1L && !is.na(v) && nzchar(v)
-  for (f in c("package", "symbol", "hash", "id")) {
+  # runner_package is REQUIRED, exactly like package/symbol/hash/id: it decides
+  # WHICH namespace supplies .batch_execute (the runner-vs-consumer split). Absent
+  # -- not merely ill-typed -- it must die here, before any code loads. There is no
+  # fall-back to the consumer package: a malformed envelope must never be able to
+  # make the consumer namespace supply .batch_execute.
+  for (f in c("package", "symbol", "hash", "id", "runner_package")) {
     if (!is_str1(meta[[f]])) {
       stop(sprintf("batch_worker: meta$%s missing or not a non-empty string", f))
     }
-  }
-  if (!is.null(meta[["runner_package"]]) && !is_str1(meta[["runner_package"]])) {
-    stop("batch_worker: meta$runner_package is not a non-empty string")
   }
   if (!is.null(meta[["dev_path"]]) && !is_str1(meta[["dev_path"]])) {
     stop("batch_worker: meta$dev_path is not a valid path string")
@@ -56,7 +58,7 @@ env <- qs2::qs_read(input_path)
 meta <- env[["meta"]]
 dev_path <- meta[["dev_path"]]
 package <- meta[["package"]]
-runner <- if (!is.null(meta[["runner_package"]])) meta[["runner_package"]] else package
+runner <- meta[["runner_package"]]  # REQUIRED (checked above); no consumer fallback
 
 suppressPackageStartupMessages({
   if (!is.null(dev_path)) {
