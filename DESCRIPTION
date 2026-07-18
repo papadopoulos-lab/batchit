@@ -1,0 +1,33 @@
+Package: batchit
+Title: One Subprocess Dispatcher with a Both-Ends-Validated Contract
+Version: 26.7.18
+Authors@R: person(c("Richard","Aubrey"), "White", email = "hello@rwhite.no", role = c("aut", "cre"),
+    comment = c(ORCID = "0000-0002-6747-1726"))
+Description: A generic parent/child dispatch contract for running one R function
+    across many subprocesses. A target is a descriptor -- package plus symbol
+    plus a body/formals identity hash -- never a closure, so the child can refuse
+    code that differs from what the parent dispatched. Work items are validated
+    at both ends against the target's formals, and every result comes back in a
+    structured envelope (protocol, id, status, value-or-error, target identity,
+    captured warnings). Two transports share the one contract: a fresh process
+    per item via 'processx' for memory-bound work where process exit is the
+    memory strategy, and a lazy producer with bounded backpressure via 'mirai'
+    daemons for work whose items are generated on demand.
+Depends: R (>= 4.1.0)
+License: MIT + file LICENSE
+URL: https://github.com/papadopoulos-lab/batchit
+BugReports: https://github.com/papadopoulos-lab/batchit/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Imports:
+    digest,
+    processx,
+    qs2,
+    utils
+Suggests:
+    devtools,
+    mirai (>= 2.3.0),
+    testthat (>= 3.0.0),
+    withr
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0
