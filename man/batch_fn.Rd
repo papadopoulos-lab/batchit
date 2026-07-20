@@ -75,7 +75,7 @@ own formals + \verb{pkg::}-qualified calls must be passed as an item argument.
 Because an adhoc closure carries no package/symbol/hash identity, a result
 is instead bound to the dispatch that produced it via the item id (already
 checked) PLUS a fresh, high-entropy per-item nonce issued here and echoed
-back by the child -- see \code{\link[=.batch_inspect_result]{.batch_inspect_result()}}'s \code{expected_nonce}.
+back by the child -- see \code{.batch_inspect_result()}'s \code{expected_nonce}.
 
 Production/auditable stages should prefer \code{\link[=batch_run]{batch_run()}} with a
 \code{\link[=batch_target]{batch_target()}} descriptor (hash-verified, resolvable by package+symbol,

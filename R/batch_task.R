@@ -1,4 +1,4 @@
-# Declared-output commit engine (batch_task()) -- Phase 6' Units 1-2. Package
+# Declared-output commit engine (batch_task()) -- Phase 6' Units 1-4. Package
 # targets, both commit styles: `return` (Unit 1, the target returns a named
 # list) and `staged_writer` (Unit 2, the target streams each output to
 # `batch_stage_path(<name>)` instead); see PHASE6_DESIGN.md sections 2-4, 9.1,
@@ -17,14 +17,26 @@
 # itself mean "this attempt committed" -- only a marker that decodes and
 # verifies does.
 #
+# Unit 4 (design PHASE6_DESIGN.md sections 7, 9.2, 9.3): the OPT-IN
+# consumer-skip mechanism -- `batch_record()`/`batch_prior()`/`batch_skip()`,
+# backed by a scoped accessor (`.batch_record_env`) entered/exited tightly
+# around `do.call()` in `.batch_execute()`, exactly like `.batch_stage_env`.
+# batchit itself never decides to skip; it only reads the marker to hand a
+# consumer its own prior `details` (step 0, `.batch_read_prior_marker()`,
+# CHILD-side, before `do.call()`), and honours an explicit `batch_skip()`
+# sentinel the target RETURNS (`.batch_commit_task_skip()`, CHILD-side, after
+# `do.call()`). Neither is ever called from `batch_task()`'s own (parent) body.
+#
 # Doctrine (PHASE6_DESIGN.md section 0, normative): no batchit LAUNCH decision
 # may depend on marker existence or contents. The parent-side functions in this
 # file therefore validate only the marker's PATHNAME and its parent directory
 # -- they never call file.exists()/file.info()/Sys.readlink() (or read it) on
 # the marker path itself. Reading/removing/replacing the marker is exclusively
-# the CHILD's job, inside `.batch_commit_task()`, as part of COMMITTING (never
-# as part of deciding whether to dispatch). `.batch_commit_task()` is therefore
-# the one function below explicitly exempt from that rule.
+# the CHILD's job, inside `.batch_commit_task()`/`.batch_read_prior_marker()`/
+# `.batch_commit_task_skip()`, as part of COMMITTING or handing a consumer its
+# own prior `details` (never as part of deciding whether to dispatch) -- those
+# three functions are therefore the ones below explicitly exempt from that
+# rule.
 
 # --- outputs spec: alignment, structural validation, path validation --------
 
@@ -410,6 +422,252 @@ batch_stage_path <- function(name) {
   paths[[name]]
 }
 
+# --- batch_record()/batch_prior()/batch_skip() scoped accessor --------------
+# (design PHASE6_DESIGN.md sections 7, 9.2, 9.3)
+
+# One package-level environment holding the CURRENT batch_task() item's
+# opt-in consumer-skip state: whether the accessor is answerable at all
+# (`active`), the PRIOR marker's own record captured at step 0 (`prior`, or
+# `NULL`) -- batch_prior() reads `prior$details` from this -- and whatever
+# the target itself has passed to batch_record() so far (`details`, last
+# call wins). Entered/exited TIGHTLY around do.call() in .batch_execute(),
+# mirroring `.batch_stage_env` exactly (see its own comment for why a
+# private environment, not options(), and why one shared slot is safe: only
+# one item ever runs at a time inside one worker subprocess).
+.batch_record_env <- new.env(parent = emptyenv())
+.batch_record_env$active <- FALSE
+.batch_record_env$prior <- NULL
+.batch_record_env$details <- NULL
+
+#' Enter batch_record()/batch_prior() scope for one item's `do.call()`
+#'
+#' Returns the PRIOR `{active, prior, details}` so the caller can restore it
+#' on exit (save/restore, exactly like [.batch_stage_scope_enter()]).
+#' @param prior This item's step-0 `prior` record (design section 9.2), or
+#'   `NULL`.
+#' @noRd
+.batch_record_scope_enter <- function(prior) {
+  saved <- list(active = .batch_record_env$active, prior = .batch_record_env$prior,
+    details = .batch_record_env$details)
+  .batch_record_env$active <- TRUE
+  .batch_record_env$prior <- prior
+  .batch_record_env$details <- NULL
+  invisible(saved)
+}
+
+#' Exit batch_record()/batch_prior() scope, restoring the PRIOR state
+#' @param saved The `{active, prior, details}` [.batch_record_scope_enter()] returned.
+#' @noRd
+.batch_record_scope_exit <- function(saved = list(active = FALSE, prior = NULL, details = NULL)) {
+  .batch_record_env$active <- saved$active
+  .batch_record_env$prior <- saved$prior
+  .batch_record_env$details <- saved$details
+  invisible(NULL)
+}
+
+#' Attach an opaque `details` value to THIS item's new marker
+#'
+#' Callable ONLY from inside the target of a `batch_task()` item (i.e. only
+#' in a batchit worker subprocess, while that one target call is running,
+#' between the `.batch_record_scope_enter()`/`_exit()` pair tightly wrapping
+#' `do.call()` in `.batch_execute()`) -- the opt-in half of the consumer-skip
+#' mechanism (design PHASE6_DESIGN.md section 7): the target may call this
+#' any number of times during its own run; the LAST call wins (design
+#' section 9.3). `details` is entirely opaque to batchit -- never inspected,
+#' compared, or interpreted (design section 0) -- it travels straight into
+#' the item's committed marker (`.batch_commit_task()`'s `details` field) and
+#' is handed back verbatim to a LATER run of the SAME item via
+#' [batch_prior()]. It must be something [qs2::qs_save()] can serialize; an
+#' unserializable (or otherwise invalid) value fails the target's own commit
+#' at the marker-temp-write step (design section 9.3) -- BEFORE the old
+#' marker is removed, so a failing `batch_record()` payload can never destroy
+#' a previously valid commit.
+#'
+#' Calling this outside an active `batch_task()` target run -- including
+#' during a return-value dispatch ([batch_run()]/[batch_stream()]/
+#' [batch_fn()]), which has no marker/skip machinery at all -- is an error.
+#'
+#' @param details Any value [qs2::qs_save()] can serialize.
+#' @return `invisible(NULL)`.
+#' @examples
+#' \dontrun{
+#' # inside a batch_task() target:
+#' my_target <- function(x) {
+#'   batch_record(list(computed_from = x))
+#'   list(primary = x)
+#' }
+#' }
+#' @export
+batch_record <- function(details) {
+  if (!isTRUE(.batch_record_env$active)) {
+    stop(paste0(
+      "batch_record(): no batch_task() target run is active -- only callable ",
+      "from inside the target of a batch_task() item"), call. = FALSE)
+  }
+  .batch_record_env$details <- details
+  invisible(NULL)
+}
+
+#' Return the PRIOR run's `batch_record()` details for THIS item
+#'
+#' Callable ONLY from inside the target of a `batch_task()` item, exactly
+#' like [batch_record()]. Returns the `details` value THIS SAME item's PRIOR
+#' successful commit passed to `batch_record()`, captured at STEP 0 -- before
+#' `do.call()` even started (design PHASE6_DESIGN.md section 9.2) -- from the
+#' final marker at this item's derived marker path, but ONLY if that marker
+#' decodes AND its protocol, attempt token, and committed output map all
+#' verify against THIS item's own declared outputs; a malformed, foreign,
+#' absent, or symlinked marker, or one belonging to a differently-shaped
+#' item, all make this return `NULL`, exactly like there being no prior at
+#' all. A VALID prior marker whose `details` is itself `NULL`/absent ALSO
+#' makes this return `NULL` -- i.e. a target that never called
+#' `batch_record()` on its prior run disables skip for the next one, since
+#' there is nothing for the target to decide currency from.
+#'
+#' The target is expected to inspect this value and decide for itself
+#' whether the prior outputs are still current; if so, it should RETURN
+#' [batch_skip()] instead of recomputing. batchit ascribes NO meaning to
+#' `details` and never makes this decision itself (design section 0).
+#'
+#' @return The prior `details` value, or `NULL`.
+#' @examples
+#' \dontrun{
+#' my_target <- function(x) {
+#'   prior <- batch_prior()
+#'   if (!is.null(prior) && identical(prior$computed_from, x)) {
+#'     return(batch_skip())
+#'   }
+#'   batch_record(list(computed_from = x))
+#'   list(primary = x)
+#' }
+#' }
+#' @export
+batch_prior <- function() {
+  if (!isTRUE(.batch_record_env$active)) {
+    stop(paste0(
+      "batch_prior(): no batch_task() target run is active -- only callable ",
+      "from inside the target of a batch_task() item"), call. = FALSE)
+  }
+  prior <- .batch_record_env$prior
+  if (is.null(prior)) return(NULL)
+  prior[["details"]]
+}
+
+#' Sentinel: tell batchit the prior committed outputs are current
+#'
+#' RETURN this from a `batch_task()` target (do not call it merely for a
+#' side effect) to mean "do not recompute -- the outputs a prior run of this
+#' item already committed are still current; reuse them" (design
+#' PHASE6_DESIGN.md sections 7, 9.2). Reachable only when [batch_prior()]
+#' returned non-`NULL` for this item; batchit then RE-VERIFIES the prior
+#' marker and RE-STATS every declared output before honouring the request
+#' (design section 9.2 point 4) -- a target that returns this without a
+#' valid prior, or whose prior/outputs no longer verify at that moment,
+#' fails loud with the marker left completely untouched. Like
+#' [batch_record()]/[batch_prior()], only callable from inside the target of
+#' an active `batch_task()` item.
+#'
+#' @return A sentinel object (class `"batch_skip"`); RETURN it, do not act on
+#'   it yourself.
+#' @examples
+#' \dontrun{
+#' my_target <- function(x) {
+#'   if (!is.null(batch_prior())) return(batch_skip())
+#'   list(primary = x)
+#' }
+#' }
+#' @export
+batch_skip <- function() {
+  if (!isTRUE(.batch_record_env$active)) {
+    stop(paste0(
+      "batch_skip(): no batch_task() target run is active -- only callable ",
+      "from inside the target of a batch_task() item"), call. = FALSE)
+  }
+  structure(list(), class = "batch_skip")
+}
+
+#' Is `x` the [batch_skip()] sentinel a target returned?
+#' @noRd
+.batch_is_skip <- function(x) inherits(x, "batch_skip")
+
+# --- step-0 prior-marker read + skip-time re-verify --------------------------
+# (design PHASE6_DESIGN.md sections 9.2, 9.3 -- CHILD-side; exempt from the
+# file-banner doctrine rule for the same reason `.batch_commit_task()` is.)
+
+#' Is `record` a well-formed batchit marker record for THIS item's `outputs`?
+#'
+#' Structural verification only (mirrors the read-back check
+#' `.batch_commit_task()`'s own step 7 performs on a marker it JUST wrote,
+#' generalised to a marker written by some EARLIER commit): exactly the
+#' fields `.batch_commit_task()` writes (`protocol`, `attempt`, `committed`,
+#' `details` -- no more, no fewer), the CURRENT protocol number, a
+#' non-empty attempt-token string, and a committed output map that is
+#' EXACTLY `outputs` (names AND paths) -- not merely non-empty or
+#' overlapping. Total: every comparison here is on plain base types
+#' (`identical()`, which never dispatches), so a hostile `record` cannot
+#' make this throw; the caller still wraps its OWN read of the marker in a
+#' `tryCatch`, since decoding an arbitrary file can fail before this
+#' function is ever reached.
+#' @noRd
+.batch_valid_marker_record <- function(record, outputs) {
+  if (!is.list(record)) return(FALSE)
+  nm <- names(record)
+  if (is.null(nm) || any(!nzchar(nm)) || anyDuplicated(nm)) return(FALSE)
+  if (!identical(sort(nm), sort(c("protocol", "attempt", "committed", "details")))) {
+    return(FALSE)
+  }
+  if (!identical(record[["protocol"]], .BATCH_PROTOCOL)) return(FALSE)
+  attempt <- record[["attempt"]]
+  if (!is.character(attempt) || length(attempt) != 1L || is.na(attempt) || !nzchar(attempt)) {
+    return(FALSE)
+  }
+  committed <- record[["committed"]]
+  if (!is.character(committed) || is.null(names(committed)) ||
+      anyDuplicated(names(committed)) ||
+      !identical(sort(names(committed)), sort(names(outputs))) ||
+      !identical(committed[order(names(committed))], outputs[order(names(outputs))])) {
+    return(FALSE)
+  }
+  TRUE
+}
+
+#' Read + verify the PRIOR marker at step 0, BEFORE `do.call()` runs the target
+#'
+#' Reads the marker EXACTLY ONCE (design PHASE6_DESIGN.md section 9.2 point
+#' 1), before the target ever runs, and accepts it as a usable `prior` only
+#' if it decodes to a well-formed batchit marker record AND that record's
+#' protocol/attempt-token/committed-output-map verify against THIS item's
+#' own declared `outputs` -- i.e. it really is a marker some prior attempt
+#' of THIS SAME item produced for these exact output paths, not a
+#' foreign/malformed/stale file that happens to sit at the derived marker
+#' path. An absent, unreadable, malformed, foreign, directory, or
+#' (defensively) SYMLINKED marker all resolve to `prior = NULL` -- never an
+#' error, and never a partial/best-effort acceptance.
+#'
+#' Sanctioned by design section 0 ("...or to hand a consumer its own prior
+#' `details`") -- this is a CHILD-side read, never a launch decision (the
+#' item has already been unconditionally dispatched by the time this runs);
+#' the marker itself is left completely untouched.
+#' @param marker_path This item's derived (or explicit) marker path.
+#' @param outputs This item's declared output map (already both-ends
+#'   validated and normalized).
+#' @return The decoded marker record (a list), or `NULL`.
+#' @noRd
+.batch_read_prior_marker <- function(marker_path, outputs) {
+  tryCatch(
+    {
+      if (!file.exists(marker_path) || dir.exists(marker_path) ||
+          .batch_is_symlink(marker_path)) {
+        return(NULL)
+      }
+      record <- qs2::qs_read(marker_path)
+      if (!.batch_valid_marker_record(record, outputs)) return(NULL)
+      record
+    },
+    error = function(e) NULL
+  )
+}
+
 #' Child-side declared-output commit (design PHASE6_DESIGN.md section 3.3)
 #'
 #' `fn_kind = "package"`; either commit style. Runs the 7-step sequence: (1)
@@ -459,14 +717,23 @@ batch_stage_path <- function(name) {
 #' @param marker_path Final marker path (already parent-validated and
 #'   normalized).
 #' @param attempt This dispatch's attempt token (parent-issued).
-#' @param details Reserved (design section 7); always `NULL` in Units 1-2.
+#' @param details The opaque consumer `details` value (design PHASE6_DESIGN.md
+#'   section 7) captured from the target's LAST `batch_record()` call during
+#'   `do.call()` (`.batch_execute()` reads it from `.batch_record_env` right
+#'   after `do.call()` returns), or `NULL` if the target never called
+#'   `batch_record()`. Written into the marker verbatim; batchit never
+#'   inspects or interprets it. An unserializable value fails at step 2
+#'   (the marker-temp write) -- BEFORE step 4 removes the old marker.
 #' @param style `"return"` or `"staged_writer"`.
 #' @param stage_map For `style = "staged_writer"` only: the SAME declared
 #'   name -> staging-temp-path map [.batch_stage_paths_for()] computed, and
 #'   [.batch_stage_scope_enter()]'d, BEFORE `do.call()` ran the target (so
 #'   `batch_stage_path()` and this function agree on the exact paths).
 #'   Ignored for `style = "return"`.
-#' @return `list(committed = outputs, attempt = attempt)` -- the commit record.
+#' @return `list(committed = outputs, attempt = attempt, skipped = FALSE)` --
+#'   the commit record. `skipped` is always `FALSE` here (a real commit just
+#'   happened); see [.batch_commit_task_skip()] for the `skipped = TRUE`
+#'   sibling.
 #' @noRd
 .batch_commit_task <- function(value, outputs, marker_path, attempt, details = NULL,
                                  style = "return", stage_map = NULL) {
@@ -574,7 +841,83 @@ batch_stage_path <- function(name) {
   }
 
   ok <- TRUE
-  list(committed = outputs, attempt = attempt)
+  list(committed = outputs, attempt = attempt, skipped = FALSE)
+}
+
+#' Child-side skip-and-reuse (design PHASE6_DESIGN.md sections 7, 9.2, 9.3)
+#'
+#' Reached only when the target RETURNED [batch_skip()] -- `.batch_execute()`
+#' calls this INSTEAD OF `.batch_commit_task()` on that path, never both.
+#' `prior` is the step-0 record (already decoded and verified against this
+#' item's own `outputs`, design section 9.2 point 2); a `NULL` prior is
+#' rejected here (the target should not have been able to return
+#' `batch_skip()` at all in that case -- `batch_prior()` would have returned
+#' `NULL` -- but this is re-checked rather than trusted, per the "no
+#' step-0-snapshot is trusted at skip time" rule below).
+#'
+#' RE-READS and RE-VERIFIES the marker at THIS moment (the step-0 read was a
+#' SNAPSHOT taken before `do.call()`; nothing during the target's run could
+#' have changed it under batchit's own single-exclusive-writer contract, but
+#' this function does not rely on that assumption -- it re-derives the
+#' witness fresh) and RE-STATS every declared output as a regular,
+#' non-symlink, EXISTING file -- the marker vouches they were fully
+#' committed once; only a fresh stat proves they still are (design section
+#' 9.2 point 4: "any mismatch/missing -> fail loud, marker untouched").
+#'
+#' On success: NOTHING is removed, renamed, or written -- no new marker, no
+#' temp files, no output replacement -- this is a pure verify-and-reuse. The
+#' emitted commit record echoes the RE-VERIFIED marker's OWN attempt token
+#' (not a fresh one -- nothing new was committed) and `skipped = TRUE`, so
+#' the parent inspector (`.batch_inspect_result()`) can tell a skip apart
+#' from a real commit and skip the "attempt must equal the token I just
+#' dispatched" check that only makes sense for a fresh commit.
+#' @param prior This item's step-0 `prior` record, or `NULL`.
+#' @param outputs Named character vector: declared output name -> final path
+#'   (already parent-validated and normalized) -- the SAME map passed to
+#'   `.batch_commit_task()`.
+#' @param marker_path Final marker path (already parent-validated and
+#'   normalized).
+#' @return `list(committed = outputs, attempt = <the prior marker's own
+#'   token>, skipped = TRUE)`.
+#' @noRd
+.batch_commit_task_skip <- function(prior, outputs, marker_path, attempt) {
+  if (is.null(prior)) {
+    stop(paste0(
+      "batch_skip(): the target returned batch_skip() but there is no valid ",
+      "prior commit to reuse for this item (batch_prior() would have ",
+      "returned NULL) -- refusing to skip; the marker is left untouched: ",
+      marker_path), call. = FALSE)
+  }
+  # Re-derive the witness fresh -- do NOT trust the step-0 snapshot as still
+  # current (design section 9.2 point 4: "RE-READ + match the marker token &
+  # output map").
+  record <- if (file.exists(marker_path) && !dir.exists(marker_path) &&
+      !.batch_is_symlink(marker_path)) {
+    tryCatch(qs2::qs_read(marker_path), error = function(e) NULL)
+  } else {
+    NULL
+  }
+  if (is.null(record) || !.batch_valid_marker_record(record, outputs) ||
+      !identical(record[["attempt"]], prior[["attempt"]])) {
+    stop(paste0(
+      "batch_skip(): the prior marker changed, or no longer verifies, ",
+      "between step 0 and the skip decision -- refusing to reuse it; the ",
+      "marker is left untouched: ", marker_path), call. = FALSE)
+  }
+  for (nm in names(outputs)) {
+    p <- outputs[[nm]]
+    if (!file.exists(p) || dir.exists(p) || .batch_is_symlink(p)) {
+      stop(sprintf(paste0(
+        "batch_skip(): declared output '%s' no longer exists as a regular, ",
+        "non-symlink file -- refusing to reuse the prior commit; the marker ",
+        "is left untouched: %s"), nm, p), call. = FALSE)
+    }
+  }
+  # Return the CURRENT dispatch's attempt token (not the prior marker's): the
+  # parent's inspector checks it unconditionally, so a skip cannot bypass the
+  # dispatch-identity check. The prior marker's own token was verified above
+  # (record$attempt == prior$attempt) as part of re-confirming the witness.
+  list(committed = outputs, attempt = attempt, skipped = TRUE)
 }
 
 # --- frontend: batch_task() --------------------------------------------------
@@ -652,7 +995,11 @@ batch_stage_path <- function(name) {
 #'   `batch_task(target = ...)`). Pass `fn` instead; supplying both errors.
 #' @return A list, named by item id, in item order: each element is that item's
 #'   commit record, `list(committed = <named char: name -> final path>,
-#'   attempt = <token>)`. Never the target's raw return value.
+#'   attempt = <token>, skipped = <TRUE/FALSE>)`. `skipped` is `TRUE` only
+#'   when the target opted in via [batch_prior()]/[batch_skip()] (design
+#'   PHASE6_DESIGN.md section 7) and batchit reused the item's prior commit
+#'   instead of recomputing; it is `FALSE` for every ordinary commit. Never
+#'   the target's raw return value.
 #' @examples
 #' \dontrun{
 #' t <- batch_target("mypkg", "process_one_slice")

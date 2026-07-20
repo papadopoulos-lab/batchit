@@ -157,7 +157,7 @@
 #' Because an adhoc closure carries no package/symbol/hash identity, a result
 #' is instead bound to the dispatch that produced it via the item id (already
 #' checked) PLUS a fresh, high-entropy per-item nonce issued here and echoed
-#' back by the child -- see [.batch_inspect_result()]'s `expected_nonce`.
+#' back by the child -- see `.batch_inspect_result()`'s `expected_nonce`.
 #'
 #' Production/auditable stages should prefer [batch_run()] with a
 #' [batch_target()] descriptor (hash-verified, resolvable by package+symbol,

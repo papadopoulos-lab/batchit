@@ -60,7 +60,11 @@ consumer identity, so this instead names BATCHIT'S OWN source tree (see
 }
 \value{
 A list, named by item id, in item order: each element is that item's
-commit record, \verb{list(committed = <named char: name -> final path>, attempt = <token>)}. Never the target's raw return value.
+commit record, \verb{list(committed = <named char: name -> final path>, attempt = <token>, skipped = <TRUE/FALSE>)}. \code{skipped} is \code{TRUE} only
+when the target opted in via \code{\link[=batch_prior]{batch_prior()}}/\code{\link[=batch_skip]{batch_skip()}} (design
+PHASE6_DESIGN.md section 7) and batchit reused the item's prior commit
+instead of recomputing; it is \code{FALSE} for every ordinary commit. Never
+the target's raw return value.
 }
 \description{
 The declared-output sibling of \code{\link[=batch_run]{batch_run()}} (design PHASE6_DESIGN.md

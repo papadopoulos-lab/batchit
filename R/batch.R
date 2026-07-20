@@ -439,8 +439,15 @@ batch_target <- function(package, symbol, version = NULL) {
     }
     # Symmetric with the output-path re-validation: the parent derives the
     # marker from an already-normalized output dir, so a non-normalized marker
-    # like ".../sub/../.batchit__1" is a corrupted/hostile envelope.
-    if (!identical(marker, normalizePath(marker, mustWork = FALSE))) {
+    # like ".../sub/../.batchit__1" is a corrupted/hostile envelope. Normalize
+    # only the PARENT dir + reattach the untouched basename -- do NOT normalize
+    # the whole path, which would FOLLOW a leaf marker symlink and reject the
+    # envelope; a marker whose leaf is a symlink must instead reach the child's
+    # step-0 read and become prior = NULL (a normal recompute), per design
+    # section 9.2 -- .batch_read_prior_marker() makes that leaf decision.
+    norm_marker <- file.path(
+      normalizePath(dirname(marker), mustWork = FALSE), basename(marker))
+    if (!identical(marker, norm_marker)) {
       stop(sprintf(
         ".batch envelope meta$marker [item '%s'] is not already absolute/normalized",
         meta[["id"]]), call. = FALSE)
@@ -449,12 +456,17 @@ batch_target <- function(package, symbol, version = NULL) {
     if (!is.character(attempt) || length(attempt) != 1L || is.na(attempt) || !nzchar(attempt)) {
       stop(".batch envelope meta$attempt is missing or not a non-empty string", call. = FALSE)
     }
-    # details is reserved (design PHASE6_DESIGN.md section 7); Unit 1 never
-    # sets it, so a non-NULL value here can only be a corrupted/hostile
+    # details NEVER travels on the wire, even after Unit 4 (design
+    # PHASE6_DESIGN.md section 7): the parent never sets it -- the real
+    # `details` value is produced CHILD-side, by the target calling
+    # batch_record() during do.call() (see .batch_execute()), and flows
+    # straight into .batch_commit_task()'s marker write, never through this
+    # envelope. So a non-NULL value here can only be a corrupted/hostile
     # envelope.
     if (!is.null(meta[["details"]])) {
-      stop(paste0(".batch envelope: meta$details must be NULL (Unit 1 does not implement ",
-        "the opt-in consumer-skip details value)"), call. = FALSE)
+      stop(paste0(".batch envelope: meta$details must be NULL (details is produced ",
+        "CHILD-side via batch_record(), never carried in the dispatch envelope)"),
+        call. = FALSE)
     }
   }
 
@@ -551,9 +563,24 @@ batch_target <- function(package, symbol, version = NULL) {
       # "return"/"staged_writer" whenever outputs is present, NULL otherwise.
       outputs <- meta[["outputs"]]
       style <- meta[["style"]]
+      task_dispatch <- !is.null(outputs)
+
+      # Step 0 (design PHASE6_DESIGN.md section 9.2, normative) -- done FIRST,
+      # before ANY scope is entered, so batch_stage_path()/batch_record()/
+      # batch_prior() are answerable ONLY during do.call() and NEVER during this
+      # marker read. ONLY for a declared-output commit dispatch: read the final
+      # marker EXACTLY ONCE and accept it as `prior` only if it decodes and its
+      # protocol/attempt-token/committed-output-map verify against THIS item's
+      # own declared outputs (a malformed, foreign, absent, or symlinked marker
+      # all become `prior = NULL`). Sanctioned by design section 0 ("...or to
+      # hand a consumer its own prior details") -- NEVER a launch decision (the
+      # item was already unconditionally dispatched); the marker is left
+      # completely untouched. A return-value dispatch has no marker/skip
+      # machinery, so `prior` stays NULL and the record scope is never entered.
+      prior <- if (task_dispatch) .batch_read_prior_marker(meta[["marker"]], outputs) else NULL
 
       stage_map <- NULL
-      staged <- !is.null(outputs) && identical(style, "staged_writer")
+      staged <- task_dispatch && identical(style, "staged_writer")
       stage_prior <- NULL
       if (staged) {
         # Pre-compute EVERY declared output's staging path BEFORE do.call()
@@ -562,11 +589,20 @@ batch_target <- function(package, symbol, version = NULL) {
         # reaches .batch_commit_task(), so only an on.exit registered before
         # do.call() still fires. Safe through a successful commit too -- by then
         # every path has been renamed away, so unlink() on an absent path is a
-        # no-op. Then enter scope so batch_stage_path() can answer.
+        # no-op; it ALSO covers a batch_skip()ped target that wrote a stage
+        # first (design section 9.3: skip is a successful early exit and must
+        # remove its own current-attempt stage/temp files -- the stage is
+        # never renamed on that path, so this same unconditional unlink
+        # removes it). Then enter scope so batch_stage_path() can answer.
         stage_map <- .batch_stage_paths_for(outputs, meta[["attempt"]])
         on.exit(unlink(stage_map, force = TRUE), add = TRUE)
         stage_prior <- .batch_stage_scope_enter(stage_map)
       }
+
+      # Enter the record scope (batch_record()/batch_prior()) AFTER step 0 has
+      # captured `prior` above -- answerable only during do.call(), exited in
+      # the finally() below (like the stage scope).
+      record_prior_state <- if (task_dispatch) .batch_record_scope_enter(prior) else NULL
 
       # Capture the target's warnings into the envelope instead of letting them
       # scroll off into a log the parent deletes on success. This matters for a
@@ -574,6 +610,7 @@ batch_target <- function(package, symbol, version = NULL) {
       # partial (status "ok") result -- without this the incomplete result would
       # be stored with no word to the parent.
       warns <- character()
+      recorded_details <- NULL
       value <- tryCatch(
         withCallingHandlers(
           do.call(fn, env[["args"]]),
@@ -582,12 +619,22 @@ batch_target <- function(package, symbol, version = NULL) {
             invokeRestart("muffleWarning")
           }
         ),
-        # Exit staged scope the INSTANT the target returns or errors -- NOT
-        # during the commit below. batch_stage_path() must be answerable ONLY
-        # while the target itself runs (design section 3.4); leaving it active
+        # Exit EVERY scope the INSTANT the target returns or errors -- NOT
+        # during the commit/skip handling below. batch_stage_path()/
+        # batch_record()/batch_prior() must be answerable ONLY while the
+        # target itself runs (design sections 3.4, 9.3); leaving them active
         # through the commit would let e.g. a classed `outputs` map's `[[`
-        # method reach it after the target is done.
-        finally = if (staged) .batch_stage_scope_exit(stage_prior)
+        # method reach them after the target is done. `recorded_details` --
+        # whatever the target last passed to batch_record(), design section
+        # 9.3's "last call wins" -- is captured HERE, before the record scope
+        # is torn down; this runs on success, on the target's own error, AND
+        # when the target returned batch_skip() (all three are a "normal
+        # return" from do.call()'s point of view here).
+        finally = {
+          if (task_dispatch) recorded_details <- .batch_record_env$details
+          if (staged) .batch_stage_scope_exit(stage_prior)
+          if (task_dispatch) .batch_record_scope_exit(record_prior_state)
+        }
       )
 
       if (is.null(outputs)) {
@@ -598,14 +645,30 @@ batch_target <- function(package, symbol, version = NULL) {
           warnings = utils::head(warns, 100L),
           target = result_target
         )
+      } else if (.batch_is_skip(value)) {
+        # design sections 7, 9.2 point 4, 9.3: the target decided the PRIOR
+        # committed outputs are current. Verify + reuse -- no new marker, no
+        # rename, nothing removed; any mismatch/missing output fails loud
+        # with the marker left untouched (.batch_commit_task_skip()).
+        commit <- .batch_commit_task_skip(prior, outputs, meta[["marker"]],
+          meta[["attempt"]])
+        list(
+          status = "ok",
+          value = commit,
+          error = NULL,
+          warnings = utils::head(warns, 100L),
+          target = result_target
+        )
       } else {
         # Declared-output commit dispatch (batch_task(), design
         # PHASE6_DESIGN.md section 3.3). The raw target `value` is discarded
         # after commit (unconditionally for staged_writer, or once matched
         # against `outputs` for return) -- it never crosses back, only the
-        # small commit record does.
+        # small commit record does. `recorded_details` is whatever the
+        # target last passed to batch_record() (design section 7), or NULL
+        # if it never called it.
         commit <- .batch_commit_task(value, outputs, meta[["marker"]],
-          meta[["attempt"]], meta[["details"]], style = style, stage_map = stage_map)
+          meta[["attempt"]], recorded_details, style = style, stage_map = stage_map)
         list(
           status = "ok",
           value = commit,
@@ -659,11 +722,15 @@ batch_target <- function(package, symbol, version = NULL) {
 #' `expected_outputs`/`expected_attempt` (both `NULL` by default) are set only
 #' when inspecting a `batch_task()` (declared-output commit) result: the value
 #' field is then a commit record, not raw data, and is checked against the
-#' `outputs`/attempt token actually DISPATCHED for this item (design
-#' PHASE6_DESIGN.md section 3.5) -- names AND paths, plus the token, must match
-#' exactly, or a stale/substituted result is rejected the same way a wrong id
-#' or wrong target identity is. Existing (return-value) callers pass neither and
-#' are unaffected.
+#' `outputs` actually DISPATCHED for this item (design PHASE6_DESIGN.md
+#' section 3.5) -- names AND paths must match exactly, or a stale/substituted
+#' result is rejected the same way a wrong id or wrong target identity is. The
+#' record's `attempt` token is checked against `expected_attempt` too, UNLESS
+#' the record's own `skipped` field is `TRUE` (design sections 7, 9.2, 9.3):
+#' a skip's token is the item's PRIOR marker's own (nothing new was
+#' committed), so it is never expected to equal the token freshly issued for
+#' THIS dispatch. Existing (return-value) callers pass neither and are
+#' unaffected.
 #'
 #' `expected_nonce` (`NULL` by default) is set only when inspecting an `adhoc`
 #' (Phase 6' Unit 3) result: an adhoc envelope carries no package/symbol/hash
@@ -769,24 +836,25 @@ batch_target <- function(package, symbol, version = NULL) {
 
   # Declared-output commit result (batch_task()): the value is a small commit
   # record, never raw data. Validate it matches EXACTLY what was dispatched --
-  # names AND paths of the committed map, and the attempt token -- so a stale or
+  # names AND paths of the committed map, AND the attempt token THIS dispatch
+  # issued (checked for a fresh commit AND a skip; see below) -- so a stale or
   # substituted result can never be accepted as this item's commit.
   if (!is.null(expected_outputs)) {
     val <- envelope[["value"]]
     val_nm <- names(val)
-    # The commit record's names must be EXACTLY {"committed", "attempt"} --
-    # no missing, no blank, and critically no EXTRA field. Allowing extras
-    # would let a worker smuggle arbitrary raw data back to the parent
-    # (e.g. `list(committed = ..., attempt = ..., raw = <huge>)`), defeating
-    # the whole point of batch_task() (only a small commit record ever
-    # crosses back; see design PHASE6_DESIGN.md section 3.5).
+    # The commit record's names must be EXACTLY {"committed", "attempt",
+    # "skipped"} -- no missing, no blank, and critically no EXTRA field.
+    # Allowing extras would let a worker smuggle arbitrary raw data back to
+    # the parent (e.g. `list(committed = ..., attempt = ..., raw = <huge>)`),
+    # defeating the whole point of batch_task() (only a small commit record
+    # ever crosses back; see design PHASE6_DESIGN.md section 3.5).
     if (!is.list(val) || is.null(val_nm) || any(!nzchar(val_nm)) ||
         anyDuplicated(val_nm) ||
-        !identical(sort(val_nm), sort(c("committed", "attempt")))) {
+        !identical(sort(val_nm), sort(c("committed", "attempt", "skipped")))) {
       return(list(ok = FALSE,
         reason = paste0(
-          "commit result value must have EXACTLY the fields committed, attempt ",
-          "(no more, no fewer) -- got: ",
+          "commit result value must have EXACTLY the fields committed, attempt, ",
+          "skipped (no more, no fewer) -- got: ",
           paste(val_nm %||% "<none>", collapse = ", "))))
     }
     committed <- val[["committed"]]
@@ -798,9 +866,24 @@ batch_target <- function(package, symbol, version = NULL) {
       return(list(ok = FALSE,
         reason = "committed output map does not match the outputs dispatched for this item"))
     }
+    skipped <- val[["skipped"]]
+    if (!is.logical(skipped) || length(skipped) != 1L || is.na(skipped)) {
+      return(list(ok = FALSE,
+        reason = "commit result skipped flag is missing or not a single TRUE/FALSE"))
+    }
     attempt <- val[["attempt"]]
-    if (!is.character(attempt) || length(attempt) != 1L || is.na(attempt) ||
-        !identical(attempt, expected_attempt)) {
+    if (!is.character(attempt) || length(attempt) != 1L || is.na(attempt) || !nzchar(attempt)) {
+      return(list(ok = FALSE,
+        reason = "commit attempt token is missing or not a non-empty string"))
+    }
+    # The attempt token is ALWAYS the token THIS dispatch issued -- for a fresh
+    # commit AND for a skip. (A skip verifies the PRIOR marker's own token
+    # internally, in .batch_commit_task_skip(); the token it returns to the
+    # parent is the CURRENT dispatch's, so `skipped = TRUE` can never be a
+    # self-asserted bypass of the dispatch-identity check -- a stale, misrouted,
+    # or substituted result envelope is rejected here regardless of the skip
+    # flag, exactly as it is for a fresh commit.)
+    if (!identical(attempt, expected_attempt)) {
       return(list(ok = FALSE,
         reason = "commit attempt token does not match what was dispatched"))
     }

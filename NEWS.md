@@ -1,5 +1,59 @@
 # batchit (development)
 
+Phase 6' Unit 4 (see `PHASE6_DESIGN.md`): the OPT-IN consumer-skip
+mechanism — new exported `batch_record(details)`, `batch_prior()`, and
+`batch_skip()`, callable ONLY from inside the target of a `batch_task()`
+item. batchit itself never decides to skip anything (the section 0 doctrine
+is unchanged): it only reads a marker to hand a consumer its own prior
+`details`, and honours an explicit `batch_skip()` sentinel the target
+RETURNS.
+
+A `batch_task()` target may call `batch_record(details)` any number of times
+during its own run (LAST call wins) to attach a small, `qs2`-serializable,
+opaque `details` value to the item's new marker. A LATER run of the SAME
+item can call `batch_prior()` to read back that value — `NULL` on a first
+run, or if the marker at the derived path is absent, malformed, foreign, a
+directory, symlinked, or simply does not verify against this item's own
+declared outputs (protocol + attempt token + committed output map); a valid
+prior marker whose `details` is itself `NULL`/absent also returns `NULL`
+(disabling skip for that item, since there is nothing to judge currency
+from). The target decides for itself, from `details`, whether the prior
+commit is still current; if so it RETURNS `batch_skip()` instead of
+recomputing. batchit then re-derives the witness fresh (re-reads and
+re-verifies the marker, re-stats every declared output as a regular,
+non-symlink file) before honouring the request — never trusting the step-0
+snapshot as still current. A `batch_skip()` with no valid prior, or whose
+prior/outputs no longer verify at that moment, fails loud with the marker
+left completely untouched; a `staged_writer` target that writes a stage
+before deciding to skip has that stage cleaned by the same unconditional
+cleanup a normal commit relies on.
+
+Implementation: a new scoped accessor (`.batch_record_env`), entered/exited
+TIGHTLY around `do.call()` in `.batch_execute()` — mirroring
+`.batch_stage_env` exactly, including "answerable only while the target
+itself runs" and "restored on success, error, AND skip". The marker is read
+EXACTLY ONCE per item, before `do.call()` (step 0), and left completely
+untouched while the target runs; this read is sanctioned by the existing
+section 0 doctrine ("...or to hand a consumer its own prior details") and
+lives entirely CHILD-side (`.batch_read_prior_marker()`,
+`.batch_commit_task_skip()`) — the PARENT-side dispatch path (`batch_task()`
+itself) never references any of the new machinery, verified both by the
+existing AST-based §0 lockdown test (still 0 hits) and a new dedicated test
+asserting `batch_task()`'s own body never mentions the skip helpers by name.
+
+The commit record `batch_task()` returns per item gained a third,
+ALWAYS-present field: `list(committed, attempt, skipped)`. `skipped = FALSE`
+for an ordinary commit (unchanged behaviour otherwise); `skipped = TRUE` for
+a skip-and-reuse, in which case `attempt` is the item's PRIOR marker's own
+token (nothing new was committed, so it is never expected to equal the token
+freshly issued for this dispatch) — `.batch_inspect_result()`'s parent-side
+check is `skipped`-aware accordingly. No protocol bump: this is a
+result-envelope shape produced and consumed by the same installed version
+within one call, not a dispatch-envelope version-skew concern.
+
+Production TTE stages (s1/s2/s3) pass NO skip logic and continue to always
+recompute — this is a purely opt-in mechanism for a consumer that wants it.
+
 Phase 6' Unit 3 (see `PHASE6_DESIGN.md`): a new `fn_kind = "adhoc"` dispatch
 kind, alongside the existing `fn_kind = "package"` (a `batch_target()`
 descriptor). `adhoc` dispatches a bare closure VALUE, serialized straight into
