@@ -1,5 +1,57 @@
 # batchit (development)
 
+Phase 6' Unit 3 (see `PHASE6_DESIGN.md`): a new `fn_kind = "adhoc"` dispatch
+kind, alongside the existing `fn_kind = "package"` (a `batch_target()`
+descriptor). `adhoc` dispatches a bare closure VALUE, serialized straight into
+the envelope, instead of resolving a package+symbol. New exported frontend
+`batch_fn(fn, items, n_workers, dev_path = NULL, collect = FALSE, ...)` is the
+adhoc, return-value sibling of `batch_run()`; `batch_task(fn, ...)` now also
+accepts a bare closure (`fn` is EITHER a `batch_target()` descriptor OR a bare
+closure) — the same declared-output commit engine, both styles, and the same
+§0 marker doctrine hold for adhoc too.
+
+An adhoc closure is gated by a best-effort static self-containedness LINT
+(`codetools::findGlobals()`, new Imports dependency), applied at BOTH ends —
+the frontend at dispatch time (early UX) and `.batch_check_envelope()` again
+in the CHILD (correctness: a worker never simply trusts that an envelope
+reaching it went through a frontend's own check). The closure may reference
+only base R (functions, operators, and constants — anything bound in
+`baseenv()`), its own declared formals, and explicit `pkg::fun()`/`pkg:::fun()`
+calls; any other free variable is rejected, NAMING it. `...` in the closure's
+formals is prohibited, exactly like a package `batch_target()`; a primitive or
+non-function is rejected too. This is a best-effort static lint, not a proof —
+it does not detect `get()`/`mget()`/`assign()`/a string-argument `do.call()`,
+`eval(parse(...))`, `substitute()`, `.GlobalEnv`, a formula's/attribute's own
+environment, `<<-`, S4/R5/R6 dispatch, or other ambient state reachable without
+a syntactically visible free variable.
+
+Once accepted, the closure is UNCONDITIONALLY rebased onto `baseenv()` before
+it is ever serialized — there is no env-preservation mode. This closes the
+large/secret enclosing-environment carriage path the lint itself cannot
+detect: proven that an un-rebased closure's original environment (and
+anything bound in it) round-trips through the qs2 wire intact, while a
+`baseenv()`-rooted closure instead reconnects to the RECEIVING session's own
+`baseenv()` — so a closure that only passes the lint because it reaches its
+enclosing environment indirectly (e.g. `get("x", envir = environment())`, a
+documented blind spot) still fails at run time in the real child subprocess.
+
+Because an adhoc envelope carries no package/symbol/hash identity, a result is
+instead bound to the id (already checked) plus a fresh, high-entropy
+per-dispatch NONCE the parent issues and the child echoes back in the result's
+`target` field (`list(fn_kind = "adhoc", nonce = <nonce>)`); `.batch_inspect_
+result()` branches on `fn_kind` (via its new `expected_nonce` argument) and
+rejects a result claiming the wrong id or the wrong nonce exactly like a wrong
+package/symbol/hash is rejected for `fn_kind = "package"`.
+
+`dev_path` for `adhoc` dispatch (`batch_fn()`, or `batch_task()` with a bare
+closure) has no consumer package to validate against, so it instead names
+BATCHIT'S OWN source tree — this is what lets batchit's own adhoc test suite
+run against source without a reinstall (mirroring the existing package-kind
+"runner == consumer" self-test path); `NULL` (the default) uses the installed
+`batchit`, which is what any downstream caller wants. A closure's own
+`pkg::fun()` calls are unaffected either way, resolving via ordinary lazy
+namespace loading in the worker.
+
 Phase 6' Unit 2 (see `PHASE6_DESIGN.md`): `batch_task()` now supports `style =
 "staged_writer"` alongside `style = "return"` (Unit 1). Instead of returning a
 named list, a `staged_writer` target WRITES each declared output to

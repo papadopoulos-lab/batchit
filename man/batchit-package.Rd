@@ -6,7 +6,7 @@
 \alias{batchit-package}
 \title{batchit: One Subprocess Dispatcher with a Both-Ends-Validated Contract}
 \description{
-A generic parent/child dispatch contract for running one R function across many subprocesses. A target is a descriptor -- package plus symbol plus a body/formals identity hash -- never a closure, so the child can refuse code that differs from what the parent dispatched. Work items are validated at both ends against the target's formals, and every result comes back in a structured envelope (protocol, id, status, value-or-error, target identity, captured warnings). Two transports share the one contract: a fresh process per item via 'processx' for memory-bound work where process exit is the memory strategy, and a lazy producer with bounded backpressure via 'mirai' daemons for work whose items are generated on demand.
+A generic parent/child dispatch contract for running one R function across many subprocesses. A package target is a descriptor -- package plus symbol plus a body/formals identity hash, never a closure -- so the child can refuse code that differs from what the parent dispatched; an ad-hoc target dispatches a self-contained closure by value instead. Work items are validated at both ends against the target's formals, and every result comes back in a structured envelope (protocol, id, status, value-or-error, target identity, captured warnings). Two transports share the one contract: a fresh process per item via 'processx' for memory-bound work where process exit is the memory strategy, and a lazy producer with bounded backpressure via 'mirai' daemons for work whose items are generated on demand.
 }
 \seealso{
 Useful links:

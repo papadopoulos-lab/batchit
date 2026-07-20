@@ -886,3 +886,30 @@ test_that("batch_task(): a given-but-wrong dev_path errors EVEN for an empty wor
     "does not exist"
   )
 })
+
+test_that("batch_task(): the deprecated `target = ` alias still works (Unit 1/2 shipped it before the fn rename)", {
+  skip_if_not(have_tree, "package source tree not available")
+  dir <- withr::local_tempdir()
+  out1 <- file.path(dir, "alias_primary.qs2")
+  out2 <- file.path(dir, "alias_secondary.qs2")
+  # The OLD spelling: batch_task(target = <descriptor>, ...).
+  batchit::batch_task(
+    target = mk(".batch_fixture_task_ok"),
+    items = named_list("only", list(x = 5L)),
+    outputs = named_list("only", c(primary = out1, secondary = out2)),
+    n_workers = 1L, dev_path = dev_tree
+  )
+  expect_identical(qs2::qs_read(out1), 5L)
+
+  # Passing BOTH `fn` and `target` is a clear error, not a silent pick.
+  expect_error(
+    batchit::batch_task(
+      mk(".batch_fixture_task_ok"), target = mk(".batch_fixture_task_ok"),
+      items = named_list("only", list(x = 1L)),
+      outputs = named_list("only",
+        c(primary = file.path(dir, "b1.qs2"), secondary = file.path(dir, "b2.qs2"))),
+      n_workers = 1L, dev_path = dev_tree
+    ),
+    "do not pass both"
+  )
+})

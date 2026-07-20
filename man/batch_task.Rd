@@ -6,7 +6,7 @@
 FILES instead of returning a value}
 \usage{
 batch_task(
-  target,
+  fn,
   items,
   outputs,
   style = "return",
@@ -14,13 +14,17 @@ batch_task(
   dev_path = NULL,
   p = NULL,
   label = NULL,
-  timeout = .BATCH_DEFAULT_TIMEOUT
+  timeout = .BATCH_DEFAULT_TIMEOUT,
+  target = NULL
 )
 }
 \arguments{
-\item{target}{A \code{batch_target} descriptor from \code{\link[=batch_target]{batch_target()}}.}
+\item{fn}{EITHER a \code{batch_target} descriptor from \code{\link[=batch_target]{batch_target()}}
+(\code{fn_kind = "package"}) OR a bare closure (\code{fn_kind = "adhoc"}):
+self-contained (base R, \verb{pkg::}-qualified calls, and its own formals only
+-- see \code{.batch_lint_adhoc_fn()}), not a primitive, and not taking \code{...}.}
 
-\item{items}{List of items; each a fully-named list of the target's formals.
+\item{items}{List of items; each a fully-named list of \code{fn}'s formals.
 Named items keep their name as the item id; unnamed items get their index.}
 
 \item{outputs}{A list aligned to \code{items}: \code{outputs[[i]]} is item \code{i}'s output
@@ -38,14 +42,21 @@ Unit 1) or \code{"staged_writer"} (the target writes each output via
 
 \item{n_workers}{Concurrent subprocesses (validated: finite, whole, >= 1).}
 
-\item{dev_path}{Consumer-package source tree for \code{devtools::load_all()} in
-the worker, or \code{NULL} for the installed consumer package.}
+\item{dev_path}{For \code{fn_kind = "package"}, the CONSUMER package's source
+tree for \code{devtools::load_all()} in the worker (or \code{NULL} for the
+installed consumer package). For \code{fn_kind = "adhoc"} there is no
+consumer identity, so this instead names BATCHIT'S OWN source tree (see
+\code{\link[=batch_fn]{batch_fn()}}'s \code{dev_path} doc) -- \code{NULL} (the default) uses the installed
+\code{batchit}.}
 
 \item{p}{A progress callback such as a \code{progressr} progressor, or \code{NULL}.}
 
 \item{label}{Optional short stage tag prefixed to the progress message.}
 
 \item{timeout}{Per-item wall-clock limit in seconds; see \code{\link[=batch_run]{batch_run()}}.}
+
+\item{target}{Deprecated former name of \code{fn} (Unit 1/2 shipped
+\code{batch_task(target = ...)}). Pass \code{fn} instead; supplying both errors.}
 }
 \value{
 A list, named by item id, in item order: each element is that item's
@@ -67,14 +78,22 @@ marker at that path completely untouched, so a file sitting at the marker
 path does not by itself mean this attempt committed.
 }
 \details{
-Two commit styles, both only for package targets (\code{fn_kind = "package"},
-via \code{\link[=batch_target]{batch_target()}}): \code{style = "return"} (Unit 1 -- the target returns
-\verb{list(<name> = <value>, ...)}, names matching the declared outputs EXACTLY;
-each value is qs2-serialized to its declared path) and \code{style = "staged_writer"} (Unit 2 -- the target instead WRITES each output to
-\code{\link[=batch_stage_path]{batch_stage_path()}}\verb{(<name>)} as it goes; its return value is ignored).
+Two commit styles, for EITHER fn_kind: \code{style = "return"} (Unit 1 -- the
+target returns \verb{list(<name> = <value>, ...)}, names matching the declared
+outputs EXACTLY; each value is qs2-serialized to its declared path) and
+\code{style = "staged_writer"} (Unit 2 -- the target instead WRITES each output
+to \code{\link[=batch_stage_path]{batch_stage_path()}}\verb{(<name>)} as it goes; its return value is ignored).
 There is deliberately no \code{collect} argument -- the point of \code{batch_task()}
 is that raw values never cross back to the parent; only a small commit
 record does.
+
+\code{fn} is EITHER a \code{batch_target()} descriptor (\code{fn_kind = "package"}) OR a
+bare closure (\code{fn_kind = "adhoc"}, Phase 6' Unit 3, design PHASE6_DESIGN.md
+sections 1-2) -- both drive the SAME commit engine (\code{.batch_commit_task()},
+both styles, the same marker/§0 doctrine). A closure is gated by the same
+self-containedness lint and mandatory \code{baseenv()} rebase \code{\link[=batch_fn]{batch_fn()}} uses
+(see \code{.batch_lint_adhoc_fn()}); commit-record identity is unaffected either
+way (it is bound to the marker's own attempt token, never to fn_kind).
 
 No batchit-computed "should this item re-run?" logic exists here or anywhere
 in these Units: every item is dispatched and every target is always run. (A

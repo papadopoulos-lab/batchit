@@ -596,15 +596,22 @@ batch_stage_path <- function(name) {
 #' marker at that path completely untouched, so a file sitting at the marker
 #' path does not by itself mean this attempt committed.
 #'
-#' Two commit styles, both only for package targets (`fn_kind = "package"`,
-#' via [batch_target()]): `style = "return"` (Unit 1 -- the target returns
-#' `list(<name> = <value>, ...)`, names matching the declared outputs EXACTLY;
-#' each value is qs2-serialized to its declared path) and `style =
-#' "staged_writer"` (Unit 2 -- the target instead WRITES each output to
-#' [batch_stage_path()]`(<name>)` as it goes; its return value is ignored).
+#' Two commit styles, for EITHER fn_kind: `style = "return"` (Unit 1 -- the
+#' target returns `list(<name> = <value>, ...)`, names matching the declared
+#' outputs EXACTLY; each value is qs2-serialized to its declared path) and
+#' `style = "staged_writer"` (Unit 2 -- the target instead WRITES each output
+#' to [batch_stage_path()]`(<name>)` as it goes; its return value is ignored).
 #' There is deliberately no `collect` argument -- the point of `batch_task()`
 #' is that raw values never cross back to the parent; only a small commit
 #' record does.
+#'
+#' `fn` is EITHER a `batch_target()` descriptor (`fn_kind = "package"`) OR a
+#' bare closure (`fn_kind = "adhoc"`, Phase 6' Unit 3, design PHASE6_DESIGN.md
+#' sections 1-2) -- both drive the SAME commit engine (`.batch_commit_task()`,
+#' both styles, the same marker/§0 doctrine). A closure is gated by the same
+#' self-containedness lint and mandatory `baseenv()` rebase [batch_fn()] uses
+#' (see `.batch_lint_adhoc_fn()`); commit-record identity is unaffected either
+#' way (it is bound to the marker's own attempt token, never to fn_kind).
 #'
 #' No batchit-computed "should this item re-run?" logic exists here or anywhere
 #' in these Units: every item is dispatched and every target is always run. (A
@@ -614,8 +621,11 @@ batch_stage_path <- function(name) {
 #' identically whether a target's marker already exists, is stale, or is
 #' malformed; only the CHILD, while committing, ever reads one.
 #'
-#' @param target A `batch_target` descriptor from [batch_target()].
-#' @param items List of items; each a fully-named list of the target's formals.
+#' @param fn EITHER a `batch_target` descriptor from [batch_target()]
+#'   (`fn_kind = "package"`) OR a bare closure (`fn_kind = "adhoc"`):
+#'   self-contained (base R, `pkg::`-qualified calls, and its own formals only
+#'   -- see `.batch_lint_adhoc_fn()`), not a primitive, and not taking `...`.
+#' @param items List of items; each a fully-named list of `fn`'s formals.
 #'   Named items keep their name as the item id; unnamed items get their index.
 #' @param outputs A list aligned to `items`: `outputs[[i]]` is item `i`'s output
 #'   map, a named character vector `c(<name> = <final path>)`. May instead be
@@ -629,11 +639,17 @@ batch_stage_path <- function(name) {
 #'   Unit 1) or `"staged_writer"` (the target writes each output via
 #'   [batch_stage_path()] instead -- Unit 2). Any other value errors.
 #' @param n_workers Concurrent subprocesses (validated: finite, whole, >= 1).
-#' @param dev_path Consumer-package source tree for `devtools::load_all()` in
-#'   the worker, or `NULL` for the installed consumer package.
+#' @param dev_path For `fn_kind = "package"`, the CONSUMER package's source
+#'   tree for `devtools::load_all()` in the worker (or `NULL` for the
+#'   installed consumer package). For `fn_kind = "adhoc"` there is no
+#'   consumer identity, so this instead names BATCHIT'S OWN source tree (see
+#'   [batch_fn()]'s `dev_path` doc) -- `NULL` (the default) uses the installed
+#'   `batchit`.
 #' @param p A progress callback such as a `progressr` progressor, or `NULL`.
 #' @param label Optional short stage tag prefixed to the progress message.
 #' @param timeout Per-item wall-clock limit in seconds; see [batch_run()].
+#' @param target Deprecated former name of `fn` (Unit 1/2 shipped
+#'   `batch_task(target = ...)`). Pass `fn` instead; supplying both errors.
 #' @return A list, named by item id, in item order: each element is that item's
 #'   commit record, `list(committed = <named char: name -> final path>,
 #'   attempt = <token>)`. Never the target's raw return value.
@@ -649,7 +665,7 @@ batch_stage_path <- function(name) {
 #' }
 #' @export
 batch_task <- function(
-  target,
+  fn,
   items,
   outputs,
   style = "return",
@@ -657,10 +673,37 @@ batch_task <- function(
   dev_path = NULL,
   p = NULL,
   label = NULL,
-  timeout = .BATCH_DEFAULT_TIMEOUT
+  timeout = .BATCH_DEFAULT_TIMEOUT,
+  target = NULL
 ) {
-  if (!inherits(target, "batch_target")) {
-    stop("batch_task(): `target` must come from batch_target()", call. = FALSE)
+  # `target` is the DEPRECATED former name of `fn` (Unit 1/2 shipped
+  # `batch_task(target = ...)`; Unit 3 renamed it `fn` because it now also
+  # accepts a bare closure). Preserve the old NAMED spelling.
+  if (!is.null(target)) {
+    if (!missing(fn)) {
+      stop(paste0("batch_task(): pass `fn` only -- `target` is the deprecated ",
+        "former name of `fn`; do not pass both"), call. = FALSE)
+    }
+    fn <- target
+  }
+  # `fn` is EITHER a batch_target() descriptor (fn_kind = "package") OR a bare
+  # closure (fn_kind = "adhoc", Phase 6' Unit 3) -- resolved here, ONCE, into
+  # the two variables (`fn_kind`, and either `target` or a lint-passed,
+  # baseenv()-rebased `fn`) every step below branches on.
+  if (inherits(fn, "batch_target")) {
+    fn_kind <- "package"
+    target <- fn
+    formal_names <- target$formal_names
+  } else if (is.function(fn)) {
+    fn_kind <- "adhoc"
+    .batch_lint_adhoc_fn(fn, where = "parent")
+    fn <- .batch_rebase_adhoc_closure(fn)
+    formal_names <- names(formals(fn))
+    if (is.null(formal_names)) formal_names <- character(0)
+    target <- NULL
+  } else {
+    stop(paste0("batch_task(): `fn` must come from batch_target() (fn_kind = ",
+      "\"package\") or be a bare closure (fn_kind = \"adhoc\")"), call. = FALSE)
   }
   if (!is.character(style) || length(style) != 1L || is.na(style) || !nzchar(style)) {
     stop("batch_task(): `style` must be a single non-empty string", call. = FALSE)
@@ -674,7 +717,12 @@ batch_task <- function(
   # Validate ALL config BEFORE the empty-workload early return -- otherwise a
   # bad dev_path/timeout is silently accepted whenever there is no work.
   timeout <- .batch_validate_timeout(timeout, "batch_task()")
-  dev_path <- .batch_validate_dev_path(dev_path, target$package)
+  # For "package", dev_path names the CONSUMER's tree (target$package). For
+  # "adhoc" there is no consumer identity -- dev_path instead names BATCHIT'S
+  # OWN tree (see batch_fn()'s dev_path doc; the worker interprets it the
+  # same way).
+  dev_path <- .batch_validate_dev_path(dev_path,
+    if (identical(fn_kind, "package")) target$package else "batchit")
   if (!is.list(items)) {
     stop(sprintf("batch_task(): `items` must be a list, got %s", class(items)[1L]),
       call. = FALSE)
@@ -719,7 +767,11 @@ batch_task <- function(
   # the first): item schemas are legitimately heterogeneous, so a bad one hides
   # behind a good first one.
   for (i in seq_len(n_items)) {
-    .batch_validate_item(target, items[[i]], where = "parent", id = ids[i])
+    if (identical(fn_kind, "package")) {
+      .batch_validate_item(target, items[[i]], where = "parent", id = ids[i])
+    } else {
+      .batch_validate_adhoc_item(formal_names, items[[i]], where = "parent", id = ids[i])
+    }
   }
   for (i in seq_len(n_items)) {
     .batch_validate_output_map(outputs[[i]], where = "parent", id = ids[i])
@@ -734,6 +786,17 @@ batch_task <- function(
 
   attempts <- vapply(seq_len(n_items), function(i) .batch_new_attempt_token(),
     character(1))
+  # fn_kind == "adhoc" (Phase 6' Unit 3, design section 9.4): a fresh
+  # per-dispatch identity nonce, echoed back by the child and checked by
+  # .batch_inspect_result() in place of the package/symbol/hash identity a
+  # batch_target descriptor would otherwise supply. Unused (stays NULL) for
+  # "package" -- the commit-record attempt-token check already binds identity
+  # there.
+  nonces <- if (identical(fn_kind, "adhoc")) {
+    vapply(seq_len(n_items), function(i) .batch_new_attempt_token(), character(1))
+  } else {
+    NULL
+  }
 
   script_path <- .batch_worker_script()
   rscript_bin <- file.path(R.home("bin"), "Rscript")
@@ -765,10 +828,18 @@ batch_task <- function(
 
   runner_pkg <- .batch_runner_package()
   for (i in seq_len(n_items)) {
-    envelope <- .batch_input_envelope(
-      target, dev_path, runner_pkg, ids[i], items[[i]],
-      outputs = outputs[[i]], marker = markers[i], style = style,
-      attempt = attempts[i])
+    envelope <- if (identical(fn_kind, "package")) {
+      .batch_input_envelope(
+        target, dev_path, runner_pkg, ids[i], items[[i]],
+        outputs = outputs[[i]], marker = markers[i], style = style,
+        attempt = attempts[i])
+    } else {
+      .batch_input_envelope(
+        target = NULL, dev_path = dev_path, runner = runner_pkg, id = ids[i],
+        args = items[[i]], fn_kind = "adhoc",
+        outputs = outputs[[i]], marker = markers[i], style = style,
+        attempt = attempts[i], fn = fn, nonce = nonces[i])
+    }
     .batch_write_envelope(envelope, input_paths[i])
   }
 
@@ -845,8 +916,14 @@ batch_task <- function(
           path, conditionMessage(e)))
       }
     )
-    insp <- .batch_inspect_result(envelope, ids[idx], target,
-      expected_outputs = outputs[[idx]], expected_attempt = attempts[idx])
+    insp <- if (identical(fn_kind, "package")) {
+      .batch_inspect_result(envelope, ids[idx], target,
+        expected_outputs = outputs[[idx]], expected_attempt = attempts[idx])
+    } else {
+      .batch_inspect_result(envelope, ids[idx], target = NULL,
+        expected_outputs = outputs[[idx]], expected_attempt = attempts[idx],
+        expected_nonce = nonces[idx])
+    }
     if (!insp$ok) .fail(entry, insp$reason)
     .batch_surface_warnings(insp$warnings, ids[idx])
     insp$value

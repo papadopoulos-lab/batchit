@@ -286,7 +286,7 @@ test_that(".batch_check_envelope() REQUIRES a non-empty runner_package", {
   expect_error(batchit:::.batch_check_envelope(na_rp), "runner_package")
 })
 
-test_that(".batch_check_envelope() REQUIRES a valid meta$fn_kind (Phase 6' Unit 1)", {
+test_that(".batch_check_envelope() REQUIRES a valid meta$fn_kind (Phase 6' Unit 1/3)", {
   good <- list(protocol = PROTO, meta = list(fn_kind = "package", package = "batchit",
     symbol = "s", hash = "h", id = "1", runner_package = "batchit", collect = TRUE),
     args = list())
@@ -297,10 +297,17 @@ test_that(".batch_check_envelope() REQUIRES a valid meta$fn_kind (Phase 6' Unit 
   # invalid value
   bad_fk <- good; bad_fk$meta$fn_kind <- "bogus"
   expect_error(batchit:::.batch_check_envelope(bad_fk), "fn_kind")
-  # "adhoc" is structurally VALID here (Unit 1 rejects it later, in
-  # .batch_execute(), not in the structural gate)
-  adhoc <- good; adhoc$meta$fn_kind <- "adhoc"
+  # "adhoc" is a structurally valid enum value, but (Phase 6' Unit 3) it needs
+  # its OWN shape -- fn/nonce present, package/symbol/hash ABSENT -- not the
+  # package envelope with fn_kind merely flipped (package/symbol/hash still
+  # present is now correctly rejected; see the dedicated adhoc envelope tests
+  # in test-batch_adhoc.R).
+  adhoc <- list(protocol = PROTO, meta = list(fn_kind = "adhoc", fn = function(x) x,
+    nonce = "tok", id = "1", runner_package = "batchit", collect = TRUE),
+    args = list())
   expect_true(batchit:::.batch_check_envelope(adhoc))
+  adhoc_with_package <- good; adhoc_with_package$meta$fn_kind <- "adhoc"
+  expect_error(batchit:::.batch_check_envelope(adhoc_with_package), "forbidden")
 })
 
 test_that(".batch_check_envelope() rejects an unknown meta field", {

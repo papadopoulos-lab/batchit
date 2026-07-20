@@ -173,7 +173,17 @@ batch_target <- function(package, symbol, version = NULL) {
   loc <- if (is.null(id)) "" else sprintf(" [item '%s']", id)
   lead <- sprintf(".batch %s-validation%s: %s::%s",
     where, loc, target$package, target$symbol)
+  .batch_validate_item_against_formals(target$formal_names, lead, args)
+}
 
+#' The formal-name-schema core of item validation, shared by [.batch_validate_item()]
+#' (a `batch_target` descriptor's `formal_names`) and the `adhoc` sibling
+#' `.batch_validate_adhoc_item()` (a bare closure's own `formal_names`, no
+#' package/symbol identity to build a lead from) -- see `R/batch_adhoc.R`
+#' (Phase 6' Unit 3, PHASE6_DESIGN.md sections 1, 4). Takes an already-built
+#' `lead` string so both callers keep their own distinct error-message shape.
+#' @noRd
+.batch_validate_item_against_formals <- function(formal_names, lead, args) {
   if (!is.list(args)) {
     stop(sprintf("%s -- item must be a list, got %s",
       lead, class(args)[1L]), call. = FALSE)
@@ -188,12 +198,12 @@ batch_target <- function(package, symbol, version = NULL) {
     stop(sprintf("%s -- duplicate argument name(s): %s",
       lead, paste(dup, collapse = ", ")), call. = FALSE)
   }
-  extra <- setdiff(nms, target$formal_names)
+  extra <- setdiff(nms, formal_names)
   if (length(extra) > 0L) {
     stop(sprintf("%s -- argument(s) that are not formals of the target: %s",
       lead, paste(extra, collapse = ", ")), call. = FALSE)
   }
-  missing <- setdiff(target$formal_names, nms)
+  missing <- setdiff(formal_names, nms)
   if (length(missing) > 0L) {
     stop(sprintf(
       paste0("%s -- formal(s) not supplied: %s. Every formal must be named ",
@@ -252,10 +262,13 @@ batch_target <- function(package, symbol, version = NULL) {
 #' separate step -- see `.batch_validate_item()`.
 #'
 #' Branches on `meta$fn_kind` (design PHASE6_DESIGN.md sections 1/4): `"package"`
-#' requires `package`/`symbol`/`hash`; `"adhoc"` is a structurally valid enum
-#' value here (rejected with a clear "not yet supported" message later, in
-#' `.batch_execute()` -- Unit 1 implements only the `"package"` branch). Also
-#' branches on whether `meta$outputs` is present: absent means today's
+#' requires `package`/`symbol`/`hash` and forbids `fn`/`nonce`; `"adhoc"` is
+#' the reverse -- requires `fn` (the closure, re-linted for self-containedness
+#' HERE -- design section 5, `.batch_lint_adhoc_fn()` in `R/batch_adhoc.R` --
+#' the CHILD-side correctness copy of the check a frontend already ran at
+#' dispatch time) and `nonce` (its per-dispatch identity token, design section
+#' 9.4), and forbids `package`/`symbol`/`hash` (there is no package to
+#' resolve). Also branches on whether `meta$outputs` is present: absent means today's
 #' return-value dispatch (`collect` required; `style`/`marker`/`attempt`
 #' forbidden); present means a declared-output commit dispatch (`style`/
 #' `marker`/`attempt` required; `collect` forbidden) -- design section 4. Any
@@ -295,7 +308,7 @@ batch_target <- function(package, symbol, version = NULL) {
   }
   known_meta_fields <- c("fn_kind", "id", "runner_package", "dev_path", "version",
     "package", "symbol", "hash", "collect", "outputs", "marker", "style",
-    "attempt", "details")
+    "attempt", "details", "fn", "nonce")
   unknown <- setdiff(names(meta), known_meta_fields)
   if (length(unknown) > 0L) {
     stop(sprintf(".batch envelope meta has unknown field(s): %s",
@@ -330,10 +343,33 @@ batch_target <- function(package, symbol, version = NULL) {
           call. = FALSE)
       }
     }
+    if (!is.null(meta[["fn"]]) || !is.null(meta[["nonce"]])) {
+      stop(paste0(".batch envelope: meta$fn/meta$nonce are forbidden when ",
+        "fn_kind is \"package\" (adhoc-only fields)"), call. = FALSE)
+    }
+  } else {
+    # fn_kind == "adhoc" (Phase 6' Unit 3, PHASE6_DESIGN.md sections 1, 4, 5):
+    # no package/symbol/hash to resolve -- the closure and its per-dispatch
+    # identity nonce (section 9.4) travel directly in meta$fn / meta$nonce.
+    for (f in c("package", "symbol", "hash")) {
+      if (!is.null(meta[[f]])) {
+        stop(sprintf(paste0(".batch envelope: meta$%s is forbidden when fn_kind is ",
+          "\"adhoc\" (there is no package to resolve)"), f), call. = FALSE)
+      }
+    }
+    # Re-lint HERE, in the CHILD: design section 5's self-containedness check
+    # runs at BOTH ends. A frontend (batch_fn() / batch_task() with a bare
+    # closure) already linted at dispatch time (early UX); this is the
+    # correctness copy -- a worker must never simply trust that an envelope
+    # reaching it actually went through a frontend's own check. Also enforces
+    # "closure, not a primitive" and "no `...`" (see .batch_lint_adhoc_fn() in
+    # R/batch_adhoc.R).
+    .batch_lint_adhoc_fn(meta[["fn"]], where = "child", id = meta[["id"]])
+    nonce <- meta[["nonce"]]
+    if (!is.character(nonce) || length(nonce) != 1L || is.na(nonce) || !nzchar(nonce)) {
+      stop(".batch envelope meta$nonce is missing or not a non-empty string", call. = FALSE)
+    }
   }
-  # fn_kind == "adhoc" is accepted STRUCTURALLY here (a valid discriminator
-  # value) -- Unit 1 implements no adhoc execution, so .batch_execute() rejects
-  # it with a clear "not yet supported" error once it gets that far.
 
   outputs <- meta[["outputs"]]
   if (is.null(outputs)) {
@@ -485,15 +521,30 @@ batch_target <- function(package, symbol, version = NULL) {
       .batch_check_envelope(env)
       meta <- env[["meta"]]
       fn_kind <- meta[["fn_kind"]]
-      if (!identical(fn_kind, "package")) {
-        stop(sprintf(
-          "batch worker: fn_kind '%s' not yet supported (Unit 1 implements only \"package\")",
-          fn_kind), call. = FALSE)
+      if (identical(fn_kind, "package")) {
+        target <- .batch_resolve_target(meta)
+        .batch_validate_item(target, env[["args"]], where = "child", id = meta[["id"]])
+        fn <- get(meta[["symbol"]], envir = asNamespace(meta[["package"]]),
+          inherits = FALSE)
+        result_target <- list(package = target$package, symbol = target$symbol,
+          hash = target$hash)
+      } else {
+        # fn_kind == "adhoc" (Phase 6' Unit 3): .batch_check_envelope() above
+        # already re-linted meta$fn for self-containedness (design section 5)
+        # and required meta$nonce -- there is no package/symbol to resolve.
+        # Rebase AGAIN defensively right before do.call(): the parent already
+        # rebased onto baseenv() before serializing (and qs2 round-trips a
+        # baseenv()-rooted closure by RECONNECTING to the child's own
+        # baseenv(), not by carrying a snapshot -- see .batch_rebase_adhoc_closure()),
+        # but a hand-crafted envelope reaching the worker directly (bypassing
+        # batch_fn()/batch_task()) must never get to run an un-rebased
+        # closure just because it happened to still pass the lint.
+        fn <- .batch_rebase_adhoc_closure(meta[["fn"]])
+        fmls <- names(formals(fn))
+        if (is.null(fmls)) fmls <- character(0)
+        .batch_validate_adhoc_item(fmls, env[["args"]], where = "child", id = meta[["id"]])
+        result_target <- list(fn_kind = "adhoc", nonce = meta[["nonce"]])
       }
-      target <- .batch_resolve_target(meta)
-      .batch_validate_item(target, env[["args"]], where = "child", id = meta[["id"]])
-      fn <- get(meta[["symbol"]], envir = asNamespace(meta[["package"]]),
-        inherits = FALSE)
 
       # style/outputs are already both-fully-validated by .batch_check_envelope()
       # above -- BEFORE do.call() ever runs the target: style is one of
@@ -545,8 +596,7 @@ batch_target <- function(package, symbol, version = NULL) {
           value = if (isTRUE(meta[["collect"]])) value else NULL,
           error = NULL,
           warnings = utils::head(warns, 100L),
-          target = list(package = target$package, symbol = target$symbol,
-            hash = target$hash)
+          target = result_target
         )
       } else {
         # Declared-output commit dispatch (batch_task(), design
@@ -561,8 +611,7 @@ batch_target <- function(package, symbol, version = NULL) {
           value = commit,
           error = NULL,
           warnings = utils::head(warns, 100L),
-          target = list(package = target$package, symbol = target$symbol,
-            hash = target$hash)
+          target = result_target
         )
       }
     },
@@ -599,10 +648,13 @@ batch_target <- function(package, symbol, version = NULL) {
 #' accept/reject identically. Returns `list(ok, reason, value, warnings)`.
 #'
 #' Checks, in order: the result is a list; protocol; status; the id matches the
-#' dispatched id; and (on success) the FULL executed-target identity -- package,
-#' symbol AND hash -- matches what was dispatched (the contract defines identity
-#' as all three; a body/formals hash can collide across two functions), plus that
-#' a successful envelope actually carries a `value` field.
+#' dispatched id; and (on success) identity of the code that actually ran --
+#' for `fn_kind = "package"`, the FULL executed-target identity (package,
+#' symbol AND hash; the contract defines identity as all three, since a
+#' body/formals hash can collide across two functions) matches what was
+#' dispatched; for `fn_kind = "adhoc"` there is no package identity, so
+#' `expected_nonce` (see below) is checked instead -- plus that a successful
+#' envelope actually carries a `value` field.
 #'
 #' `expected_outputs`/`expected_attempt` (both `NULL` by default) are set only
 #' when inspecting a `batch_task()` (declared-output commit) result: the value
@@ -612,16 +664,25 @@ batch_target <- function(package, symbol, version = NULL) {
 #' exactly, or a stale/substituted result is rejected the same way a wrong id
 #' or wrong target identity is. Existing (return-value) callers pass neither and
 #' are unaffected.
+#'
+#' `expected_nonce` (`NULL` by default) is set only when inspecting an `adhoc`
+#' (Phase 6' Unit 3) result: an adhoc envelope carries no package/symbol/hash
+#' descriptor for the child to echo back, so identity is instead bound to the
+#' id (already checked above) PLUS a fresh, high-entropy per-dispatch nonce
+#' the parent issued and the child echoes in its result `target` field as
+#' `list(fn_kind = "adhoc", nonce = <nonce>)` (design PHASE6_DESIGN.md section
+#' 9.4) -- `target` itself is unused (may be `NULL`) on this path.
 #' @noRd
 .batch_inspect_result <- function(envelope, expected_id, target,
-                                    expected_outputs = NULL, expected_attempt = NULL) {
+                                    expected_outputs = NULL, expected_attempt = NULL,
+                                    expected_nonce = NULL) {
   # Total BY CONSTRUCTION: any error while inspecting a hostile or corrupt result
   # -- a classed object with a throwing `[[`/`format` method, a field that errors
   # on access -- becomes a failure reason, so it flows through the caller's
   # uniform .fail() path rather than crashing the pool.
   tryCatch(
     .batch_inspect_result_impl(envelope, expected_id, target,
-      expected_outputs, expected_attempt),
+      expected_outputs, expected_attempt, expected_nonce),
     error = function(e) list(ok = FALSE,
       reason = paste0("malformed result envelope: ", .batch_condition_message(e)))
   )
@@ -629,7 +690,8 @@ batch_target <- function(package, symbol, version = NULL) {
 
 #' @noRd
 .batch_inspect_result_impl <- function(envelope, expected_id, target,
-                                         expected_outputs = NULL, expected_attempt = NULL) {
+                                         expected_outputs = NULL, expected_attempt = NULL,
+                                         expected_nonce = NULL) {
   if (!is.list(envelope)) {
     return(list(ok = FALSE, reason = sprintf(
       "result is not a list (got %s)", class(envelope)[1L])))
@@ -674,13 +736,28 @@ batch_target <- function(package, symbol, version = NULL) {
   # `anyDuplicated(names(tgt))`: a nested `target = list(package="a",
   # package="evil", ...)` must not let the first `package` win and leave the
   # executed identity ambiguous.
-  if (!is.list(tgt) || anyDuplicated(names(tgt)) ||
-      !identical(tgt[["package"]], target$package) ||
-      !identical(tgt[["symbol"]], target$symbol) ||
-      !identical(tgt[["hash"]], target$hash)) {
-    return(list(ok = FALSE, reason = sprintf(
-      "result came from a different target than dispatched (expected %s::%s, hash %s)",
-      target$package, target$symbol, target$hash)))
+  if (!is.list(tgt) || anyDuplicated(names(tgt))) {
+    return(list(ok = FALSE,
+      reason = "result envelope has a malformed target field"))
+  }
+  if (!is.null(expected_nonce)) {
+    # adhoc (Phase 6' Unit 3, design section 9.4): no package identity to
+    # check -- bind on fn_kind == "adhoc" plus the per-dispatch nonce the
+    # parent issued and the child echoed back (id was already checked above).
+    if (!is.character(expected_nonce) || length(expected_nonce) != 1L ||
+        is.na(expected_nonce) || !identical(tgt[["fn_kind"]], "adhoc") ||
+        !identical(tgt[["nonce"]], expected_nonce)) {
+      return(list(ok = FALSE,
+        reason = "result came from a different adhoc dispatch than expected (nonce mismatch)"))
+    }
+  } else {
+    if (!identical(tgt[["package"]], target$package) ||
+        !identical(tgt[["symbol"]], target$symbol) ||
+        !identical(tgt[["hash"]], target$hash)) {
+      return(list(ok = FALSE, reason = sprintf(
+        "result came from a different target than dispatched (expected %s::%s, hash %s)",
+        target$package, target$symbol, target$hash)))
+    }
   }
   if (!("value" %in% names(envelope))) {
     return(list(ok = FALSE, reason = "successful result envelope has no value field"))
@@ -907,11 +984,20 @@ batch_target <- function(package, symbol, version = NULL) {
 #' commit fields `batch_task()` supplies instead (design PHASE6_DESIGN.md
 #' sections 3/4); `collect` and those five are mutually exclusive, enforced by
 #' `.batch_check_envelope()`.
+#'
+#' `fn`/`nonce` are the `fn_kind = "adhoc"` fields (Phase 6' Unit 3, design
+#' sections 1, 4, 9.4): `fn` carries the already-linted, already-baseenv()-
+#' rebased closure itself, and `nonce` is its per-dispatch identity token,
+#' used in place of the package/symbol/hash identity a `batch_target` would
+#' otherwise supply -- `batch_fn()` and `batch_task()` (with a bare closure)
+#' pass `target = NULL` and these two instead. Forbidden (must stay `NULL`)
+#' for `fn_kind = "package"`, enforced by `.batch_check_envelope()`.
 #' @noRd
 .batch_input_envelope <- function(target, dev_path, runner, id, args,
                                     fn_kind = "package", collect = NULL,
                                     outputs = NULL, marker = NULL, style = NULL,
-                                    attempt = NULL, details = NULL) {
+                                    attempt = NULL, details = NULL,
+                                    fn = NULL, nonce = NULL) {
   list(
     protocol = .BATCH_PROTOCOL,
     meta = list(
@@ -920,6 +1006,8 @@ batch_target <- function(package, symbol, version = NULL) {
       symbol = target$symbol,
       version = target$version,
       hash = target$hash,
+      fn = fn,
+      nonce = nonce,
       dev_path = dev_path,
       runner_package = runner,
       id = as.character(id),
