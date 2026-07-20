@@ -15,6 +15,13 @@ have_tree <- file.exists(file.path(dev_tree, "DESCRIPTION")) &&
 
 mk <- function(sym) batchit::batch_target("batchit", sym)
 
+# The CURRENT protocol number, read dynamically rather than hardcoded: every
+# raw envelope literal below must carry a protocol that actually matches
+# .BATCH_PROTOCOL, or a test would start failing for the WRONG reason (a
+# protocol mismatch) the moment the number is bumped, instead of exercising
+# what it claims to test.
+PROTO <- batchit:::.BATCH_PROTOCOL
+
 # --- target descriptor -------------------------------------------------------
 
 test_that("batch_target() records the srcref-stripped identity hash", {
@@ -245,8 +252,9 @@ test_that("a FAILING run also leaves no temp files behind", {
 # --- envelope + result validation (now load-bearing, not decorative) ---------
 
 test_that(".batch_check_envelope() rejects malformed input envelopes", {
-  good <- list(protocol = 1L, meta = list(package = "batchit", symbol = "s",
-    hash = "h", id = "1", runner_package = "batchit", collect = TRUE), args = list())
+  good <- list(protocol = PROTO, meta = list(fn_kind = "package", package = "batchit",
+    symbol = "s", hash = "h", id = "1", runner_package = "batchit", collect = TRUE),
+    args = list())
   expect_true(batchit:::.batch_check_envelope(good))
   expect_error(batchit:::.batch_check_envelope(42), "not a list")
   expect_error(batchit:::.batch_check_envelope(within(good, protocol <- 99L)),
@@ -263,8 +271,9 @@ test_that(".batch_check_envelope() REQUIRES a non-empty runner_package", {
   # checker omits it, a malformed envelope with no runner_package passes the shared
   # structural gate and the worker falls back to the CONSUMER namespace for
   # .batch_execute -- exactly the runner/consumer confusion the seam must prevent.
-  good <- list(protocol = 1L, meta = list(package = "batchit", symbol = "s",
-    hash = "h", id = "1", runner_package = "batchit", collect = TRUE), args = list())
+  good <- list(protocol = PROTO, meta = list(fn_kind = "package", package = "batchit",
+    symbol = "s", hash = "h", id = "1", runner_package = "batchit", collect = TRUE),
+    args = list())
   expect_true(batchit:::.batch_check_envelope(good))
   # absent
   no_rp <- good; no_rp$meta$runner_package <- NULL
@@ -277,6 +286,204 @@ test_that(".batch_check_envelope() REQUIRES a non-empty runner_package", {
   expect_error(batchit:::.batch_check_envelope(na_rp), "runner_package")
 })
 
+test_that(".batch_check_envelope() REQUIRES a valid meta$fn_kind (Phase 6' Unit 1)", {
+  good <- list(protocol = PROTO, meta = list(fn_kind = "package", package = "batchit",
+    symbol = "s", hash = "h", id = "1", runner_package = "batchit", collect = TRUE),
+    args = list())
+  expect_true(batchit:::.batch_check_envelope(good))
+  # missing
+  no_fk <- good; no_fk$meta$fn_kind <- NULL
+  expect_error(batchit:::.batch_check_envelope(no_fk), "fn_kind")
+  # invalid value
+  bad_fk <- good; bad_fk$meta$fn_kind <- "bogus"
+  expect_error(batchit:::.batch_check_envelope(bad_fk), "fn_kind")
+  # "adhoc" is structurally VALID here (Unit 1 rejects it later, in
+  # .batch_execute(), not in the structural gate)
+  adhoc <- good; adhoc$meta$fn_kind <- "adhoc"
+  expect_true(batchit:::.batch_check_envelope(adhoc))
+})
+
+test_that(".batch_check_envelope() rejects an unknown meta field", {
+  good <- list(protocol = PROTO, meta = list(fn_kind = "package", package = "batchit",
+    symbol = "s", hash = "h", id = "1", runner_package = "batchit", collect = TRUE),
+    args = list())
+  bogus <- good
+  bogus$meta$totally_unexpected_field <- "x"
+  expect_error(batchit:::.batch_check_envelope(bogus), "unknown field")
+})
+
+test_that(".batch_check_envelope() rejects an unknown TOP-LEVEL envelope field", {
+  good <- list(protocol = PROTO, meta = list(fn_kind = "package", package = "batchit",
+    symbol = "s", hash = "h", id = "1", runner_package = "batchit", collect = TRUE),
+    args = list())
+  expect_true(batchit:::.batch_check_envelope(good))
+  bogus <- good
+  bogus$unexpected <- "smuggled"
+  expect_error(batchit:::.batch_check_envelope(bogus), "unknown top-level field")
+})
+
+test_that(".batch_check_envelope() enforces the outputs<->style/marker/attempt/collect exclusivity", {
+  base_meta <- list(fn_kind = "package", package = "batchit", symbol = "s",
+    hash = "h", id = "1", runner_package = "batchit")
+  # outputs present -> collect forbidden
+  with_outputs <- list(protocol = PROTO, meta = c(base_meta, list(
+    outputs = c(a = "/tmp/a.qs2"), marker = "/tmp/.batchit__1", style = "return",
+    attempt = "tok", collect = TRUE)), args = list())
+  expect_error(batchit:::.batch_check_envelope(with_outputs), "collect")
+  # outputs present, collect absent, style/marker/attempt present -> ok
+  ok_task <- list(protocol = PROTO, meta = c(base_meta, list(
+    outputs = c(a = "/tmp/a.qs2"), marker = "/tmp/.batchit__1", style = "return",
+    attempt = "tok")), args = list())
+  expect_true(batchit:::.batch_check_envelope(ok_task))
+  # outputs ABSENT -> style/marker/attempt forbidden
+  with_style_no_outputs <- list(protocol = PROTO, meta = c(base_meta, list(
+    collect = TRUE, style = "return")), args = list())
+  expect_error(batchit:::.batch_check_envelope(with_style_no_outputs),
+    "style/marker/attempt are forbidden")
+})
+
+test_that(".batch_check_envelope() re-validates output/marker PATH SHAPE on the child side (not just structural presence)", {
+  # The child MAY replay independently of the parent, so it must re-validate
+  # what the parent already checked at dispatch time -- not merely trust that
+  # the envelope carries well-typed strings. These reuse
+  # .batch_validate_output_paths()'s conservative rules (absolute, already
+  # normalized, parent dir exists, destination absent/regular-non-symlink).
+  base_meta <- function(extra) {
+    c(list(fn_kind = "package", package = "batchit", symbol = "s", hash = "h",
+      id = "1", runner_package = "batchit", style = "return",
+      attempt = "tok"), extra)
+  }
+  wrap <- function(meta) list(protocol = PROTO, meta = meta, args = list())
+
+  # non-absolute output path
+  rel_out <- wrap(base_meta(list(
+    outputs = c(a = "relative/x.qs2"), marker = "/tmp/.batchit__1")))
+  expect_error(batchit:::.batch_check_envelope(rel_out), "absolute")
+
+  # output whose PARENT DIRECTORY does not exist
+  bad_parent <- wrap(base_meta(list(
+    outputs = c(a = "/no/such/dir/x.qs2"), marker = "/tmp/.batchit__1")))
+  expect_error(batchit:::.batch_check_envelope(bad_parent), "does not exist")
+
+  # output that is an existing DIRECTORY
+  dir <- withr::local_tempdir()
+  as_dir <- wrap(base_meta(list(
+    outputs = c(a = dir), marker = "/tmp/.batchit__1")))
+  expect_error(batchit:::.batch_check_envelope(as_dir), "directory")
+
+  # a path that is absolute but NOT ALREADY in normalizePath() form (contains
+  # a `..` segment): the child must reject it rather than silently
+  # re-normalize it into a DIFFERENT path than the parent dispatched.
+  # normalizePath(mustWork = FALSE) only actually COLLAPSES a `..` segment
+  # when the full path already exists on disk (an absent tail is left
+  # untouched, literally) -- so the destination must pre-exist for this to
+  # actually exercise the divergence.
+  file.create(file.path(dir, "x.qs2"))
+  unnormalized <- wrap(base_meta(list(
+    outputs = c(a = file.path(dir, "..", basename(dir), "x.qs2")),
+    marker = "/tmp/.batchit__1")))
+  expect_error(batchit:::.batch_check_envelope(unnormalized), "normalized")
+
+  # marker: non-absolute
+  rel_marker <- wrap(base_meta(list(
+    outputs = c(a = file.path(dir, "x.qs2")), marker = "relative/.batchit__1")))
+  expect_error(batchit:::.batch_check_envelope(rel_marker), "absolute")
+
+  # marker: parent directory does not exist
+  bad_marker_parent <- wrap(base_meta(list(
+    outputs = c(a = file.path(dir, "x.qs2")), marker = "/no/such/dir/.batchit__1")))
+  expect_error(batchit:::.batch_check_envelope(bad_marker_parent), "does not exist")
+
+  # a fully valid envelope still passes
+  ok <- wrap(base_meta(list(
+    outputs = c(a = file.path(dir, "x.qs2")),
+    marker = file.path(dir, ".batchit__1"))))
+  expect_true(batchit:::.batch_check_envelope(ok))
+})
+
+test_that(".batch_check_envelope() rejects any style OTHER THAN \"return\" for a declared-output envelope, BEFORE the target could run", {
+  # Unit 1 implements only style = "return". A bad style must be rejected
+  # HERE (structurally, before .batch_execute() ever calls do.call()) -- not
+  # only later, deep inside the branch that runs after the target executes.
+  dir <- withr::local_tempdir()
+  base_meta <- function(style) list(fn_kind = "package", package = "batchit",
+    symbol = "s", hash = "h", id = "1", runner_package = "batchit",
+    outputs = c(a = file.path(dir, "x.qs2")), marker = file.path(dir, ".batchit__1"),
+    style = style, attempt = "tok")
+  expect_error(
+    batchit:::.batch_check_envelope(list(protocol = PROTO,
+      meta = base_meta("staged_writer"), args = list())),
+    "not supported")
+  expect_error(
+    batchit:::.batch_check_envelope(list(protocol = PROTO,
+      meta = base_meta("bogus_style"), args = list())),
+    "not supported")
+  expect_true(batchit:::.batch_check_envelope(list(protocol = PROTO,
+    meta = base_meta("return"), args = list())))
+})
+
+test_that("a side-effecting target does NOT run when the REAL worker receives a declared-output envelope with an unsupported style", {
+  # The production wiring, not just the helper: drive the REAL worker with a
+  # style it cannot execute, and prove the target never ran (its side effect
+  # -- a file it would write on its own -- must be absent). Before the fix
+  # this style check ran INSIDE .batch_execute() AFTER do.call(), so a
+  # side-effecting target executed for an envelope that was always going to
+  # be rejected.
+  skip_if_not(have_tree, "package source tree not available")
+  dir <- withr::local_tempdir()
+  side_effect_file <- file.path(dir, "SHOULD_NOT_EXIST.txt")
+  worker <- file.path(dev_tree, "inst", "batch_worker.R")
+  rscript <- file.path(R.home("bin"), "Rscript")
+  meta <- list(fn_kind = "package", package = "batchit",
+    symbol = ".batch_fixture_side_effect_writer", hash = mk(".batch_fixture_side_effect_writer")$hash,
+    id = "1", runner_package = "batchit", dev_path = dev_tree,
+    outputs = c(a = file.path(dir, "out.qs2")), marker = file.path(dir, ".batchit__1"),
+    style = "staged_writer", attempt = "tok")
+  env <- list(protocol = PROTO, meta = meta,
+    args = list(path = side_effect_file))
+  inp <- withr::local_tempfile(fileext = ".qs2")
+  outp <- withr::local_tempfile(fileext = ".qs2")
+  errf <- withr::local_tempfile(fileext = ".txt")
+  qs2::qs_save(env, inp)
+
+  p <- processx::process$new(rscript, c("--vanilla", worker, inp, outp),
+    env = c("current", R_LIBS = paste(.libPaths(), collapse = .Platform$path.sep)),
+    stdout = "|", stderr = errf)
+  p$wait(timeout = 30000)
+
+  # .batch_check_envelope() runs INSIDE .batch_execute()'s tryCatch (which is
+  # TOTAL by design), so an unsupported style is a normal "status = error"
+  # result envelope (exit 0), not a worker crash -- the message lives in the
+  # result's error$message, not stderr.
+  expect_false(file.exists(side_effect_file), info =
+    "the target's own side effect exists -- it ran despite an unsupported style")
+  expect_true(file.exists(outp))
+  res <- batchit:::.batch_read_envelope(outp)
+  expect_identical(res$status, "error")
+  expect_match(res$error$message, "not supported")
+})
+
+test_that(".batch_check_envelope() requires meta$details to be NULL on BOTH dispatch branches", {
+  dir <- withr::local_tempdir()
+  # return-value branch (outputs absent): details forbidden
+  return_meta <- list(fn_kind = "package", package = "batchit", symbol = "s",
+    hash = "h", id = "1", runner_package = "batchit", collect = TRUE,
+    details = "smuggled")
+  expect_error(
+    batchit:::.batch_check_envelope(list(protocol = PROTO, meta = return_meta, args = list())),
+    "details")
+  # declared-output branch: details must be NULL (Unit 1 contract -- reserved
+  # for a future opt-in consumer-skip mechanism, design PHASE6_DESIGN.md
+  # section 7, not implemented here)
+  task_meta <- list(fn_kind = "package", package = "batchit", symbol = "s",
+    hash = "h", id = "1", runner_package = "batchit",
+    outputs = c(a = file.path(dir, "x.qs2")), marker = file.path(dir, ".batchit__1"),
+    style = "return", attempt = "tok", details = "smuggled")
+  expect_error(
+    batchit:::.batch_check_envelope(list(protocol = PROTO, meta = task_meta, args = list())),
+    "details")
+})
+
 test_that(".batch_execute() is TOTAL: a malformed envelope yields an error envelope, not a throw", {
   res <- batchit:::.batch_execute(list(protocol = 1L, meta = NULL, args = list()))
   expect_identical(res$status, "error")
@@ -287,7 +494,7 @@ test_that(".batch_execute() is TOTAL: a malformed envelope yields an error envel
 
 test_that(".batch_inspect_result() makes protocol, id and FULL target identity load-bearing, and is total", {
   tgt <- list(package = "batchit", symbol = "s", hash = "H")
-  ok <- list(protocol = 1L, id = "7", status = "ok", value = 99L,
+  ok <- list(protocol = PROTO, id = "7", status = "ok", value = 99L,
     warnings = character(),
     target = list(package = "batchit", symbol = "s", hash = "H"))
   expect_true(batchit:::.batch_inspect_result(ok, "7", tgt)$ok)
@@ -296,10 +503,11 @@ test_that(".batch_inspect_result() makes protocol, id and FULL target identity l
   nl <- batchit:::.batch_inspect_result("garbage", "7", tgt)
   expect_false(nl$ok)
   expect_match(nl$reason, "not a list")
-  # wrong protocol
-  expect_false(batchit:::.batch_inspect_result(within(ok, protocol <- 2L), "7", tgt)$ok)
+  # wrong protocol (PROTO + 1L is guaranteed different from the current protocol,
+  # unlike a hardcoded literal that could coincidentally BECOME correct)
+  expect_false(batchit:::.batch_inspect_result(within(ok, protocol <- PROTO + 1L), "7", tgt)$ok)
   # error status carries the message
-  err <- list(protocol = 1L, id = "7", status = "error",
+  err <- list(protocol = PROTO, id = "7", status = "error",
     error = list(message = "boom"), warnings = character())
   expect_match(batchit:::.batch_inspect_result(err, "7", tgt)$reason, "boom")
   # id mismatch -- a valid-looking result for the WRONG item is rejected
@@ -317,7 +525,7 @@ test_that(".batch_inspect_result() makes protocol, id and FULL target identity l
   novalue <- ok
   novalue$value <- NULL
   expect_false(batchit:::.batch_inspect_result(novalue, "7", tgt)$ok)
-  null_ok <- list(protocol = 1L, id = "7", status = "ok", value = NULL,
+  null_ok <- list(protocol = PROTO, id = "7", status = "ok", value = NULL,
     warnings = character(),
     target = list(package = "batchit", symbol = "s", hash = "H"))
   expect_true(batchit:::.batch_inspect_result(null_ok, "7", tgt)$ok)
@@ -340,11 +548,11 @@ test_that("batch_run() validates timeout and collect as scalars, even for empty 
 
 test_that(".batch_inspect_result() stays total on malformed list fields and is strict on id", {
   tgt <- list(package = "batchit", symbol = "s", hash = "H")
-  ok <- list(protocol = 1L, id = "7", status = "ok", value = 1L,
+  ok <- list(protocol = PROTO, id = "7", status = "ok", value = 1L,
     warnings = character(),
     target = list(package = "batchit", symbol = "s", hash = "H"))
   # a bare-string `error` (not a list) must not throw while extracting the message
-  es <- list(protocol = 1L, id = "7", status = "error", error = "boom",
+  es <- list(protocol = PROTO, id = "7", status = "error", error = "boom",
     warnings = character())
   expect_false(batchit:::.batch_inspect_result(es, "7", tgt)$ok)
   # a NUMERIC id is rejected (strict identical, no as.character coercion)
@@ -357,8 +565,9 @@ test_that(".batch_inspect_result() stays total on malformed list fields and is s
   expect_true(rw$ok)
   expect_identical(rw$warnings, character())
   # DUPLICATE critical field names cannot smuggle a bad value behind a good one:
-  # `$protocol` would return the first (1L); the name check rejects the envelope.
-  dup <- list(protocol = 1L, protocol = 99L, id = "7", status = "ok", value = 1L,
+  # `$protocol` would return the first (matching one here); the name check
+  # rejects the envelope BEFORE the (duplicated) protocol value is even read.
+  dup <- list(protocol = PROTO, protocol = 99L, id = "7", status = "ok", value = 1L,
     warnings = character(),
     target = list(package = "batchit", symbol = "s", hash = "H"))
   d <- batchit:::.batch_inspect_result(dup, "7", tgt)
@@ -373,7 +582,7 @@ test_that(".batch_inspect_result() is total even against a hostile classed objec
   # yield a failure REASON, not crash the pool -- the whole inspection is wrapped.
   registerS3method("[[", "batchHostile", function(x, i, ...) stop("hostile [[ access"))
   hostile <- structure(
-    list(protocol = 1L, id = "7", status = "ok"), class = "batchHostile")
+    list(protocol = PROTO, id = "7", status = "ok"), class = "batchHostile")
   r <- batchit:::.batch_inspect_result(hostile, "7", tgt)
   expect_false(r$ok)
   expect_match(r$reason, "malformed result envelope")
@@ -386,7 +595,7 @@ test_that(".batch_inspect_result() is total even against a hostile classed objec
   registerS3method("conditionMessage", "hostCond",
     function(c) stop("conditionMessage itself throws"))
   hostile2 <- structure(
-    list(protocol = 1L, id = "7", status = "ok"), class = "batchHostile2")
+    list(protocol = PROTO, id = "7", status = "ok"), class = "batchHostile2")
   r2 <- batchit:::.batch_inspect_result(hostile2, "7", tgt)
   expect_false(r2$ok)
   expect_match(r2$reason, "malformed result envelope")
@@ -394,7 +603,7 @@ test_that(".batch_inspect_result() is total even against a hostile classed objec
 
 test_that(".batch_inspect_result() rejects DUPLICATE names in the nested target too", {
   tgt <- list(package = "batchit", symbol = "s", hash = "H")
-  ok <- list(protocol = 1L, id = "7", status = "ok", value = 1L,
+  ok <- list(protocol = PROTO, id = "7", status = "ok", value = 1L,
     warnings = character(),
     target = list(package = "batchit", symbol = "s", hash = "H"))
   # `target = list(package="batchit", package="evil", ...)` must not resolve via
@@ -405,13 +614,14 @@ test_that(".batch_inspect_result() rejects DUPLICATE names in the nested target 
 })
 
 test_that(".batch_check_envelope() rejects duplicate outer and meta field names", {
-  gm <- list(package = "batchit", symbol = "s", hash = "h", id = "1", collect = TRUE)
+  gm <- list(fn_kind = "package", package = "batchit", symbol = "s", hash = "h",
+    id = "1", collect = TRUE)
   expect_error(
-    batchit:::.batch_check_envelope(list(protocol = 1L, protocol = 1L,
+    batchit:::.batch_check_envelope(list(protocol = PROTO, protocol = PROTO,
       meta = gm, args = list())),
     "duplicate field names")
   expect_error(
-    batchit:::.batch_check_envelope(list(protocol = 1L,
+    batchit:::.batch_check_envelope(list(protocol = PROTO,
       meta = c(gm, list(package = "evil")), args = list())),
     "meta has duplicate")
 })
@@ -496,9 +706,9 @@ test_that("the REAL worker uses EXACT field extraction (no `$` partial-match ste
   worker <- file.path(dev_tree, "inst", "batch_worker.R")
   rscript <- file.path(R.home("bin"), "Rscript")
   meta <- list(dev_path_payload = "/attacker/tree/would/be/loaded",
-    package = "batchit", symbol = ".batch_fixture_echo", hash = "x", id = "1",
-    collect = TRUE, runner_package = "batchit")
-  env <- list(protocol = 1L, meta = meta, args = list(x = 1L))
+    fn_kind = "package", package = "batchit", symbol = ".batch_fixture_echo",
+    hash = "x", id = "1", collect = TRUE, runner_package = "batchit")
+  env <- list(protocol = PROTO, meta = meta, args = list(x = 1L))
   inp <- withr::local_tempfile(fileext = ".qs2")
   outp <- withr::local_tempfile(fileext = ".qs2")
   outf <- withr::local_tempfile(fileext = ".txt")
@@ -538,7 +748,7 @@ test_that("a successful target's warnings are surfaced in the parent, tagged by 
 test_that("collect = FALSE drops the target value before it enters the envelope", {
   # The shape-A memory guarantee, tested at the executor: a large return must not
   # be carried back when collect = FALSE.
-  env <- list(protocol = 1L, meta = list(package = "batchit",
+  env <- list(protocol = PROTO, meta = list(fn_kind = "package", package = "batchit",
     symbol = ".batch_fixture_big", version = "0",
     hash = mk(".batch_fixture_big")$hash, dev_path = NULL,
     runner_package = "batchit", id = "1", collect = FALSE),

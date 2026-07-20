@@ -1,3 +1,61 @@
+# batchit (development)
+
+Phase 6' Unit 1 (see `PHASE6_DESIGN.md`): a new declared-output commit engine,
+`batch_task()`, alongside the existing return-value `batch_run()`/
+`batch_stream()`. `batch_task(target, items, outputs, style = "return",
+n_workers, dev_path = NULL, ...)` runs a package target once per item (the
+same `processx`-per-item transport as `batch_run()`) and, instead of returning
+a value, commits it to `outputs[[i]]` — a declared name -> final-path map — via
+an all-or-nothing 7-step rename sequence run in the CHILD. A per-item marker
+file (`.batchit__<item id>`) is the atomic witness of a complete commit — but
+only a VALID, engine-produced marker (one that decodes and whose
+protocol/attempt-token/committed-output-map verify) is that witness; bare
+pathname existence at that path is not (a target that errors before the old
+marker is removed leaves an unrelated pre-existing marker untouched).
+`batch_task()` has no `collect` argument — the point is that raw values never
+cross back to the parent, only a small commit record
+(`list(committed = <name -> path>, attempt = <token>)`) does.
+
+This unit implements ONLY package targets (`fn_kind = "package"`) and ONLY
+`style = "return"`; `fn_kind = "adhoc"` and `style = "staged_writer"` are
+structurally recognised but rejected with a clear "not yet supported" error
+(later units). No consumer-opt-in skip/reuse logic exists yet (design section
+7) — every item is always dispatched and always recomputed.
+
+Normative doctrine (design section 0): no batchit dispatch decision may ever
+depend on a marker's existence or contents — `batch_task()`'s parent-side code
+validates only a marker's PATHNAME and parent directory, never reads/stats it;
+only the child, while committing, ever touches one. A source-level lockdown
+test guards this statically.
+
+The wire protocol bumped (`.BATCH_PROTOCOL` 1 -> 2): the envelope gained a
+required `meta$fn_kind` discriminator plus the declared-output commit fields
+(`outputs`/`marker`/`style`/`attempt`/`details`, the last reserved for a future
+opt-in consumer-skip mechanism and always `NULL` for now). An old-protocol
+envelope is rejected, and the worker now verifies protocol BEFORE loading any
+CONSUMER package (it always loads the RUNNER first). `.batch_check_envelope()`
+also now rejects any unknown `meta` field, closing the "typo'd field silently
+ignored" gap.
+
+Adversarial-review hardening of Unit 1: the CHILD's `.batch_check_envelope()`
+now re-validates output/marker path shape (already-normalized, absolute,
+parent dir exists) and rejects `style != "return"` BEFORE the target ever
+runs (previously a side-effecting target could execute for an envelope whose
+style would fail anyway), rather than trusting the parent's checks alone.
+`meta$details` must be `NULL` on both dispatch branches (Unit 1 never sets
+it). The top-level envelope now rejects unknown fields, matching the
+existing `meta`-field lockdown. A `batch_task()` commit result's value must
+have EXACTLY the fields `committed`/`attempt` — no extra field can smuggle
+raw data back to the parent. `batch_task()` now sweeps a failed (or killed)
+item's own batchit-generated commit temps from the parent side on ANY item
+failure — matched by the item's unique, attempt-scoped token
+(`<basename>.<attempt>.tmp<random>`, via `list.files(all.files = TRUE)` so the
+dotfile marker temp is included), so an unrelated file is never over-deleted.
+This closes a temp leak when `kill_tree()`/SIGKILL reaches the child before its
+own `on.exit` cleanup can run. Item ids containing `/`
+or `\` are now rejected (they are interpolated into the per-item marker
+filename).
+
 # batchit 26.7.19
 
 `runner_package` is now a **required** envelope field, with no consumer fallback.

@@ -69,3 +69,65 @@
   }
   invisible(NULL)
 }
+
+# --- Phase 6' Unit 1 fixtures: declared-output commit (batch_task()) --------
+# Targets for the return-style commit engine: a target's return must be a
+# named list whose names are EXACTLY the declared outputs (see
+# .batch_commit_task() in R/batch_task.R). These fixtures exercise the
+# well-formed case and every documented failure shape.
+
+# Returns exactly two named values -- the well-formed case (declared outputs
+# "primary"/"secondary").
+#' @noRd
+.batch_fixture_task_ok <- function(x) {
+  list(primary = x, secondary = x * 10)
+}
+
+# Missing a declared name ("secondary" never returned).
+#' @noRd
+.batch_fixture_task_missing_name <- function(x) {
+  list(primary = x)
+}
+
+# An UNDECLARED extra name alongside the two declared ones.
+#' @noRd
+.batch_fixture_task_extra_name <- function(x) {
+  list(primary = x, secondary = x * 10, surprise = "unexpected")
+}
+
+# Errors before returning anything -- no output could ever have been prepared.
+#' @noRd
+.batch_fixture_task_boom <- function(x) {
+  stop("task target detonated: ", x, call. = FALSE)
+}
+
+# Returns an empty list -- "exit 0, wrote nothing": shorter than every declared
+# output, the same shape as .batch_fixture_task_missing_name() but for BOTH
+# declared names at once.
+#' @noRd
+.batch_fixture_task_empty <- function(x) {
+  list()
+}
+
+# Sleeps `seconds` (well past any short test timeout), THEN returns the
+# well-formed declared-outputs shape -- lets a test force a real timeout
+# kill_tree() (via a short `timeout`) that lands during do.call(), i.e.
+# BEFORE .batch_commit_task() ever starts, exercising batch_task()'s
+# timeout/SIGKILL failure path against a REAL subprocess.
+#' @noRd
+.batch_fixture_task_slow <- function(x, seconds) {
+  Sys.sleep(seconds)
+  list(primary = x, secondary = x * 10)
+}
+
+# Writes a file at `path` as a SIDE EFFECT, then returns. Exists purely to
+# make "did the target actually run?" observable from OUTSIDE the subprocess:
+# a real file appearing at `path` is unambiguous proof do.call() executed it,
+# used to prove a target does NOT run when the worker rejects its envelope
+# (e.g. an unsupported commit `style`) before do.call() -- see
+# .batch_check_envelope()'s style enforcement.
+#' @noRd
+.batch_fixture_side_effect_writer <- function(path) {
+  writeLines("ran", path)
+  list(a = "ran")
+}

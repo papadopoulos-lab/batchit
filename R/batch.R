@@ -24,7 +24,14 @@
 # consumer's code. The worker and the mirai daemon each load BOTH packages (see
 # inst/batch_worker.R and .batch_stream() below).
 
-.BATCH_PROTOCOL <- 1L
+# Bumped to 2 for Phase 6' Unit 1 (see PHASE6_DESIGN.md): the envelope gained a
+# REQUIRED meta$fn_kind discriminator ("package" | "adhoc") plus the
+# declared-output commit fields (outputs/marker/style/attempt/details) used by
+# batch_task(). An old (protocol 1) envelope has none of these, so a
+# version-skewed worker must reject it rather than mis-execute --
+# .batch_check_envelope() enforces that, and the worker now verifies protocol
+# BEFORE loading any CONSUMER package (see inst/batch_worker.R).
+.BATCH_PROTOCOL <- 2L
 
 # Generous per-item wall-clock default: a hang-catcher, not a deadline. Long
 # enough that no legitimate item (e.g., in the originating registry pipeline a
@@ -243,6 +250,16 @@ batch_target <- function(package, symbol, version = NULL) {
 #' or corrupt envelope produces a confusing error deep inside resolution instead
 #' of a clear one here. Argument validation (against the target's formals) is a
 #' separate step -- see `.batch_validate_item()`.
+#'
+#' Branches on `meta$fn_kind` (design PHASE6_DESIGN.md sections 1/4): `"package"`
+#' requires `package`/`symbol`/`hash`; `"adhoc"` is a structurally valid enum
+#' value here (rejected with a clear "not yet supported" message later, in
+#' `.batch_execute()` -- Unit 1 implements only the `"package"` branch). Also
+#' branches on whether `meta$outputs` is present: absent means today's
+#' return-value dispatch (`collect` required; `style`/`marker`/`attempt`
+#' forbidden); present means a declared-output commit dispatch (`style`/
+#' `marker`/`attempt` required; `collect` forbidden) -- design section 4. Any
+#' `meta` field outside the known set is rejected, not silently ignored.
 #' @noRd
 .batch_check_envelope <- function(env) {
   if (!is.list(env)) {
@@ -255,6 +272,16 @@ batch_target <- function(package, symbol, version = NULL) {
   if (anyDuplicated(names(env))) {
     stop(".batch envelope has duplicate field names", call. = FALSE)
   }
+  # Unknown top-level fields are rejected, not ignored -- the same policy
+  # already applied to meta (design PHASE6_DESIGN.md section 4) extended to
+  # the outer envelope, so a typo'd or smuggled top-level field cannot ride
+  # along silently.
+  known_top_fields <- c("protocol", "meta", "args")
+  unknown_top <- setdiff(names(env), known_top_fields)
+  if (length(unknown_top) > 0L) {
+    stop(sprintf(".batch envelope has unknown top-level field(s): %s",
+      paste(unknown_top, collapse = ", ")), call. = FALSE)
+  }
   if (!identical(env[["protocol"]], .BATCH_PROTOCOL)) {
     stop(sprintf(".batch envelope protocol mismatch: expected %s, got %s",
       .BATCH_PROTOCOL, format(env[["protocol"]] %||% "<none>")), call. = FALSE)
@@ -266,21 +293,136 @@ batch_target <- function(package, symbol, version = NULL) {
   if (anyDuplicated(names(meta))) {
     stop(".batch envelope meta has duplicate field names", call. = FALSE)
   }
-  # runner_package is a load-deciding field (it names the namespace that supplies
-  # .batch_execute), so it is required and non-empty like the rest -- both
-  # transports must accept the SAME complete schema, or one could pass an envelope
-  # the other's worker rejects.
-  for (f in c("package", "symbol", "hash", "id", "runner_package")) {
+  known_meta_fields <- c("fn_kind", "id", "runner_package", "dev_path", "version",
+    "package", "symbol", "hash", "collect", "outputs", "marker", "style",
+    "attempt", "details")
+  unknown <- setdiff(names(meta), known_meta_fields)
+  if (length(unknown) > 0L) {
+    stop(sprintf(".batch envelope meta has unknown field(s): %s",
+      paste(unknown, collapse = ", ")), call. = FALSE)
+  }
+
+  # id / runner_package are required regardless of fn_kind: id lets the parent
+  # match a result to the item it dispatched; runner_package is a load-deciding
+  # field (it names the namespace that supplies .batch_execute), so both
+  # transports must accept the SAME complete schema, or one could pass an
+  # envelope the other's worker rejects.
+  for (f in c("id", "runner_package")) {
     v <- meta[[f]]
     if (!is.character(v) || length(v) != 1L || is.na(v) || !nzchar(v)) {
       stop(sprintf(".batch envelope meta$%s is missing or not a non-empty string", f),
         call. = FALSE)
     }
   }
-  collect <- meta[["collect"]]
-  if (!is.logical(collect) || length(collect) != 1L || is.na(collect)) {
-    stop(".batch envelope meta$collect is missing or not a logical flag", call. = FALSE)
+
+  fn_kind <- meta[["fn_kind"]]
+  if (!is.character(fn_kind) || length(fn_kind) != 1L || is.na(fn_kind) ||
+      !(fn_kind %in% c("package", "adhoc"))) {
+    stop(sprintf(
+      ".batch envelope meta$fn_kind is missing or not one of \"package\"/\"adhoc\": %s",
+      format(fn_kind %||% "<none>")), call. = FALSE)
   }
+  if (identical(fn_kind, "package")) {
+    for (f in c("package", "symbol", "hash")) {
+      v <- meta[[f]]
+      if (!is.character(v) || length(v) != 1L || is.na(v) || !nzchar(v)) {
+        stop(sprintf(".batch envelope meta$%s is missing or not a non-empty string", f),
+          call. = FALSE)
+      }
+    }
+  }
+  # fn_kind == "adhoc" is accepted STRUCTURALLY here (a valid discriminator
+  # value) -- Unit 1 implements no adhoc execution, so .batch_execute() rejects
+  # it with a clear "not yet supported" error once it gets that far.
+
+  outputs <- meta[["outputs"]]
+  if (is.null(outputs)) {
+    collect <- meta[["collect"]]
+    if (!is.logical(collect) || length(collect) != 1L || is.na(collect)) {
+      stop(".batch envelope meta$collect is missing or not a logical flag", call. = FALSE)
+    }
+    if (!is.null(meta[["style"]]) || !is.null(meta[["marker"]]) ||
+        !is.null(meta[["attempt"]])) {
+      stop(paste0(".batch envelope: meta$style/marker/attempt are forbidden when ",
+        "meta$outputs is absent (return-value dispatch)"), call. = FALSE)
+    }
+    if (!is.null(meta[["details"]])) {
+      stop(paste0(".batch envelope: meta$details is forbidden when meta$outputs is ",
+        "absent (return-value dispatch)"), call. = FALSE)
+    }
+  } else {
+    if (!is.null(meta[["collect"]])) {
+      stop(paste0(".batch envelope: meta$collect is forbidden when meta$outputs is ",
+        "present (declared-output commit dispatch)"), call. = FALSE)
+    }
+    .batch_validate_output_map(outputs, where = "child", id = meta[["id"]])
+    # The CHILD may replay independently (it is not merely a passive
+    # executor of whatever the parent already checked), so it re-validates
+    # the same conservative path rules the parent enforced at dispatch time
+    # (design PHASE6_DESIGN.md section 3.1) -- reusing
+    # .batch_validate_output_paths() -- rather than trusting structural
+    # presence alone. Crucially the child must NOT silently re-normalize a
+    # path into something DIFFERENT from what the parent dispatched (that
+    # would let the child commit to a path the parent never validated): so
+    # every output path must already be exactly its own normalized form, or
+    # this rejects rather than "fixing" it.
+    normalized_outputs <- .batch_validate_output_paths(outputs, meta[["id"]])
+    if (!identical(normalized_outputs, outputs)) {
+      stop(sprintf(paste0(
+        ".batch envelope meta$outputs [item '%s']: output path(s) are not already ",
+        "absolute/normalized (the parent must dispatch already-normalized paths; the ",
+        "child re-validates but never silently re-normalizes a path into something ",
+        "different)"), meta[["id"]]), call. = FALSE)
+    }
+    style <- meta[["style"]]
+    if (!is.character(style) || length(style) != 1L || is.na(style) || !nzchar(style)) {
+      stop(".batch envelope meta$style is missing or not a non-empty string", call. = FALSE)
+    }
+    # Reject any style other than "return" HERE -- BEFORE the target ever
+    # runs (this function is called before do.call() in .batch_execute()).
+    # Unit 1 implements no other style; letting a side-effecting target run
+    # for an envelope whose style will fail anyway is exactly the ordering
+    # bug this closes.
+    if (!identical(style, "return")) {
+      stop(sprintf(paste0(
+        ".batch envelope meta$style '%s' is not supported (Unit 1 implements only ",
+        "\"return\") -- rejected before the target runs"), style), call. = FALSE)
+    }
+    marker <- meta[["marker"]]
+    if (!is.character(marker) || length(marker) != 1L || is.na(marker) || !nzchar(marker)) {
+      stop(".batch envelope meta$marker is missing or not a non-empty string", call. = FALSE)
+    }
+    if (!.batch_is_absolute_path(marker)) {
+      stop(sprintf(".batch envelope meta$marker [item '%s'] is not an absolute path: %s",
+        meta[["id"]], marker), call. = FALSE)
+    }
+    marker_parent <- dirname(marker)
+    if (!dir.exists(marker_parent)) {
+      stop(sprintf(paste0(
+        ".batch envelope meta$marker [item '%s']: parent directory does not exist: %s"),
+        meta[["id"]], marker_parent), call. = FALSE)
+    }
+    # Symmetric with the output-path re-validation: the parent derives the
+    # marker from an already-normalized output dir, so a non-normalized marker
+    # like ".../sub/../.batchit__1" is a corrupted/hostile envelope.
+    if (!identical(marker, normalizePath(marker, mustWork = FALSE))) {
+      stop(sprintf(
+        ".batch envelope meta$marker [item '%s'] is not already absolute/normalized",
+        meta[["id"]]), call. = FALSE)
+    }
+    attempt <- meta[["attempt"]]
+    if (!is.character(attempt) || length(attempt) != 1L || is.na(attempt) || !nzchar(attempt)) {
+      stop(".batch envelope meta$attempt is missing or not a non-empty string", call. = FALSE)
+    }
+    # details is reserved (design PHASE6_DESIGN.md section 7); Unit 1 never
+    # sets it, so a non-NULL value here can only be a corrupted/hostile
+    # envelope.
+    if (!is.null(meta[["details"]])) {
+      stop(paste0(".batch envelope: meta$details must be NULL (Unit 1 does not implement ",
+        "the opt-in consumer-skip details value)"), call. = FALSE)
+    }
+  }
+
   if (!is.list(env[["args"]])) {
     stop(".batch envelope args is not a list", call. = FALSE)
   }
@@ -343,6 +485,12 @@ batch_target <- function(package, symbol, version = NULL) {
     {
       .batch_check_envelope(env)
       meta <- env[["meta"]]
+      fn_kind <- meta[["fn_kind"]]
+      if (!identical(fn_kind, "package")) {
+        stop(sprintf(
+          "batch worker: fn_kind '%s' not yet supported (Unit 1 implements only \"package\")",
+          fn_kind), call. = FALSE)
+      }
       target <- .batch_resolve_target(meta)
       .batch_validate_item(target, env[["args"]], where = "child", id = meta[["id"]])
       fn <- get(meta[["symbol"]], envir = asNamespace(meta[["package"]]),
@@ -361,14 +509,37 @@ batch_target <- function(package, symbol, version = NULL) {
           invokeRestart("muffleWarning")
         }
       )
-      list(
-        status = "ok",
-        value = if (isTRUE(meta[["collect"]])) value else NULL,
-        error = NULL,
-        warnings = utils::head(warns, 100L),
-        target = list(package = target$package, symbol = target$symbol,
-          hash = target$hash)
-      )
+
+      outputs <- meta[["outputs"]]
+      if (is.null(outputs)) {
+        list(
+          status = "ok",
+          value = if (isTRUE(meta[["collect"]])) value else NULL,
+          error = NULL,
+          warnings = utils::head(warns, 100L),
+          target = list(package = target$package, symbol = target$symbol,
+            hash = target$hash)
+        )
+      } else {
+        # Declared-output commit dispatch (batch_task(), design
+        # PHASE6_DESIGN.md section 3.3). style == "return" is already
+        # enforced by .batch_check_envelope() above -- BEFORE do.call() ran
+        # the target -- so by this point it is always "return" (Unit 1
+        # implements no other style; a side-effecting target must never run
+        # for an envelope whose style would fail anyway). The raw target
+        # `value` is discarded after commit -- it never crosses back, only
+        # the small commit record does.
+        commit <- .batch_commit_task(value, outputs, meta[["marker"]],
+          meta[["attempt"]], meta[["details"]])
+        list(
+          status = "ok",
+          value = commit,
+          error = NULL,
+          warnings = utils::head(warns, 100L),
+          target = list(package = target$package, symbol = target$symbol,
+            hash = target$hash)
+        )
+      }
     },
     error = function(e) list(
       status = "error",
@@ -407,21 +578,33 @@ batch_target <- function(package, symbol, version = NULL) {
 #' symbol AND hash -- matches what was dispatched (the contract defines identity
 #' as all three; a body/formals hash can collide across two functions), plus that
 #' a successful envelope actually carries a `value` field.
+#'
+#' `expected_outputs`/`expected_attempt` (both `NULL` by default) are set only
+#' when inspecting a `batch_task()` (declared-output commit) result: the value
+#' field is then a commit record, not raw data, and is checked against the
+#' `outputs`/attempt token actually DISPATCHED for this item (design
+#' PHASE6_DESIGN.md section 3.5) -- names AND paths, plus the token, must match
+#' exactly, or a stale/substituted result is rejected the same way a wrong id
+#' or wrong target identity is. Existing (return-value) callers pass neither and
+#' are unaffected.
 #' @noRd
-.batch_inspect_result <- function(envelope, expected_id, target) {
+.batch_inspect_result <- function(envelope, expected_id, target,
+                                    expected_outputs = NULL, expected_attempt = NULL) {
   # Total BY CONSTRUCTION: any error while inspecting a hostile or corrupt result
   # -- a classed object with a throwing `[[`/`format` method, a field that errors
   # on access -- becomes a failure reason, so it flows through the caller's
   # uniform .fail() path rather than crashing the pool.
   tryCatch(
-    .batch_inspect_result_impl(envelope, expected_id, target),
+    .batch_inspect_result_impl(envelope, expected_id, target,
+      expected_outputs, expected_attempt),
     error = function(e) list(ok = FALSE,
       reason = paste0("malformed result envelope: ", .batch_condition_message(e)))
   )
 }
 
 #' @noRd
-.batch_inspect_result_impl <- function(envelope, expected_id, target) {
+.batch_inspect_result_impl <- function(envelope, expected_id, target,
+                                         expected_outputs = NULL, expected_attempt = NULL) {
   if (!is.list(envelope)) {
     return(list(ok = FALSE, reason = sprintf(
       "result is not a list (got %s)", class(envelope)[1L])))
@@ -481,6 +664,46 @@ batch_target <- function(package, symbol, version = NULL) {
   # Never coerce an arbitrary object (as.character() on a closure throws); a
   # non-character warnings field is simply dropped, keeping the inspector total.
   if (!is.character(warnings)) warnings <- character()
+
+  # Declared-output commit result (batch_task()): the value is a small commit
+  # record, never raw data. Validate it matches EXACTLY what was dispatched --
+  # names AND paths of the committed map, and the attempt token -- so a stale or
+  # substituted result can never be accepted as this item's commit.
+  if (!is.null(expected_outputs)) {
+    val <- envelope[["value"]]
+    val_nm <- names(val)
+    # The commit record's names must be EXACTLY {"committed", "attempt"} --
+    # no missing, no blank, and critically no EXTRA field. Allowing extras
+    # would let a worker smuggle arbitrary raw data back to the parent
+    # (e.g. `list(committed = ..., attempt = ..., raw = <huge>)`), defeating
+    # the whole point of batch_task() (only a small commit record ever
+    # crosses back; see design PHASE6_DESIGN.md section 3.5).
+    if (!is.list(val) || is.null(val_nm) || any(!nzchar(val_nm)) ||
+        anyDuplicated(val_nm) ||
+        !identical(sort(val_nm), sort(c("committed", "attempt")))) {
+      return(list(ok = FALSE,
+        reason = paste0(
+          "commit result value must have EXACTLY the fields committed, attempt ",
+          "(no more, no fewer) -- got: ",
+          paste(val_nm %||% "<none>", collapse = ", "))))
+    }
+    committed <- val[["committed"]]
+    if (!is.character(committed) || is.null(names(committed)) ||
+        anyDuplicated(names(committed)) ||
+        !identical(sort(names(committed)), sort(names(expected_outputs))) ||
+        !identical(committed[order(names(committed))],
+          expected_outputs[order(names(expected_outputs))])) {
+      return(list(ok = FALSE,
+        reason = "committed output map does not match the outputs dispatched for this item"))
+    }
+    attempt <- val[["attempt"]]
+    if (!is.character(attempt) || length(attempt) != 1L || is.na(attempt) ||
+        !identical(attempt, expected_attempt)) {
+      return(list(ok = FALSE,
+        reason = "commit attempt token does not match what was dispatched"))
+    }
+  }
+
   list(ok = TRUE, reason = NULL, value = envelope[["value"]], warnings = warnings)
 }
 
@@ -645,18 +868,29 @@ batch_target <- function(package, symbol, version = NULL) {
 
 #' Build a dispatch input envelope
 #'
-#' The ONE place both frontends assemble the wire envelope, so `batch_run()` and
-#' `batch_stream()` cannot drift in the schema the child reads back
-#' (`.batch_check_envelope()` / `.batch_execute()`). `runner` (the runner package
-#' name) travels so the worker/daemon knows which package holds `.batch_execute`
-#' -- the field that carries the runner-vs-consumer split. `id` is coerced to a
-#' string here so a numeric item index and an explicit character id land
-#' identically.
+#' The ONE place EVERY frontend assembles the wire envelope -- `batch_run()`,
+#' `batch_stream()`, and `batch_task()` -- so none of them can drift in the
+#' schema the child reads back (`.batch_check_envelope()` / `.batch_execute()`).
+#' `runner` (the runner package name) travels so the worker/daemon knows which
+#' package holds `.batch_execute` -- the field that carries the
+#' runner-vs-consumer split. `id` is coerced to a string here so a numeric item
+#' index and an explicit character id land identically.
+#'
+#' `fn_kind`/`collect` are the return-value-dispatch fields (unchanged
+#' defaults: `batch_run()`/`batch_stream()` pass only `collect`).
+#' `outputs`/`marker`/`style`/`attempt`/`details` are the declared-output
+#' commit fields `batch_task()` supplies instead (design PHASE6_DESIGN.md
+#' sections 3/4); `collect` and those five are mutually exclusive, enforced by
+#' `.batch_check_envelope()`.
 #' @noRd
-.batch_input_envelope <- function(target, dev_path, runner, id, collect, args) {
+.batch_input_envelope <- function(target, dev_path, runner, id, args,
+                                    fn_kind = "package", collect = NULL,
+                                    outputs = NULL, marker = NULL, style = NULL,
+                                    attempt = NULL, details = NULL) {
   list(
     protocol = .BATCH_PROTOCOL,
     meta = list(
+      fn_kind = fn_kind,
       package = target$package,
       symbol = target$symbol,
       version = target$version,
@@ -664,7 +898,12 @@ batch_target <- function(package, symbol, version = NULL) {
       dev_path = dev_path,
       runner_package = runner,
       id = as.character(id),
-      collect = collect
+      collect = collect,
+      outputs = outputs,
+      marker = marker,
+      style = style,
+      attempt = attempt,
+      details = details
     ),
     args = args
   )
@@ -859,7 +1098,7 @@ batch_run <- function(
   runner_pkg <- .batch_runner_package()
   for (i in seq_len(n_items)) {
     envelope <- .batch_input_envelope(
-      target, dev_path, runner_pkg, ids[i], collect, items[[i]])
+      target, dev_path, runner_pkg, ids[i], items[[i]], collect = collect)
     .batch_write_envelope(envelope, input_paths[i])
   }
 
@@ -1186,7 +1425,7 @@ batch_stream <- function(
     args <- producer(id)
     .batch_validate_item(target, args, where = "parent", id = id)
     envelope <- .batch_input_envelope(
-      target, dev_path, runner_pkg, id, collect, args)
+      target, dev_path, runner_pkg, id, args, collect = collect)
     h <- mirai::mirai(
       {
         get(".batch_execute", envir = asNamespace(.runner))(.env)

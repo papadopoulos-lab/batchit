@@ -3,3 +3,4 @@
 export(batch_run)
 export(batch_stream)
 export(batch_target)
+export(batch_task)
