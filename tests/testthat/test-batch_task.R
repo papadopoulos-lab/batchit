@@ -608,16 +608,186 @@ test_that(".batch_inspect_result() rejects a commit record MISSING a required fi
   expect_match(r$reason, "EXACTLY")
 })
 
-# --- supplementary: dispatch-time validation ---------------------------------
+# --- 8: style = "staged_writer" (Phase 6' Unit 2) ----------------------------
+# Same real-subprocess discipline as the "return"-style tests above: the
+# target STREAMS each declared output to batch_stage_path(<name>) instead of
+# returning it; the return value is unconditionally ignored by the commit
+# engine.
 
-test_that("batch_task(): style = \"staged_writer\" errors as not yet supported", {
+test_that("batch_task() style = \"staged_writer\": commits every declared output written via batch_stage_path() + a marker, through the real worker", {
+  skip_if_not(have_tree, "package source tree not available")
+  dir <- withr::local_tempdir()
+  out1 <- file.path(dir, "sw_ok_primary.qs2")
+  out2 <- file.path(dir, "sw_ok_secondary.qs2")
+
+  r <- batchit::batch_task(
+    mk(".batch_fixture_task_staged_ok"),
+    items = named_list("only", list(x = 21L)),
+    outputs = named_list("only", c(primary = out1, secondary = out2)),
+    style = "staged_writer",
+    n_workers = 1L, dev_path = dev_tree
+  )
+
+  expect_true(file.exists(out1))
+  expect_true(file.exists(out2))
+  expect_identical(qs2::qs_read(out1), 21L)
+  expect_identical(qs2::qs_read(out2), 210)
+
+  marker <- file.path(dir, ".batchit__only")
+  expect_true(file.exists(marker))
+  rec <- qs2::qs_read(marker)
+  expect_identical(rec$protocol, PROTO)
+  expect_setequal(names(rec$committed), c("primary", "secondary"))
+  expect_null(rec$details)
+
+  expect_identical(names(r), "only")
+  expect_setequal(names(r$only$committed), c("primary", "secondary"))
+  expect_true(is.character(r$only$attempt) && nzchar(r$only$attempt))
+
+  # no leftover STAGE temp survives a successful commit
+  expect_length(Sys.glob(file.path(dir, "*.stage*")), 0L)
+})
+
+test_that("batch_task() style = \"staged_writer\": target writes only SOME declared outputs -> error, NO marker, staged files cleaned, no torn finals", {
+  skip_if_not(have_tree, "package source tree not available")
+  dir <- withr::local_tempdir()
+  out1 <- file.path(dir, "sw_missing_primary.qs2")
+  out2 <- file.path(dir, "sw_missing_secondary.qs2")
+  before <- list.files(dir, all.files = TRUE, no.. = TRUE)
+
   expect_error(
-    batchit::batch_task(mk(".batch_fixture_task_ok"), items = list(list(x = 1L)),
-      outputs = list(c(primary = "/tmp/x.qs2", secondary = "/tmp/y.qs2")),
-      style = "staged_writer", n_workers = 1L),
-    "staged_writer.*not yet supported"
+    batchit::batch_task(
+      mk(".batch_fixture_task_staged_missing"),
+      items = list(list(x = 1L)),
+      outputs = list(c(primary = out1, secondary = out2)),
+      style = "staged_writer",
+      n_workers = 1L, dev_path = dev_tree
+    ),
+    "never wrote"
+  )
+  expect_false(file.exists(out1))
+  expect_false(file.exists(out2))
+  expect_false(file.exists(file.path(dir, ".batchit__1")))
+  # written stage temp (primary) AND never-written stage temp (secondary) are
+  # both gone -- nothing left behind by a partial staged_writer commit
+  expect_identical(sort(list.files(dir, all.files = TRUE, no.. = TRUE)), sort(before))
+})
+
+test_that("batch_task() style = \"staged_writer\": target writes one stage then ERRORS mid-run -> .batch_execute()'s own cleanup removes the partial stage (commit never reached)", {
+  # Distinct from the 'missing' test above, which RETURNS normally and so
+  # reaches .batch_commit_task()'s cleanup. Here the target stop()s DURING
+  # do.call() -- after writing one stage -- so .batch_commit_task() is never
+  # entered, and only the on.exit(unlink(stage_map)) registered in
+  # .batch_execute()'s own frame BEFORE do.call() can remove the written
+  # stage. Proves that outer cleanup is load-bearing (codex Unit-2 round 1).
+  skip_if_not(have_tree, "package source tree not available")
+  dir <- withr::local_tempdir()
+  out1 <- file.path(dir, "sw_pboom_primary.qs2")
+  out2 <- file.path(dir, "sw_pboom_secondary.qs2")
+  before <- list.files(dir, all.files = TRUE, no.. = TRUE)
+
+  # No-op the PARENT sweep so the ONLY thing that can remove the written stage
+  # is .batch_execute()'s own on.exit in the CHILD (unaffected by this
+  # parent-process mock). Without this, the parent sweep would clean the stage
+  # too and mask whether the child-side outer cleanup is load-bearing.
+  testthat::local_mocked_bindings(
+    .batch_sweep_task_temps = function(...) invisible(TRUE),
+    .package = "batchit"
+  )
+
+  expect_error(
+    batchit::batch_task(
+      mk(".batch_fixture_task_staged_partial_boom"),
+      items = list(list(x = 1L)),
+      outputs = list(c(primary = out1, secondary = out2)),
+      style = "staged_writer",
+      n_workers = 1L, dev_path = dev_tree
+    ),
+    "detonated"
+  )
+  expect_false(file.exists(out1))
+  expect_false(file.exists(out2))
+  expect_false(file.exists(file.path(dir, ".batchit__1")))
+  # The primary stage the target wrote before erroring must be swept by
+  # .batch_execute()'s own on.exit -- nothing left behind.
+  expect_identical(sort(list.files(dir, all.files = TRUE, no.. = TRUE)), sort(before))
+})
+
+test_that("batch_stage_path(): errors when called OUTSIDE a staged_writer run", {
+  expect_error(
+    batchit::batch_stage_path("primary"),
+    "no staged_writer.*run is active"
   )
 })
+
+test_that("batch_task() style = \"staged_writer\": batch_stage_path() with an UNDECLARED name errors, through the real worker", {
+  skip_if_not(have_tree, "package source tree not available")
+  dir <- withr::local_tempdir()
+  out1 <- file.path(dir, "sw_badname_primary.qs2")
+  out2 <- file.path(dir, "sw_badname_secondary.qs2")
+
+  expect_error(
+    batchit::batch_task(
+      mk(".batch_fixture_task_staged_bad_name"),
+      items = list(list(x = 1L)),
+      outputs = list(c(primary = out1, secondary = out2)),
+      style = "staged_writer",
+      n_workers = 1L, dev_path = dev_tree
+    ),
+    "not one of this item's declared outputs"
+  )
+  expect_false(file.exists(out1))
+  expect_false(file.exists(out2))
+})
+
+test_that("batch_task() style = \"staged_writer\": a timeout-killed item's ATTEMPT-SCOPED STAGE leftovers are swept, but an UNRELATED file is not (token-scoping, not just suffix-shape)", {
+  skip_if_not(have_tree, "package source tree not available")
+  # Mirrors the "return"-style SIGKILL-leak test above, but for staged_writer's
+  # OWN temp shape: `<basename>.<attempt>.stage<random>`, not `.tmp`. Before
+  # .batch_sweep_task_temps()'s pattern is widened to match `.stage` too, this
+  # test is RED: the pre-seeded staged leftovers below survive the sweep
+  # (only the marker's `.tmp` temp, if any, would ever have matched).
+  testthat::local_mocked_bindings(
+    .batch_new_attempt_token = function() "TESTTOKENstage1",
+    .package = "batchit"
+  )
+  dir <- withr::local_tempdir()
+  out1 <- file.path(dir, "sw_slow_primary.qs2")
+  out2 <- file.path(dir, "sw_slow_secondary.qs2")
+  marker <- file.path(dir, ".batchit__slowstage")
+
+  # This attempt's own STAGE leftovers (as a killed worker mid-stream would
+  # leave behind) -- MUST be swept.
+  scoped_stage1 <- tempfile(
+    pattern = paste0(basename(out1), ".TESTTOKENstage1.stage"), tmpdir = dir)
+  scoped_stage2 <- tempfile(
+    pattern = paste0(basename(out2), ".TESTTOKENstage1.stage"), tmpdir = dir)
+  # An UNRELATED pre-existing file carrying NO attempt token -- MUST survive.
+  unrelated <- file.path(dir, "sw_slow_primary.qs2.stage.backup")
+  file.create(scoped_stage1, scoped_stage2, unrelated)
+  expect_true(all(file.exists(c(scoped_stage1, scoped_stage2, unrelated))))
+
+  expect_error(
+    batchit::batch_task(
+      mk(".batch_fixture_task_staged_slow"),
+      items = named_list("slowstage", list(x = 1L, seconds = 30)),
+      outputs = named_list("slowstage", c(primary = out1, secondary = out2)),
+      style = "staged_writer",
+      n_workers = 1L, dev_path = dev_tree, timeout = 1
+    ),
+    "timeout|killed"
+  )
+
+  # This attempt's stage leftovers swept; the unrelated `.stage.backup` untouched.
+  expect_false(file.exists(scoped_stage1))
+  expect_false(file.exists(scoped_stage2))
+  expect_true(file.exists(unrelated))
+  expect_false(file.exists(out1))
+  expect_false(file.exists(out2))
+  expect_false(file.exists(marker))
+})
+
+# --- supplementary: dispatch-time validation ---------------------------------
 
 test_that("batch_task(): an unknown style is rejected", {
   expect_error(

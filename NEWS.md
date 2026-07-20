@@ -1,5 +1,25 @@
 # batchit (development)
 
+Phase 6' Unit 2 (see `PHASE6_DESIGN.md`): `batch_task()` now supports `style =
+"staged_writer"` alongside `style = "return"` (Unit 1). Instead of returning a
+named list, a `staged_writer` target WRITES each declared output to
+`batch_stage_path(<name>)` — a new exported accessor that returns the exact
+attempt-scoped staging path batchit pre-computed for that output, in the same
+directory as its final destination. The target's return value is
+unconditionally ignored (no return-name-match check for this style). Commit
+step 1 becomes an ASSERTION rather than a write: every declared name must
+exist at its staging path as a regular, non-symlink file once the target
+returns, or the item fails loudly with zero renames — steps 2-7 (marker
+prepare, temp verification, old-marker removal, output renames, marker rename
+LAST, read-back verification) are identical between the two styles.
+`batch_stage_path()` errors clearly when called outside an active
+`staged_writer` run, or for a name that is not one of the item's declared
+outputs. The parent-side failure sweep (`.batch_sweep_task_temps()`, used on a
+timeout/SIGKILL) now matches BOTH `.<attempt>.tmp` (marker + `return`-style
+output temps) and `.<attempt>.stage` (`staged_writer` staging files), still
+keyed on the unique per-dispatch attempt token so an unrelated pre-existing
+file is never swept.
+
 Phase 6' Unit 1 (see `PHASE6_DESIGN.md`): a new declared-output commit engine,
 `batch_task()`, alongside the existing return-value `batch_run()`/
 `batch_stream()`. `batch_task(target, items, outputs, style = "return",

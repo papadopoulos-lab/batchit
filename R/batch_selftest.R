@@ -131,3 +131,60 @@
   writeLines("ran", path)
   list(a = "ran")
 }
+
+# --- Phase 6' Unit 2 fixtures: declared-output commit, staged_writer style --
+# A staged_writer target WRITES each declared output via batch_stage_path()
+# instead of returning it -- its return value is unconditionally IGNORED by
+# the commit engine (see .batch_commit_task(), style == "staged_writer"
+# branch). These mirror the "return"-style fixtures above (well-formed,
+# missing an output, and the batch_stage_path() undeclared-name error).
+
+# Streams both declared outputs ("primary"/"secondary") via
+# batch_stage_path(); the return value is deliberately something that would
+# FAIL the return-style name-match check (neither "primary" nor "secondary")
+# -- proving staged_writer really does ignore it rather than happening to
+# pass by coincidence.
+#' @noRd
+.batch_fixture_task_staged_ok <- function(x) {
+  qs2::qs_save(x, batch_stage_path("primary"))
+  qs2::qs_save(x * 10, batch_stage_path("secondary"))
+  list(this_return_value_is_ignored_by_staged_writer = TRUE)
+}
+
+# Writes only ONE of the two declared outputs -- "forgets" secondary.
+#' @noRd
+.batch_fixture_task_staged_missing <- function(x) {
+  qs2::qs_save(x, batch_stage_path("primary"))
+  invisible(NULL)
+}
+
+# Calls batch_stage_path() with a name that is NOT one of this item's
+# declared outputs -- exercises the accessor's own undeclared-name error,
+# through the real worker.
+#' @noRd
+.batch_fixture_task_staged_bad_name <- function(x) {
+  batch_stage_path("no_such_declared_output")
+  invisible(NULL)
+}
+
+# Sleeps `seconds` (well past any short test timeout), THEN streams both
+# declared outputs -- lets a test force a real timeout kill_tree() that lands
+# during do.call(), i.e. before any output is actually staged, exercising
+# batch_task()'s timeout/SIGKILL sweep for staged_writer's OWN temp shape
+# (`.stage`, not `.tmp`).
+#' @noRd
+.batch_fixture_task_staged_slow <- function(x, seconds) {
+  Sys.sleep(seconds)
+  qs2::qs_save(x, batch_stage_path("primary"))
+  qs2::qs_save(x * 10, batch_stage_path("secondary"))
+  invisible(NULL)
+}
+
+# Writes ONE stage file, then errors BEFORE .batch_commit_task() is reached --
+# exercises the .batch_execute() frame's own on.exit(unlink(stage_map)) cleanup
+# of a worker-created partial stage (the child never reaches the commit).
+#' @noRd
+.batch_fixture_task_staged_partial_boom <- function(x) {
+  qs2::qs_save(x, batch_stage_path("primary"))
+  stop("staged target detonated after writing one stage")
+}

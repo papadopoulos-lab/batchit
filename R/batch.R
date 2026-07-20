@@ -378,15 +378,14 @@ batch_target <- function(package, symbol, version = NULL) {
     if (!is.character(style) || length(style) != 1L || is.na(style) || !nzchar(style)) {
       stop(".batch envelope meta$style is missing or not a non-empty string", call. = FALSE)
     }
-    # Reject any style other than "return" HERE -- BEFORE the target ever
-    # runs (this function is called before do.call() in .batch_execute()).
-    # Unit 1 implements no other style; letting a side-effecting target run
-    # for an envelope whose style will fail anyway is exactly the ordering
-    # bug this closes.
-    if (!identical(style, "return")) {
+    # Reject any style other than "return"/"staged_writer" HERE -- BEFORE the
+    # target ever runs (this function is called before do.call() in
+    # .batch_execute()). Letting a side-effecting target run for an envelope
+    # whose style will fail anyway is exactly the ordering bug this closes.
+    if (!(style %in% c("return", "staged_writer"))) {
       stop(sprintf(paste0(
-        ".batch envelope meta$style '%s' is not supported (Unit 1 implements only ",
-        "\"return\") -- rejected before the target runs"), style), call. = FALSE)
+        ".batch envelope meta$style '%s' is not supported (must be \"return\" or ",
+        "\"staged_writer\") -- rejected before the target runs"), style), call. = FALSE)
     }
     marker <- meta[["marker"]]
     if (!is.character(marker) || length(marker) != 1L || is.na(marker) || !nzchar(marker)) {
@@ -496,21 +495,50 @@ batch_target <- function(package, symbol, version = NULL) {
       fn <- get(meta[["symbol"]], envir = asNamespace(meta[["package"]]),
         inherits = FALSE)
 
+      # style/outputs are already both-fully-validated by .batch_check_envelope()
+      # above -- BEFORE do.call() ever runs the target: style is one of
+      # "return"/"staged_writer" whenever outputs is present, NULL otherwise.
+      outputs <- meta[["outputs"]]
+      style <- meta[["style"]]
+
+      stage_map <- NULL
+      staged <- !is.null(outputs) && identical(style, "staged_writer")
+      stage_prior <- NULL
+      if (staged) {
+        # Pre-compute EVERY declared output's staging path BEFORE do.call()
+        # (design PHASE6_DESIGN.md section 3.4), and register them for cleanup
+        # in THIS frame: a target that errors PARTWAY through streaming never
+        # reaches .batch_commit_task(), so only an on.exit registered before
+        # do.call() still fires. Safe through a successful commit too -- by then
+        # every path has been renamed away, so unlink() on an absent path is a
+        # no-op. Then enter scope so batch_stage_path() can answer.
+        stage_map <- .batch_stage_paths_for(outputs, meta[["attempt"]])
+        on.exit(unlink(stage_map, force = TRUE), add = TRUE)
+        stage_prior <- .batch_stage_scope_enter(stage_map)
+      }
+
       # Capture the target's warnings into the envelope instead of letting them
       # scroll off into a log the parent deletes on success. This matters for a
       # target that catches a downstream failure, WARNs, and still returns a
       # partial (status "ok") result -- without this the incomplete result would
       # be stored with no word to the parent.
       warns <- character()
-      value <- withCallingHandlers(
-        do.call(fn, env[["args"]]),
-        warning = function(w) {
-          warns[[length(warns) + 1L]] <<- .batch_condition_message(w)
-          invokeRestart("muffleWarning")
-        }
+      value <- tryCatch(
+        withCallingHandlers(
+          do.call(fn, env[["args"]]),
+          warning = function(w) {
+            warns[[length(warns) + 1L]] <<- .batch_condition_message(w)
+            invokeRestart("muffleWarning")
+          }
+        ),
+        # Exit staged scope the INSTANT the target returns or errors -- NOT
+        # during the commit below. batch_stage_path() must be answerable ONLY
+        # while the target itself runs (design section 3.4); leaving it active
+        # through the commit would let e.g. a classed `outputs` map's `[[`
+        # method reach it after the target is done.
+        finally = if (staged) .batch_stage_scope_exit(stage_prior)
       )
 
-      outputs <- meta[["outputs"]]
       if (is.null(outputs)) {
         list(
           status = "ok",
@@ -522,15 +550,12 @@ batch_target <- function(package, symbol, version = NULL) {
         )
       } else {
         # Declared-output commit dispatch (batch_task(), design
-        # PHASE6_DESIGN.md section 3.3). style == "return" is already
-        # enforced by .batch_check_envelope() above -- BEFORE do.call() ran
-        # the target -- so by this point it is always "return" (Unit 1
-        # implements no other style; a side-effecting target must never run
-        # for an envelope whose style would fail anyway). The raw target
-        # `value` is discarded after commit -- it never crosses back, only
-        # the small commit record does.
+        # PHASE6_DESIGN.md section 3.3). The raw target `value` is discarded
+        # after commit (unconditionally for staged_writer, or once matched
+        # against `outputs` for return) -- it never crosses back, only the
+        # small commit record does.
         commit <- .batch_commit_task(value, outputs, meta[["marker"]],
-          meta[["attempt"]], meta[["details"]])
+          meta[["attempt"]], meta[["details"]], style = style, stage_map = stage_map)
         list(
           status = "ok",
           value = commit,

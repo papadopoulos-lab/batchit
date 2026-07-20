@@ -1,5 +1,8 @@
-# Declared-output commit engine (batch_task()) -- Phase 6' Unit 1. Package
-# targets, `return` style only; see PHASE6_DESIGN.md sections 2-4, 9.1, 9.5.
+# Declared-output commit engine (batch_task()) -- Phase 6' Units 1-2. Package
+# targets, both commit styles: `return` (Unit 1, the target returns a named
+# list) and `staged_writer` (Unit 2, the target streams each output to
+# `batch_stage_path(<name>)` instead); see PHASE6_DESIGN.md sections 2-4, 9.1,
+# 9.5.
 # batch_task() reuses batch_run()'s transport (a fresh subprocess per item via
 # processx, the SAME inst/batch_worker.R) but replaces the raw return-value
 # result with a small, non-negotiable commit record: `outputs[[i]]` names the
@@ -228,17 +231,20 @@
 #' section 3.3) only runs if the CHILD process gets to run R-level unwind code
 #' at all -- a `kill_tree()` (the timeout path) or an OS-level SIGKILL sends a
 #' signal `on.exit` cannot intercept, so a worker killed while mid-commit can
-#' orphan `<basename(final)>.tmp*` temps in the output directories. There is
-#' no way for the PARENT to know the exact temp names the child generated
-#' (they carry a `tempfile()`-random suffix), but it does not need to: every
-#' temp `.batch_commit_task()` creates is ATTEMPT-SCOPED --
-#' `<basename>.<attempt>.tmp<random>`, where `<attempt>` is this dispatch's
+#' orphan `<basename(final)>.tmp*` temps in the output directories (`return`
+#' style) or `<basename(final)>.stage*` staging files (`staged_writer` style,
+#' Unit 2 -- see [.batch_stage_paths_for()]). There is no way for the PARENT
+#' to know the exact temp names the child generated (they carry a
+#' `tempfile()`-random suffix), but it does not need to: every temp either
+#' style creates is ATTEMPT-SCOPED -- `<basename>.<attempt>.tmp<random>` or
+#' `<basename>.<attempt>.stage<random>`, where `<attempt>` is this dispatch's
 #' unique, alphanumeric (regex-safe) token -- so a `list.files(all.files=TRUE)`
-#' match keyed on the literal `.<attempt>.tmp` substring finds ONLY this
-#' attempt's own temps (including the DOTFILE marker temp, which `Sys.glob()`
-#' would skip). It is keyed on the unique TOKEN, never on the output basename,
-#' so an unrelated pre-existing file such as `out.qs2.tmp.backup` (no attempt
-#' token) can never match -- safe to remove unconditionally.
+#' match keyed on the literal `.<attempt>.tmp`/`.<attempt>.stage` substring
+#' finds ONLY this attempt's own temps (including the DOTFILE marker temp,
+#' which `Sys.glob()` would skip). It is keyed on the unique TOKEN, never on
+#' the output basename, so an unrelated pre-existing file such as
+#' `out.qs2.tmp.backup` or `out.qs2.stage.backup` (no attempt token) can never
+#' match -- safe to remove unconditionally.
 #'
 #' Deliberately conservative and narrow: it sweeps only the ONE item's own
 #' attempt-scoped temps across the directories it writes into -- it never
@@ -256,9 +262,12 @@
   # list.files(all.files = TRUE), NOT Sys.glob(): a glob's leading `*` skips
   # DOTFILES, and the marker temp is a dotfile
   # (`.batchit__<id>.<attempt>.tmp<random>`). The attempt token is a unique,
-  # alphanumeric (regex-safe) nonce; match the literal `.<attempt>.tmp`
-  # substring, so an unrelated `out.qs2.tmp.backup` (no token) never matches.
-  pat <- paste0("\\.", attempt, "\\.tmp")
+  # alphanumeric (regex-safe) nonce; match the literal `.<attempt>.tmp` OR
+  # `.<attempt>.stage` substring (the marker/return-style output temps use
+  # `.tmp`; `staged_writer` output staging files use `.stage` -- Unit 2), so
+  # an unrelated `out.qs2.tmp.backup`/`out.qs2.stage.backup` (no token) never
+  # matches.
+  pat <- paste0("\\.", attempt, "\\.(tmp|stage)")
   for (d in dirs) {
     leftover <- list.files(d, pattern = pat, all.files = TRUE, full.names = TRUE)
     if (length(leftover) > 0L) unlink(leftover, force = TRUE)
@@ -284,24 +293,150 @@
   invisible(TRUE)
 }
 
+# --- staged_writer scoped accessor (design PHASE6_DESIGN.md section 3.4) ----
+
+#' Pre-compute one item's per-output staging temp paths (staged_writer only)
+#'
+#' Attempt-scoped, same directory as each output's final destination (so the
+#' later commit rename in `.batch_commit_task()` is same-filesystem):
+#' `<basename(final)>.<attempt>.stage<random>`. Called ONCE, in
+#' `.batch_execute()` BEFORE `do.call()` runs the target -- the returned map
+#' is both what `batch_stage_path()` hands the target during the call AND,
+#' unchanged, what `.batch_commit_task()` later verifies/renames; it is never
+#' recomputed (a second `tempfile()` call would mint a DIFFERENT random path).
+#' @noRd
+.batch_stage_paths_for <- function(outputs, attempt) {
+  declared <- names(outputs)
+  stage <- character(length(declared))
+  names(stage) <- declared
+  for (nm in declared) {
+    final <- outputs[[nm]]
+    stage[[nm]] <- tempfile(pattern = paste0(basename(final), ".", attempt, ".stage"),
+      tmpdir = dirname(final))
+  }
+  stage
+}
+
+# One package-level environment holding the CURRENT staged_writer run's
+# per-output staging paths, if any. `batch_stage_path()` is called from
+# INSIDE the target's own call stack (arbitrarily deep -- a helper the target
+# itself calls), with no direct handle back into `.batch_execute()`'s frame,
+# so this state has to live somewhere both sides can reach. A dedicated
+# environment, not a base R `options()` entry: `options()` is a namespace a
+# consumer's own code might independently poke at, so a private slot keeps
+# this unambiguous. Only one item ever runs at a time inside one worker
+# subprocess (batchit never runs two items concurrently within one child), so
+# there is no concurrency hazard in reusing one shared slot across dispatches.
+.batch_stage_env <- new.env(parent = emptyenv())
+.batch_stage_env$active <- FALSE
+.batch_stage_env$paths <- NULL
+
+#' Enter staged_writer scope: `batch_stage_path()` becomes answerable.
+#' Returns the PRIOR `{active, paths}` so the caller can restore it on exit
+#' (save/restore, not an unconditional reset -- defensive against any nested or
+#' in-process reuse, even though one item runs at a time per worker).
+#' @noRd
+.batch_stage_scope_enter <- function(paths) {
+  prior <- list(active = .batch_stage_env$active, paths = .batch_stage_env$paths)
+  .batch_stage_env$active <- TRUE
+  .batch_stage_env$paths <- paths
+  invisible(prior)
+}
+
+#' Exit staged_writer scope, restoring the PRIOR `{active, paths}` state.
+#'
+#' Called from a `finally` wrapped TIGHTLY around `do.call()` in
+#' `.batch_execute()` -- so `batch_stage_path()` is answerable ONLY while the
+#' target itself runs, NOT during the subsequent commit or result construction.
+#' It runs on both the target returning normally and the target erroring. Only
+#' an OS-level kill (no R-level unwind at all) can skip it, the same limit every
+#' other child-side cleanup here already has.
+#' @param prior The `{active, paths}` returned by `.batch_stage_scope_enter()`.
+#' @noRd
+.batch_stage_scope_exit <- function(prior = list(active = FALSE, paths = NULL)) {
+  .batch_stage_env$active <- prior$active
+  .batch_stage_env$paths <- prior$paths
+  invisible(NULL)
+}
+
+#' The staging path batchit pre-computed for one declared output
+#'
+#' Inside a `style = "staged_writer"` [batch_task()] target, WRITE each
+#' declared output to `batch_stage_path(<name>)` -- an attempt-scoped temp
+#' path in the SAME directory as that output's final destination (so the
+#' later commit rename is same-filesystem) -- instead of returning it. The
+#' target's own return value is ignored by the commit engine; batchit finds
+#' out what was written by checking, once the target returns, that this
+#' exact path exists as a regular, non-symlink file (design
+#' PHASE6_DESIGN.md section 3.4) -- a declared name the target never wrote
+#' fails the whole item, with zero renames.
+#'
+#' Only callable from inside the `do.call()` of a `style = "staged_writer"`
+#' `batch_task()` item -- i.e. only in a batchit worker subprocess, while
+#' that one target call is running. Calling it any other time (outside a
+#' staged_writer run entirely, or for a `name` this item never declared) is
+#' an error.
+#'
+#' @param name The declared output name -- must be one of this item's
+#'   `outputs` names.
+#' @return A single absolute path string. WRITE to this path; do not read it
+#'   back or move/rename it yourself -- batchit renames it to the final
+#'   destination once every declared output has been staged.
+#' @examples
+#' \dontrun{
+#' # inside a style = "staged_writer" target:
+#' my_writer <- function(x) {
+#'   saveRDS(x, batch_stage_path("primary"))
+#'   invisible(NULL)
+#' }
+#' }
+#' @export
+batch_stage_path <- function(name) {
+  if (!isTRUE(.batch_stage_env$active)) {
+    stop(paste0(
+      "batch_stage_path(): no staged_writer batch_task() run is active -- only ",
+      "callable from inside the target of a style = \"staged_writer\" batch_task() item"),
+      call. = FALSE)
+  }
+  if (!is.character(name) || length(name) != 1L || is.na(name) || !nzchar(name)) {
+    stop("batch_stage_path(): `name` must be a single non-empty string", call. = FALSE)
+  }
+  paths <- .batch_stage_env$paths
+  if (!(name %in% names(paths))) {
+    stop(sprintf(
+      "batch_stage_path(): '%s' is not one of this item's declared outputs: %s",
+      name, paste(names(paths), collapse = ", ")), call. = FALSE)
+  }
+  paths[[name]]
+}
+
 #' Child-side declared-output commit (design PHASE6_DESIGN.md section 3.3)
 #'
-#' Unit 1: `fn_kind = "package"`, `style = "return"` only. Runs the 7-step
-#' sequence: (1) validate the target's return names match the declared outputs
-#' EXACTLY, then prepare every output temp (qs2-serialize, declaration order);
-#' (2) prepare + close the marker temp; (3) verify every temp is a regular
-#' non-symlink file; (4) remove the OLD final marker and verify removal; (5)
-#' rename every output temp to its final path; (6) rename the marker temp to
-#' its final path LAST (the atomic commit point); (7) read back the marker and
-#' verify the attempt token, then emit the commit record.
+#' `fn_kind = "package"`; either commit style. Runs the 7-step sequence: (1)
+#' PREPARE every output temp -- `return`: validate the target's return names
+#' match the declared outputs EXACTLY, then qs2-serialize each value
+#' (declaration order); `staged_writer`: the target's return value is
+#' IGNORED (it streamed each output to `batch_stage_path(<name>)` instead,
+#' BEFORE this function is even called -- see `.batch_execute()`), so step 1
+#' here is a pure ASSERTION that every declared output now exists at its
+#' pre-computed staging path as a regular, non-symlink file (an
+#' undeclared/never-written name -> error, zero renames); (2) prepare + close
+#' the marker temp; (3) verify every temp is a regular non-symlink file; (4)
+#' remove the OLD final marker and verify removal; (5) rename every output
+#' temp to its final path; (6) rename the marker temp to its final path LAST
+#' (the atomic commit point); (7) read back the marker and verify the
+#' attempt token, then emit the commit record. Steps 2-7 are IDENTICAL
+#' between the two styles -- only step 1 differs in HOW the output temp gets
+#' onto disk (written here, vs. already written by the target).
 #'
 #' Total for the caller's purposes: on ANY failure -- wrong/missing return
-#' names, a serialization failure, a rename failure, a marker-verification
-#' failure -- every temp this call created is removed (via `on.exit`) and the
-#' condition is re-thrown, so `.batch_execute()`'s outer `tryCatch` turns it
-#' into the usual structured error envelope. A VALID final marker (one that
-#' decodes and whose protocol/attempt-token/committed-output-map verify) is
-#' the witness of a complete commit -- never bare pathname existence: this
+#' names (`return`), a never-written declared output (`staged_writer`), a
+#' serialization failure, a rename failure, a marker-verification failure --
+#' every temp/stage file this call is tracking is removed (via `on.exit`) and
+#' the condition is re-thrown, so `.batch_execute()`'s outer `tryCatch` turns
+#' it into the usual structured error envelope. A VALID final marker (one
+#' that decodes and whose protocol/attempt-token/committed-output-map verify)
+#' is the witness of a complete commit -- never bare pathname existence: this
 #' function never removes a temp AFTER it has been renamed to a final path
 #' (it is no longer a temp at that point), and it never "rolls back" an
 #' already-renamed final -- a crash between two output renames leaves a torn
@@ -316,27 +451,26 @@
 #' replace the marker -- by design: it runs in the CHILD, as part of
 #' committing, never as part of a launch decision (design section 0).
 #'
-#' @param value The target's raw return value (a named list). Discarded by the
-#'   caller after this call returns -- it never crosses back to the parent.
+#' @param value The target's raw return value. For `style = "return"` this
+#'   must be a named list matching `outputs`; for `style = "staged_writer"`
+#'   it is discarded entirely, unchecked. Never crosses back to the parent.
 #' @param outputs Named character vector: declared output name -> final path
 #'   (already parent-validated and normalized).
 #' @param marker_path Final marker path (already parent-validated and
 #'   normalized).
 #' @param attempt This dispatch's attempt token (parent-issued).
-#' @param details Reserved (design section 7); always `NULL` in Unit 1.
+#' @param details Reserved (design section 7); always `NULL` in Units 1-2.
+#' @param style `"return"` or `"staged_writer"`.
+#' @param stage_map For `style = "staged_writer"` only: the SAME declared
+#'   name -> staging-temp-path map [.batch_stage_paths_for()] computed, and
+#'   [.batch_stage_scope_enter()]'d, BEFORE `do.call()` ran the target (so
+#'   `batch_stage_path()` and this function agree on the exact paths).
+#'   Ignored for `style = "return"`.
 #' @return `list(committed = outputs, attempt = attempt)` -- the commit record.
 #' @noRd
-.batch_commit_task <- function(value, outputs, marker_path, attempt, details = NULL) {
+.batch_commit_task <- function(value, outputs, marker_path, attempt, details = NULL,
+                                 style = "return", stage_map = NULL) {
   declared <- names(outputs)
-
-  if (!is.list(value) || is.null(names(value)) || anyDuplicated(names(value)) ||
-      any(!nzchar(names(value))) || !identical(sort(names(value)), sort(declared))) {
-    stop(sprintf(paste0(
-      "batch commit: target must return a named list whose names are EXACTLY ",
-      "the declared outputs {%s}; got {%s}"),
-      paste(declared, collapse = ", "),
-      paste(names(value) %||% character(0), collapse = ", ")), call. = FALSE)
-  }
 
   # Every temp created below, MINUS anything already renamed to its final path
   # (removed from this vector as each rename succeeds) -- cleaned up on any
@@ -346,20 +480,54 @@
   ok <- FALSE
   on.exit(if (!ok) unlink(pending, force = TRUE), add = TRUE)
 
-  # --- step 1: prepare every output temp (qs2-serialize, declaration order) ---
-  out_tmp <- character(length(declared))
-  names(out_tmp) <- declared
-  for (nm in declared) {
-    final <- outputs[[nm]]
-    # Attempt-SCOPED temp name: `<basename>.<attempt>.tmp<random>`. The attempt
-    # token is a unique, alphanumeric (glob-safe) nonce, so the parent-side
-    # failure sweep can match ONLY this attempt's own temps -- never an unrelated
-    # pre-existing file (e.g. a user's `out.qs2.tmp.backup`).
-    tmp <- tempfile(pattern = paste0(basename(final), ".", attempt, ".tmp"),
-      tmpdir = dirname(final))
-    pending <- c(pending, tmp)
-    qs2::qs_save(value[[nm]], tmp)
-    out_tmp[[nm]] <- tmp
+  # --- step 1: prepare every output temp ---------------------------------------
+  if (identical(style, "return")) {
+    if (!is.list(value) || is.null(names(value)) || anyDuplicated(names(value)) ||
+        any(!nzchar(names(value))) || !identical(sort(names(value)), sort(declared))) {
+      stop(sprintf(paste0(
+        "batch commit: target must return a named list whose names are EXACTLY ",
+        "the declared outputs {%s}; got {%s}"),
+        paste(declared, collapse = ", "),
+        paste(names(value) %||% character(0), collapse = ", ")), call. = FALSE)
+    }
+    out_tmp <- character(length(declared))
+    names(out_tmp) <- declared
+    for (nm in declared) {
+      final <- outputs[[nm]]
+      # Attempt-SCOPED temp name: `<basename>.<attempt>.tmp<random>`. The attempt
+      # token is a unique, alphanumeric (glob-safe) nonce, so the parent-side
+      # failure sweep can match ONLY this attempt's own temps -- never an unrelated
+      # pre-existing file (e.g. a user's `out.qs2.tmp.backup`).
+      tmp <- tempfile(pattern = paste0(basename(final), ".", attempt, ".tmp"),
+        tmpdir = dirname(final))
+      pending <- c(pending, tmp)
+      qs2::qs_save(value[[nm]], tmp)
+      out_tmp[[nm]] <- tmp
+    }
+  } else {
+    # style == "staged_writer": the target's return VALUE is unconditionally
+    # ignored -- there is no return-name-match check for this style (that
+    # check is `return`-only). `stage_map` names the EXACT paths
+    # batch_stage_path() handed the target (pre-computed in .batch_execute()
+    # before do.call()), so step 1 here does no writing of its own: it only
+    # ASSERTS every declared name now exists at its staging path as a
+    # regular, non-symlink file. Register every stage path for cleanup up
+    # front, not just the ones that turn out to exist -- unlink() on an
+    # absent path is a silent no-op, so this is safe even when the target
+    # wrote nothing at all.
+    pending <- c(pending, unname(stage_map))
+    for (nm in declared) {
+      p <- stage_map[[nm]]
+      if (!file.exists(p) || dir.exists(p) || .batch_is_symlink(p)) {
+        stop(sprintf(paste0(
+          "batch commit: staged_writer target never wrote declared output '%s' ",
+          "(expected a non-directory, non-symlink file at batch_stage_path('%s') = %s; ",
+          "as at any output destination, base R cannot portably reject a ",
+          "FIFO/socket/device special file the target may have created there)"),
+          nm, nm, p), call. = FALSE)
+      }
+    }
+    out_tmp <- stage_map
   }
 
   # --- step 2: prepare + close the marker temp ---------------------------------
@@ -428,17 +596,20 @@
 #' marker at that path completely untouched, so a file sitting at the marker
 #' path does not by itself mean this attempt committed.
 #'
-#' Unit 1 implements only `style = "return"` (the target returns
+#' Two commit styles, both only for package targets (`fn_kind = "package"`,
+#' via [batch_target()]): `style = "return"` (Unit 1 -- the target returns
 #' `list(<name> = <value>, ...)`, names matching the declared outputs EXACTLY;
-#' each value is qs2-serialized to its declared path) and only package targets
-#' (`fn_kind = "package"`, via [batch_target()]). There is deliberately no
-#' `collect` argument -- the point of `batch_task()` is that raw values never
-#' cross back to the parent; only a small commit record does.
+#' each value is qs2-serialized to its declared path) and `style =
+#' "staged_writer"` (Unit 2 -- the target instead WRITES each output to
+#' [batch_stage_path()]`(<name>)` as it goes; its return value is ignored).
+#' There is deliberately no `collect` argument -- the point of `batch_task()`
+#' is that raw values never cross back to the parent; only a small commit
+#' record does.
 #'
 #' No batchit-computed "should this item re-run?" logic exists here or anywhere
-#' in this Unit: every item is dispatched and every target is always run. (A
+#' in these Units: every item is dispatched and every target is always run. (A
 #' later, explicitly opt-in consumer-skip mechanism is design section 7 --
-#' not implemented in Unit 1.) Nor does the parent ever inspect a marker's
+#' not implemented yet.) Nor does the parent ever inspect a marker's
 #' existence or contents before dispatch (design section 0) -- dispatch behaves
 #' identically whether a target's marker already exists, is stale, or is
 #' malformed; only the CHILD, while committing, ever reads one.
@@ -454,8 +625,9 @@
 #'   portably distinguish a FIFO/socket/device special file, so such a file is
 #'   not rejected here and MAY be replaced by the commit rename); every
 #'   output AND every derived marker path must be unique across the WHOLE call.
-#' @param style Commit style. Only `"return"` is implemented in Unit 1;
-#'   `"staged_writer"` errors as not yet supported.
+#' @param style Commit style: `"return"` (the target returns a named list --
+#'   Unit 1) or `"staged_writer"` (the target writes each output via
+#'   [batch_stage_path()] instead -- Unit 2). Any other value errors.
 #' @param n_workers Concurrent subprocesses (validated: finite, whole, >= 1).
 #' @param dev_path Consumer-package source tree for `devtools::load_all()` in
 #'   the worker, or `NULL` for the installed consumer package.
@@ -493,12 +665,9 @@ batch_task <- function(
   if (!is.character(style) || length(style) != 1L || is.na(style) || !nzchar(style)) {
     stop("batch_task(): `style` must be a single non-empty string", call. = FALSE)
   }
-  if (identical(style, "staged_writer")) {
-    stop(paste0("batch_task(): style = \"staged_writer\" is not yet supported ",
-      "(Unit 1 implements \"return\" only)"), call. = FALSE)
-  }
-  if (!identical(style, "return")) {
-    stop(sprintf("batch_task(): unknown style '%s' (only \"return\" is supported)",
+  if (!(style %in% c("return", "staged_writer"))) {
+    stop(sprintf(
+      "batch_task(): unknown style '%s' (must be \"return\" or \"staged_writer\")",
       style), call. = FALSE)
   }
   n_workers <- .batch_validate_n_workers(n_workers, "batch_task()")

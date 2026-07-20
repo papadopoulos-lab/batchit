@@ -401,10 +401,11 @@ test_that(".batch_check_envelope() re-validates output/marker PATH SHAPE on the 
   expect_true(batchit:::.batch_check_envelope(ok))
 })
 
-test_that(".batch_check_envelope() rejects any style OTHER THAN \"return\" for a declared-output envelope, BEFORE the target could run", {
-  # Unit 1 implements only style = "return". A bad style must be rejected
-  # HERE (structurally, before .batch_execute() ever calls do.call()) -- not
-  # only later, deep inside the branch that runs after the target executes.
+test_that(".batch_check_envelope() accepts \"return\" AND \"staged_writer\", and rejects any OTHER style, BEFORE the target could run", {
+  # Phase 6' Units 1-2 implement style = "return" and style = "staged_writer".
+  # A bad style must be rejected HERE (structurally, before .batch_execute()
+  # ever calls do.call()) -- not only later, deep inside the branch that runs
+  # after the target executes.
   dir <- withr::local_tempdir()
   base_meta <- function(style) list(fn_kind = "package", package = "batchit",
     symbol = "s", hash = "h", id = "1", runner_package = "batchit",
@@ -412,14 +413,12 @@ test_that(".batch_check_envelope() rejects any style OTHER THAN \"return\" for a
     style = style, attempt = "tok")
   expect_error(
     batchit:::.batch_check_envelope(list(protocol = PROTO,
-      meta = base_meta("staged_writer"), args = list())),
-    "not supported")
-  expect_error(
-    batchit:::.batch_check_envelope(list(protocol = PROTO,
       meta = base_meta("bogus_style"), args = list())),
     "not supported")
   expect_true(batchit:::.batch_check_envelope(list(protocol = PROTO,
     meta = base_meta("return"), args = list())))
+  expect_true(batchit:::.batch_check_envelope(list(protocol = PROTO,
+    meta = base_meta("staged_writer"), args = list())))
 })
 
 test_that("a side-effecting target does NOT run when the REAL worker receives a declared-output envelope with an unsupported style", {
@@ -438,7 +437,7 @@ test_that("a side-effecting target does NOT run when the REAL worker receives a 
     symbol = ".batch_fixture_side_effect_writer", hash = mk(".batch_fixture_side_effect_writer")$hash,
     id = "1", runner_package = "batchit", dev_path = dev_tree,
     outputs = c(a = file.path(dir, "out.qs2")), marker = file.path(dir, ".batchit__1"),
-    style = "staged_writer", attempt = "tok")
+    style = "bogus_style", attempt = "tok")
   env <- list(protocol = PROTO, meta = meta,
     args = list(path = side_effect_file))
   inp <- withr::local_tempfile(fileext = ".qs2")

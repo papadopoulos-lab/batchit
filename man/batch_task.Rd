@@ -32,8 +32,9 @@ portably distinguish a FIFO/socket/device special file, so such a file is
 not rejected here and MAY be replaced by the commit rename); every
 output AND every derived marker path must be unique across the WHOLE call.}
 
-\item{style}{Commit style. Only \code{"return"} is implemented in Unit 1;
-\code{"staged_writer"} errors as not yet supported.}
+\item{style}{Commit style: \code{"return"} (the target returns a named list --
+Unit 1) or \code{"staged_writer"} (the target writes each output via
+\code{\link[=batch_stage_path]{batch_stage_path()}} instead -- Unit 2). Any other value errors.}
 
 \item{n_workers}{Concurrent subprocesses (validated: finite, whole, >= 1).}
 
@@ -66,17 +67,19 @@ marker at that path completely untouched, so a file sitting at the marker
 path does not by itself mean this attempt committed.
 }
 \details{
-Unit 1 implements only \code{style = "return"} (the target returns
+Two commit styles, both only for package targets (\code{fn_kind = "package"},
+via \code{\link[=batch_target]{batch_target()}}): \code{style = "return"} (Unit 1 -- the target returns
 \verb{list(<name> = <value>, ...)}, names matching the declared outputs EXACTLY;
-each value is qs2-serialized to its declared path) and only package targets
-(\code{fn_kind = "package"}, via \code{\link[=batch_target]{batch_target()}}). There is deliberately no
-\code{collect} argument -- the point of \code{batch_task()} is that raw values never
-cross back to the parent; only a small commit record does.
+each value is qs2-serialized to its declared path) and \code{style = "staged_writer"} (Unit 2 -- the target instead WRITES each output to
+\code{\link[=batch_stage_path]{batch_stage_path()}}\verb{(<name>)} as it goes; its return value is ignored).
+There is deliberately no \code{collect} argument -- the point of \code{batch_task()}
+is that raw values never cross back to the parent; only a small commit
+record does.
 
 No batchit-computed "should this item re-run?" logic exists here or anywhere
-in this Unit: every item is dispatched and every target is always run. (A
+in these Units: every item is dispatched and every target is always run. (A
 later, explicitly opt-in consumer-skip mechanism is design section 7 --
-not implemented in Unit 1.) Nor does the parent ever inspect a marker's
+not implemented yet.) Nor does the parent ever inspect a marker's
 existence or contents before dispatch (design section 0) -- dispatch behaves
 identically whether a target's marker already exists, is stale, or is
 malformed; only the CHILD, while committing, ever reads one.
