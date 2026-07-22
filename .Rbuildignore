@@ -5,6 +5,8 @@
 ^docs$
 ^_pkgdown\.yml$
 ^PROJECT\.md$
+^PHASE6_DESIGN\.md$
+^PUBLIC_API\.md$
 ^\.git$
 ^\.Rhistory$
 ^\.vscode$
