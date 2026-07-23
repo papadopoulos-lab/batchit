@@ -46,28 +46,24 @@ Unit 1) or \code{"staged_writer"} (the target writes each output via
 tree for \code{devtools::load_all()} in the worker (or \code{NULL} for the
 installed consumer package). For \code{fn_kind = "adhoc"} there is no
 consumer identity, so this instead names BATCHIT'S OWN source tree (see
-\code{\link[processx:run]{run()}}'s \code{dev_path} doc) -- \code{NULL} (the default) uses the installed
+\code{\link[=run]{run()}}'s \code{dev_path} doc) -- \code{NULL} (the default) uses the installed
 \code{batchit}.}
 
 \item{p}{A progress callback such as a \code{progressr} progressor, or \code{NULL}.}
 
 \item{label}{Optional short stage tag prefixed to the progress message.}
 
-\item{timeout}{Per-item wall-clock limit in seconds; see \code{\link[processx:run]{run()}}.}
+\item{timeout}{Per-item wall-clock limit in seconds; see \code{\link[=run]{run()}}.}
 
 \item{target}{Deprecated former name of \code{fn} (Unit 1/2 originally shipped
 this parameter as \code{target = ...}). Pass \code{fn} instead; supplying both errors.}
 }
 \value{
 A list, named by item id, in item order: each element is that item's
-commit record, \verb{list(committed = <named char: name -> final path>, attempt = <token>, skipped = <TRUE/FALSE>)}. \code{skipped} is \code{TRUE} only
-when the target opted in via \code{\link[=batch_prior]{batch_prior()}}/\code{\link[=batch_skip]{batch_skip()}} (design
-PHASE6_DESIGN.md section 7) and batchit reused the item's prior commit
-instead of recomputing; it is \code{FALSE} for every ordinary commit. Never
-the target's raw return value.
+commit record, \verb{list(committed = <named char: name -> final path>, attempt = <token>)}. Never the target's raw return value.
 }
 \description{
-The declared-output sibling of \code{\link[processx:run]{run()}}/\code{\link[=run_and_collect]{run_and_collect()}} (design
+The declared-output sibling of \code{\link[=run]{run()}}/\code{\link[=run_and_collect]{run_and_collect()}} (design
 PHASE6_DESIGN.md sections 2-3): same transport (a fresh subprocess per item
 via \code{processx}, the same worker script, the same both-ends item validation
 and hash-verified target), but instead of a raw return value crossing
@@ -96,18 +92,19 @@ record does.
 bare closure (\code{fn_kind = "adhoc"}, Phase 6' Unit 3, design PHASE6_DESIGN.md
 sections 1-2) -- both drive the SAME commit engine (\code{.batch_commit_task()},
 both styles, the same marker/§0 doctrine). A closure is gated by the same
-self-containedness lint and mandatory \code{baseenv()} rebase \code{\link[processx:run]{run()}}/
+self-containedness lint and mandatory \code{baseenv()} rebase \code{\link[=run]{run()}}/
 \code{\link[=run_and_collect]{run_and_collect()}} use
 (see \code{.batch_lint_adhoc_fn()}); commit-record identity is unaffected either
 way (it is bound to the marker's own attempt token, never to fn_kind).
 
 No batchit-computed "should this item re-run?" logic exists here or anywhere
-in these Units: every item is dispatched and every target is always run. (A
-later, explicitly opt-in consumer-skip mechanism is design section 7 --
-not implemented yet.) Nor does the parent ever inspect a marker's
-existence or contents before dispatch (design section 0) -- dispatch behaves
-identically whether a target's marker already exists, is stale, or is
-malformed; only the CHILD, while committing, ever reads one.
+in these Units: every item is dispatched and every target is always run
+(PUBLIC_API.md section 5: the former opt-in consumer-skip mechanism,
+design section 7, was removed -- no consumer ever needed it). Nor does the
+parent ever inspect a marker's existence or contents before dispatch
+(design section 0) -- dispatch behaves identically whether a target's
+marker already exists, is stale, or is malformed; only the CHILD, while
+committing, ever reads one.
 }
 \examples{
 \dontrun{

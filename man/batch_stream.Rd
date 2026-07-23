@@ -55,7 +55,7 @@ and in-memory transport are exactly this shape; the shape-A
 materialise-every-item-to-a-tempfile model is exactly the wrong one for it.
 }
 \details{
-Same contract as \code{\link[processx:run]{run()}}/\code{\link[=run_and_collect]{run_and_collect()}} -- target descriptor, both-end validation,
+Same contract as \code{\link[=run]{run()}}/\code{\link[=run_and_collect]{run_and_collect()}} -- target descriptor, both-end validation,
 result-envelope inspection, warning surfacing and loud failure -- over a
 different transport. At most \code{2 * n_workers} items are in flight; the producer
 for the next id is not called until an in-flight slot frees, which is the
@@ -69,7 +69,7 @@ prefix, where \verb{<nonce>} is a high-entropy, session-specific string -- so th
 name can never be "default" (that guarantee holds by construction), and a
 registry collision would require another party to have claimed a name under
 that same nonce-namespaced prefix in this session. It tears only its own
-profile down. As with \code{\link[processx:run]{run()}}/\code{\link[=run_and_collect]{run_and_collect()}}, batchit is thread-agnostic: any within-
+profile down. As with \code{\link[=run]{run()}}/\code{\link[=run_and_collect]{run_and_collect()}}, batchit is thread-agnostic: any within-
 item thread policy is the consumer's.
 
 The daemon loads the CONSUMER package (via \code{dev_path}/\code{requireNamespace}) and,

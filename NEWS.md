@@ -13,67 +13,25 @@ mandatory `baseenv()` rebase as before. `batch_task()` is renamed to
 `"return"`/`"staged_writer"`, the `target =` deprecated-alias support, the
 declared-output commit engine) is unchanged. `package_function()` and
 `where_to_write_output()` (renamed in Stage 1) are unaffected.
-`batch_record()`/`batch_prior()`/`batch_skip()` keep their names (scheduled
-for deletion in a later stage, PUBLIC_API.md section 5) — only their
-error-message text was updated to reference `run_and_write_files_atomically()`
-instead of the old `batch_task()` name, since they are only ever callable
-from inside one of its targets. `batch_stream()` is untouched (Shape B,
-handled in a later stage). See `PUBLIC_API.md` section 4 for the full
-old->new mapping.
+`batch_record()`/`batch_prior()`/`batch_skip()` keep their names in this
+stage (scheduled for deletion in a later stage, PUBLIC_API.md section 5) —
+only their error-message text was updated to reference
+`run_and_write_files_atomically()` instead of the old `batch_task()` name,
+since they are only ever callable from inside one of its targets.
+`batch_stream()` is untouched (Shape B, handled in a later stage). See
+`PUBLIC_API.md` section 4 for the full old->new mapping.
 
-Phase 6' Unit 4 (see `PHASE6_DESIGN.md`): the OPT-IN consumer-skip
-mechanism — new exported `batch_record(details)`, `batch_prior()`, and
-`batch_skip()`, callable ONLY from inside the target of a `batch_task()`
-item. batchit itself never decides to skip anything (the section 0 doctrine
-is unchanged): it only reads a marker to hand a consumer its own prior
-`details`, and honours an explicit `batch_skip()` sentinel the target
-RETURNS.
-
-A `batch_task()` target may call `batch_record(details)` any number of times
-during its own run (LAST call wins) to attach a small, `qs2`-serializable,
-opaque `details` value to the item's new marker. A LATER run of the SAME
-item can call `batch_prior()` to read back that value — `NULL` on a first
-run, or if the marker at the derived path is absent, malformed, foreign, a
-directory, symlinked, or simply does not verify against this item's own
-declared outputs (protocol + attempt token + committed output map); a valid
-prior marker whose `details` is itself `NULL`/absent also returns `NULL`
-(disabling skip for that item, since there is nothing to judge currency
-from). The target decides for itself, from `details`, whether the prior
-commit is still current; if so it RETURNS `batch_skip()` instead of
-recomputing. batchit then re-derives the witness fresh (re-reads and
-re-verifies the marker, re-stats every declared output as a regular,
-non-symlink file) before honouring the request — never trusting the step-0
-snapshot as still current. A `batch_skip()` with no valid prior, or whose
-prior/outputs no longer verify at that moment, fails loud with the marker
-left completely untouched; a `staged_writer` target that writes a stage
-before deciding to skip has that stage cleaned by the same unconditional
-cleanup a normal commit relies on.
-
-Implementation: a new scoped accessor (`.batch_record_env`), entered/exited
-TIGHTLY around `do.call()` in `.batch_execute()` — mirroring
-`.batch_stage_env` exactly, including "answerable only while the target
-itself runs" and "restored on success, error, AND skip". The marker is read
-EXACTLY ONCE per item, before `do.call()` (step 0), and left completely
-untouched while the target runs; this read is sanctioned by the existing
-section 0 doctrine ("...or to hand a consumer its own prior details") and
-lives entirely CHILD-side (`.batch_read_prior_marker()`,
-`.batch_commit_task_skip()`) — the PARENT-side dispatch path (`batch_task()`
-itself) never references any of the new machinery, verified both by the
-existing AST-based §0 lockdown test (still 0 hits) and a new dedicated test
-asserting `batch_task()`'s own body never mentions the skip helpers by name.
-
-The commit record `batch_task()` returns per item gained a third,
-ALWAYS-present field: `list(committed, attempt, skipped)`. `skipped = FALSE`
-for an ordinary commit (unchanged behaviour otherwise); `skipped = TRUE` for
-a skip-and-reuse, in which case `attempt` is the item's PRIOR marker's own
-token (nothing new was committed, so it is never expected to equal the token
-freshly issued for this dispatch) — `.batch_inspect_result()`'s parent-side
-check is `skipped`-aware accordingly. No protocol bump: this is a
-result-envelope shape produced and consumed by the same installed version
-within one call, not a dispatch-envelope version-skew concern.
-
-Production TTE stages (s1/s2/s3) pass NO skip logic and continue to always
-recompute — this is a purely opt-in mechanism for a consumer that wants it.
+Public API migration, Stage 3 (see `PUBLIC_API.md` section 5): the Phase 6'
+Unit 4 opt-in consumer-skip mechanism — `batch_record()`, `batch_prior()`,
+`batch_skip()`, the marker's `details` field, and the commit record's
+`skipped` field — is REMOVED. No consumer ever needed it (the TTE stages
+are skip-free by doctrine, Phase 5'); `run_and_write_files_atomically()`'s
+commit record returns to its pre-Unit-4 shape, `list(committed, attempt)`,
+and the marker record returns to `list(protocol, attempt, committed)`. No
+protocol bump (`.BATCH_PROTOCOL` stays `2L`): the skip fields were additive
+without a bump, so removing them needs none. Every item is unconditionally
+dispatched and every target is always run, exactly as in Unit 1-3; re-add
+only if a real consumer ever needs it.
 
 Phase 6' Unit 3 (see `PHASE6_DESIGN.md`): a new `fn_kind = "adhoc"` dispatch
 kind, alongside the existing `fn_kind = "package"` (a `package_function()`
@@ -177,20 +135,17 @@ test guards this statically.
 
 The wire protocol bumped (`.BATCH_PROTOCOL` 1 -> 2): the envelope gained a
 required `meta$fn_kind` discriminator plus the declared-output commit fields
-(`outputs`/`marker`/`style`/`attempt`/`details`, the last reserved for a future
-opt-in consumer-skip mechanism and always `NULL` for now). An old-protocol
-envelope is rejected, and the worker now verifies protocol BEFORE loading any
-CONSUMER package (it always loads the RUNNER first). `.batch_check_envelope()`
-also now rejects any unknown `meta` field, closing the "typo'd field silently
-ignored" gap.
+(`outputs`/`marker`/`style`/`attempt`). An old-protocol envelope is rejected,
+and the worker now verifies protocol BEFORE loading any CONSUMER package (it
+always loads the RUNNER first). `.batch_check_envelope()` also now rejects
+any unknown `meta` field, closing the "typo'd field silently ignored" gap.
 
 Adversarial-review hardening of Unit 1: the CHILD's `.batch_check_envelope()`
 now re-validates output/marker path shape (already-normalized, absolute,
 parent dir exists) and rejects `style != "return"` BEFORE the target ever
 runs (previously a side-effecting target could execute for an envelope whose
 style would fail anyway), rather than trusting the parent's checks alone.
-`meta$details` must be `NULL` on both dispatch branches (Unit 1 never sets
-it). The top-level envelope now rejects unknown fields, matching the
+The top-level envelope now rejects unknown fields, matching the
 existing `meta`-field lockdown. A `batch_task()` commit result's value must
 have EXACTLY the fields `committed`/`attempt` — no extra field can smuggle
 raw data back to the parent. `batch_task()` now sweeps a failed (or killed)

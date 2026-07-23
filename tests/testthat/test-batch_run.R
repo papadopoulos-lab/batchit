@@ -468,27 +468,6 @@ test_that("a side-effecting target does NOT run when the REAL worker receives a 
   expect_match(res$error$message, "not supported")
 })
 
-test_that(".batch_check_envelope() requires meta$details to be NULL on BOTH dispatch branches", {
-  dir <- withr::local_tempdir()
-  # return-value branch (outputs absent): details forbidden
-  return_meta <- list(fn_kind = "package", package = "batchit", symbol = "s",
-    hash = "h", id = "1", runner_package = "batchit", collect = TRUE,
-    details = "smuggled")
-  expect_error(
-    batchit:::.batch_check_envelope(list(protocol = PROTO, meta = return_meta, args = list())),
-    "details")
-  # declared-output branch: details must be NULL (Unit 1 contract -- reserved
-  # for a future opt-in consumer-skip mechanism, design PHASE6_DESIGN.md
-  # section 7, not implemented here)
-  task_meta <- list(fn_kind = "package", package = "batchit", symbol = "s",
-    hash = "h", id = "1", runner_package = "batchit",
-    outputs = c(a = file.path(dir, "x.qs2")), marker = file.path(dir, ".batchit__1"),
-    style = "return", attempt = "tok", details = "smuggled")
-  expect_error(
-    batchit:::.batch_check_envelope(list(protocol = PROTO, meta = task_meta, args = list())),
-    "details")
-})
-
 test_that(".batch_execute() is TOTAL: a malformed envelope yields an error envelope, not a throw", {
   res <- batchit:::.batch_execute(list(protocol = 1L, meta = NULL, args = list()))
   expect_identical(res$status, "error")

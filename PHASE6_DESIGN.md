@@ -165,7 +165,13 @@ is unconditionally discarded child-side after commit, all styles).
 No batchit-computed fingerprints, plan records, provenance sidecars, `task_scope_id`, content hashing,
 or batchit DECIDING to skip. §7's skip is CONSUMER-decided; batchit only transports the record.
 
-## 7. Opt-in consumer skip — `.batchit` record + `batch_prior()`/`batch_skip()` (maintainer-approved 2026-07-20; TTE STAYS SKIP-FREE) — IMPLEMENTED (Unit 4)
+## 7. Opt-in consumer skip — `.batchit` record + `batch_prior()`/`batch_skip()` (maintainer-approved 2026-07-20; TTE STAYS SKIP-FREE) — REMOVED 2026-07-23
+> **SUPERSEDED: this entire mechanism was REMOVED — see `PUBLIC_API.md` §5.** It had no
+> consumer (TTE is skip-free by doctrine), so `batch_record()`/`batch_prior()`/`batch_skip()`,
+> the `details`/`skipped` fields, and the prior-marker read were deleted; the commit engine is
+> back to the pre-skip `{protocol, attempt, committed}` marker / `{committed, attempt}` result
+> shape. The section below is retained as the historical design record of what Unit 4 built.
+
 Build as OPT-IN; production s1/s2/s3 pass NO skip logic and always recompute (Phase 5′ unchanged).
 - Marker `.batchit` = the commit record + an OPTIONAL consumer `details` value (§0 invariant: opaque to
   batchit; batchit never launches on it).

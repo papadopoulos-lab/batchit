@@ -41,7 +41,6 @@ test_that("run_and_write_files_atomically() commits every declared output + a ma
   rec <- qs2::qs_read(marker)
   expect_identical(rec$protocol, PROTO)
   expect_setequal(names(rec$committed), c("primary", "secondary"))
-  expect_null(rec$details)
 
   expect_identical(names(r), "only")
   expect_setequal(names(r$only$committed), c("primary", "secondary"))
@@ -442,18 +441,16 @@ test_that("run_and_write_files_atomically()'s PARENT-side dispatch path has NO m
   # Every parent-side function that handles a marker path: run_and_write_files_atomically()
   # itself (which includes its nested .launch()/.collect()/.fail() closures,
   # since those are sub-expressions of its own body) plus the two small
-  # marker-aware helpers it calls. `.batch_commit_task()`,
-  # `.batch_read_prior_marker()`, and `.batch_commit_task_skip()` are the
-  # CHILD-side functions legitimately exempt (design section 0 / the file
-  # banner, extended for Unit 4's opt-in skip) and are deliberately NOT
-  # included.
+  # marker-aware helpers it calls. `.batch_commit_task()` is the CHILD-side
+  # function legitimately exempt (design section 0 / the file banner) and is
+  # deliberately NOT included.
   # Every PARENT-side (pre-dispatch) function that RECEIVES or DERIVES a marker
   # path: run_and_write_files_atomically() itself, the two marker-aware helpers it calls, AND
   # .batch_input_envelope() (which takes `marker` and builds the wire envelope)
   # -- so a planted marker read in that callee is caught too. (.batch_execute()
-  # and the .batch_commit_task*/.batch_read_prior_marker child helpers are
-  # deliberately EXEMPT: they run in the child, as part of committing/verifying
-  # an already-dispatched item, never as a launch decision -- design section 0.)
+  # and .batch_commit_task() are deliberately EXEMPT: they run in the child,
+  # as part of committing an already-dispatched item, never as a launch
+  # decision -- design section 0.)
   fns <- list(
     run_and_write_files_atomically = batchit::run_and_write_files_atomically,
     .batch_check_task_collisions = batchit:::.batch_check_task_collisions,
@@ -537,9 +534,9 @@ test_that("the REAL worker rejects an OLD-protocol envelope BEFORE the target ev
   expect_match(err, "protocol mismatch")
 })
 
-# --- 7: commit-record shape -- committed + attempt + skipped, never raw -----
+# --- 7: commit-record shape -- committed + attempt, never raw ---------------
 
-test_that("run_and_write_files_atomically()'s result is the commit record (committed + attempt + skipped), never the raw value", {
+test_that("run_and_write_files_atomically()'s result is the commit record (committed + attempt), never the raw value", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "g_primary.qs2")
@@ -553,11 +550,10 @@ test_that("run_and_write_files_atomically()'s result is the commit record (commi
   )
 
   rec <- r[[1]]
-  expect_setequal(names(rec), c("committed", "attempt", "skipped"))
+  expect_setequal(names(rec), c("committed", "attempt"))
   expect_identical(unname(rec$committed[["primary"]]), normalizePath(out1, mustWork = FALSE))
   expect_identical(unname(rec$committed[["secondary"]]), normalizePath(out2, mustWork = FALSE))
   expect_true(is.character(rec$attempt) && nzchar(rec$attempt))
-  expect_identical(rec$skipped, FALSE)
   # the raw computed value (999999 * 10 = 9999990) must not appear anywhere
   # in the record itself
   expect_false(any(vapply(unlist(rec), function(v) identical(v, "9999990"), logical(1))))
@@ -571,7 +567,7 @@ test_that(".batch_inspect_result() rejects a commit record with the WRONG attemp
   good <- list(protocol = PROTO, id = "1", status = "ok",
     warnings = character(),
     target = list(package = "batchit", symbol = "s", hash = "H"),
-    value = list(committed = dispatched_outputs, attempt = "tok-abc", skipped = FALSE))
+    value = list(committed = dispatched_outputs, attempt = "tok-abc"))
   expect_true(batchit:::.batch_inspect_result(good, "1", tgt,
     expected_outputs = dispatched_outputs, expected_attempt = "tok-abc")$ok)
 
@@ -589,40 +585,18 @@ test_that(".batch_inspect_result() rejects a commit record with the WRONG attemp
   expect_false(r2$ok)
 })
 
-test_that(".batch_inspect_result() checks the dispatch attempt token even for a SKIP (skipped=TRUE is no bypass)", {
-  # A skip result carries the CURRENT dispatch's attempt token (not the prior
-  # marker's), and the inspector checks it unconditionally -- so a skip whose
-  # token does not match THIS dispatch is rejected exactly like a fresh commit
-  # would be. (Fixes the round-1 hole where skipped=TRUE self-asserted a bypass.)
-  tgt <- list(package = "batchit", symbol = "s", hash = "H")
-  dispatched_outputs <- c(primary = "/tmp/x_primary.qs2", secondary = "/tmp/x_secondary.qs2")
-  ok_skip <- list(protocol = PROTO, id = "1", status = "ok",
-    warnings = character(),
-    target = list(package = "batchit", symbol = "s", hash = "H"),
-    value = list(committed = dispatched_outputs, attempt = "tok-THIS-DISPATCH", skipped = TRUE))
-  expect_true(batchit:::.batch_inspect_result(ok_skip, "1", tgt,
-    expected_outputs = dispatched_outputs, expected_attempt = "tok-THIS-DISPATCH")$ok)
-
-  bad_skip <- ok_skip
-  bad_skip$value$attempt <- "tok-WRONG"
-  r <- batchit:::.batch_inspect_result(bad_skip, "1", tgt,
-    expected_outputs = dispatched_outputs, expected_attempt = "tok-THIS-DISPATCH")
-  expect_false(r$ok)
-  expect_match(r$reason, "attempt")
-})
-
 test_that(".batch_inspect_result() rejects a commit record with an EXTRA field (raw-data smuggling)", {
-  # A worker returning list(committed = ..., attempt = ..., skipped = ...,
-  # raw = <huge>) must be rejected -- allowing extras would let raw data
-  # ride along behind a well-formed-looking commit record, defeating the
-  # entire point of run_and_write_files_atomically() (only a small commit record ever crosses
-  # back).
+  # A worker returning list(committed = ..., attempt = ..., raw = <huge>)
+  # must be rejected -- allowing extras would let raw data ride along behind
+  # a well-formed-looking commit record, defeating the entire point of
+  # run_and_write_files_atomically() (only a small commit record ever
+  # crosses back).
   tgt <- list(package = "batchit", symbol = "s", hash = "H")
   dispatched_outputs <- c(primary = "/tmp/x_primary.qs2", secondary = "/tmp/x_secondary.qs2")
   smuggled <- list(protocol = PROTO, id = "1", status = "ok",
     warnings = character(),
     target = list(package = "batchit", symbol = "s", hash = "H"),
-    value = list(committed = dispatched_outputs, attempt = "tok-abc", skipped = FALSE,
+    value = list(committed = dispatched_outputs, attempt = "tok-abc",
       raw = 1:1e6))
   r <- batchit:::.batch_inspect_result(smuggled, "1", tgt,
     expected_outputs = dispatched_outputs, expected_attempt = "tok-abc")
@@ -636,17 +610,17 @@ test_that(".batch_inspect_result() rejects a commit record MISSING a required fi
   missing_attempt <- list(protocol = PROTO, id = "1", status = "ok",
     warnings = character(),
     target = list(package = "batchit", symbol = "s", hash = "H"),
-    value = list(committed = dispatched_outputs, skipped = FALSE))
+    value = list(committed = dispatched_outputs))
   r <- batchit:::.batch_inspect_result(missing_attempt, "1", tgt,
     expected_outputs = dispatched_outputs, expected_attempt = "tok-abc")
   expect_false(r$ok)
   expect_match(r$reason, "EXACTLY")
 
-  missing_skipped <- list(protocol = PROTO, id = "1", status = "ok",
+  missing_committed <- list(protocol = PROTO, id = "1", status = "ok",
     warnings = character(),
     target = list(package = "batchit", symbol = "s", hash = "H"),
-    value = list(committed = dispatched_outputs, attempt = "tok-abc"))
-  r2 <- batchit:::.batch_inspect_result(missing_skipped, "1", tgt,
+    value = list(attempt = "tok-abc"))
+  r2 <- batchit:::.batch_inspect_result(missing_committed, "1", tgt,
     expected_outputs = dispatched_outputs, expected_attempt = "tok-abc")
   expect_false(r2$ok)
   expect_match(r2$reason, "EXACTLY")
@@ -682,7 +656,6 @@ test_that("run_and_write_files_atomically() style = \"staged_writer\": commits e
   rec <- qs2::qs_read(marker)
   expect_identical(rec$protocol, PROTO)
   expect_setequal(names(rec$committed), c("primary", "secondary"))
-  expect_null(rec$details)
 
   expect_identical(names(r), "only")
   expect_setequal(names(r$only$committed), c("primary", "secondary"))
