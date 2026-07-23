@@ -16,7 +16,7 @@ Description: A generic parent/child dispatch contract for running one R function
     daemons for work whose items are generated on demand.
 Depends: R (>= 4.1.0)
 License: MIT + file LICENSE
-URL: https://github.com/papadopoulos-lab/batchit
+URL: https://papadopoulos-lab.github.io/batchit, https://github.com/papadopoulos-lab/batchit
 BugReports: https://github.com/papadopoulos-lab/batchit/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

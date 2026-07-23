@@ -1,0 +1,26 @@
+url: https://papadopoulos-lab.github.io/batchit/
+
+template:
+  bootstrap: 5
+
+reference:
+- title: Dispatch a function across subprocesses
+  desc: >
+    Run one function over many items, one fresh subprocess per item. Each takes
+    `fn` — a `package_function()` descriptor (hash-verified) or a bare closure —
+    and they differ in how each item's data arrives and in what comes back: a
+    return value, or output files committed atomically.
+  contents:
+  - run
+  - run_and_collect
+  - run_and_write_files_atomically
+  - stream_from_parent_and_write_files_atomically
+
+- title: Building a dispatch
+  desc: >
+    Helpers used when constructing a dispatch: name the target function
+    (hash-verified against what the worker loads), and, inside a
+    `staged_writer` target, resolve where to write a declared output.
+  contents:
+  - package_function
+  - where_to_write_output
