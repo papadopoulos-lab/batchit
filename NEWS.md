@@ -1,3 +1,16 @@
+# batchit 26.7.20
+
+**Public API naming migration (v2) complete (`PUBLIC_API.md`).** The engine and wire
+protocol are unchanged; the public exports are renamed to bare, self-documenting names:
+`run` / `run_and_collect` / `run_and_write_files_atomically` /
+`stream_from_parent_and_write_files_atomically` / `package_function` /
+`where_to_write_output`. `batch_fn` is folded into `run`/`run_and_collect` (the `fn`
+argument takes a `package_function()` descriptor or a bare closure); the
+`batch_record`/`batch_prior`/`batch_skip` consumer-skip mechanism is removed; and the
+per-item wire envelope is now a lightweight S3 `batch_envelope` (class + `print` + a
+worker-check conformance test). This is a BREAKING rename of every export. See the
+per-stage entries below.
+
 # batchit (development)
 
 Public API migration, Stage 4 (see `PUBLIC_API.md` sections 3.2, 4, 5): the

@@ -1,6 +1,6 @@
 Package: batchit
 Title: One Subprocess Dispatcher with a Both-Ends-Validated Contract
-Version: 26.7.19
+Version: 26.7.20
 Authors@R: person(c("Richard","Aubrey"), "White", email = "hello@rwhite.no", role = c("aut", "cre"),
     comment = c(ORCID = "0000-0002-6747-1726"))
 Description: A generic parent/child dispatch contract for running one R function
