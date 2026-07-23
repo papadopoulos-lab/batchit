@@ -116,7 +116,7 @@ runner <- meta[["runner_package"]]  # REQUIRED (checked above); no consumer fall
 # all -- meta$package is NULL, so `identical(runner, package)` can never be
 # TRUE for it. Any dev_path given for an adhoc dispatch is therefore treated
 # as naming the RUNNER's (batchit's) own source tree instead (see
-# batch_fn()'s `dev_path` doc) -- this is what lets batchit's OWN adhoc test
+# run()'s `dev_path` doc) -- this is what lets batchit's OWN adhoc test
 # suite run against source without a reinstall, mirroring the package-kind
 # self-test path above. It is NOT a second dev-tree slot for some other
 # helper package: a closure's own `pkg::fun()` calls resolve via ordinary

@@ -1,7 +1,7 @@
 # .batch_log_tail() -- the bounded log tail -- plus the two pool-level I/O
-# guarantees that make batch_run robust: a chatty worker must not deadlock the
+# guarantees that make run()/run_and_collect() robust: a chatty worker must not deadlock the
 # dispatcher, and successful logs are reclaimed per item, not at pool exit.
-# Everything else is covered for batch_run by test-batch_run.R (order/NULL
+# Everything else is covered for run()/run_and_collect() by the shape-A test file (order/NULL
 # preservation, failure surfacing, validation, temp hygiene).
 
 test_that(".batch_log_tail() is bounded and survives non-text worker output", {
@@ -99,29 +99,28 @@ test_that(".batch_log_tail() bounds the READ, not merely the output", {
   expect_lt(elapsed, 1.0)                       # ... and never read the 120 MB
 })
 
-# --- pool-level I/O guarantees, exercised through batch_run -----------------
+# --- pool-level I/O guarantees, exercised through run() ---------------------
 
 .log_tail_dev_tree <- normalizePath(testthat::test_path("..", ".."),
   mustWork = FALSE)
 .log_tail_have_tree <- file.exists(file.path(.log_tail_dev_tree, "DESCRIPTION")) &&
   file.exists(file.path(.log_tail_dev_tree, "inst", "batch_worker.R"))
 
-test_that("a chatty worker does not deadlock batch_run", {
+test_that("a chatty worker does not deadlock run()", {
   # Regression class: a pipe stdout/stderr read only AFTER the child exits. A
   # child out-writing the OS pipe buffer (64 KB on Linux) blocks forever in
   # write(), never exits, and stays is_alive() == TRUE -- so the dispatch loop
-  # spins until killed. batch_run writes worker output to per-item FILES, so
+  # spins until killed. run() writes worker output to per-item FILES, so
   # 512 KB per stream (8x the pipe buffer) must complete rather than hang.
   skip_on_cran()
   skip_if_not(.log_tail_have_tree, "package source tree not available")
 
   expect_no_error(
-    batchit::batch_run(
-      target = batchit::package_function("batchit", ".batch_fixture_chatty"),
+    batchit::run(
+      fn = batchit::package_function("batchit", ".batch_fixture_chatty"),
       items = list(list(n_kb = 512L)),
       n_workers = 1L,
-      dev_path = .log_tail_dev_tree,
-      collect = FALSE
+      dev_path = .log_tail_dev_tree
     )
   )
 })
@@ -139,13 +138,12 @@ test_that("a successful worker's log is reclaimed as it completes, not at pool e
     seen <<- c(seen, length(list.files(tempdir(), pattern = "^batch_log_")))
   }
 
-  batchit::batch_run(
-    target = batchit::package_function("batchit", ".batch_fixture_echo"),
+  batchit::run(
+    fn = batchit::package_function("batchit", ".batch_fixture_echo"),
     items = lapply(1:8, function(i) list(x = i)),
     n_workers = 1L,
     dev_path = .log_tail_dev_tree,
-    p = probe,
-    collect = FALSE
+    p = probe
   )
 
   expect_length(seen, 8L)

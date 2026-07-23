@@ -8,14 +8,22 @@
 # batchit's own, domain-free, and live in R/batch_helpers.R. (.batch_log_tail()
 # lives here.)
 #
-# Two frontends, ONE contract:
-#   batch_run(target, items, ...)   -- shape A: items already exist, a fresh
-#                                       subprocess per item (the memory strategy).
-#   batch_stream(target, ids, ...)  -- shape B: the parent IS the producer, items
-#                                       are generated lazily under backpressure
-#                                       (mirai bounded queue).
-# They share target resolution, both-end validation, the result envelope, and
-# failure semantics. They differ only in internal transport, which is private.
+# Shape A, ONE shared contract, three frontends over ONE internal impl
+# (.batch_run_impl()):
+#   run(fn, items, ...)              -- run each item, return nothing.
+#   run_and_collect(fn, items, ...)  -- run each item, return a list of values
+#                                        in item order.
+#   run_and_write_files_atomically(fn, items, outputs, style, ...) (the
+#                                     declared-output commit-engine source file)
+#                                     -- each item commits declared output files
+#                                        atomically instead of returning a value.
+# `fn` is EITHER a package_function() descriptor OR a bare closure (folded in
+# from the former ad-hoc-closure frontend) -- see .batch_run_impl()'s fn_kind branch.
+# batch_stream(target, ids, ...) is shape B: the parent IS the producer, items
+# are generated lazily under backpressure (mirai bounded queue).
+# All four share target/fn resolution, both-end validation, the result
+# envelope, and failure semantics. They differ only in internal transport,
+# which is private.
 #
 # Runner vs consumer (the extraction seam): batchit is the RUNNER; a target's
 # `package` names the CONSUMER, which is a DIFFERENT package. The worker script is
@@ -27,7 +35,7 @@
 # Bumped to 2 for Phase 6' Unit 1 (see PHASE6_DESIGN.md): the envelope gained a
 # REQUIRED meta$fn_kind discriminator ("package" | "adhoc") plus the
 # declared-output commit fields (outputs/marker/style/attempt/details) used by
-# batch_task(). An old (protocol 1) envelope has none of these, so a
+# run_and_write_files_atomically(). An old (protocol 1) envelope has none of these, so a
 # version-skewed worker must reject it rather than mis-execute --
 # .batch_check_envelope() enforces that, and the worker now verifies protocol
 # BEFORE loading any CONSUMER package (see inst/batch_worker.R).
@@ -37,8 +45,9 @@
 # enough that no legitimate item (e.g., in the originating registry pipeline a
 # multi-hour, ~20 GB analysis panel) hits it, short enough that a deadlocked or
 # infinite-looping worker does not sit forever. Callers with genuinely longer
-# items must raise it explicitly. Referenced as the default for batch_run() /
-# batch_stream()'s `timeout` formal (documented there rather than exported).
+# items must raise it explicitly. Referenced as the default for run() /
+# run_and_collect() / batch_stream()'s `timeout` formal (documented there
+# rather than exported).
 .BATCH_DEFAULT_TIMEOUT <- 6 * 3600
 
 # --- target descriptor -------------------------------------------------------
@@ -358,8 +367,9 @@ package_function <- function(package, symbol, version = NULL) {
       }
     }
     # Re-lint HERE, in the CHILD: design section 5's self-containedness check
-    # runs at BOTH ends. A frontend (batch_fn() / batch_task() with a bare
-    # closure) already linted at dispatch time (early UX); this is the
+    # runs at BOTH ends. A frontend (run()/run_and_collect() /
+    # run_and_write_files_atomically() with a bare closure) already linted at
+    # dispatch time (early UX); this is the
     # correctness copy -- a worker must never simply trust that an envelope
     # reaching it actually went through a frontend's own check. Also enforces
     # "closure, not a primitive" and "no `...`" (see .batch_lint_adhoc_fn() in
@@ -515,8 +525,9 @@ package_function <- function(package, symbol, version = NULL) {
 #' failure the child can hit -- target resolution, the hash mismatch, child-side
 #' item re-validation, and the target's own R-level errors -- is caught into ONE
 #' structured error envelope (status "error", value NULL, `error$message`). That
-#' uniformity is the point: both frontends (`batch_run` reading a file,
-#' `batch_stream` reading a daemon return) surface every failure the same way,
+#' uniformity is the point: every frontend (`run()`/`run_and_collect()`/
+#' `run_and_write_files_atomically()` reading a file, `batch_stream` reading a
+#' daemon return) surfaces every failure the same way,
 #' instead of a resolve error crashing the worker while a target error returns an
 #' envelope. `meta$collect == FALSE` drops the value entirely: shape-A
 #' direct-writers put gigabytes on disk themselves, and the whole architecture
@@ -549,8 +560,9 @@ package_function <- function(package, symbol, version = NULL) {
         # baseenv()-rooted closure by RECONNECTING to the child's own
         # baseenv(), not by carrying a snapshot -- see .batch_rebase_adhoc_closure()),
         # but a hand-crafted envelope reaching the worker directly (bypassing
-        # batch_fn()/batch_task()) must never get to run an un-rebased
-        # closure just because it happened to still pass the lint.
+        # run()/run_and_collect()/run_and_write_files_atomically()) must never
+        # get to run an un-rebased closure just because it happened to still
+        # pass the lint.
         fn <- .batch_rebase_adhoc_closure(meta[["fn"]])
         fmls <- names(formals(fn))
         if (is.null(fmls)) fmls <- character(0)
@@ -660,8 +672,8 @@ package_function <- function(package, symbol, version = NULL) {
           target = result_target
         )
       } else {
-        # Declared-output commit dispatch (batch_task(), design
-        # PHASE6_DESIGN.md section 3.3). The raw target `value` is discarded
+        # Declared-output commit dispatch (run_and_write_files_atomically(),
+        # design PHASE6_DESIGN.md section 3.3). The raw target `value` is discarded
         # after commit (unconditionally for staged_writer, or once matched
         # against `outputs` for return) -- it never crosses back, only the
         # small commit record does. `recorded_details` is whatever the
@@ -720,7 +732,8 @@ package_function <- function(package, symbol, version = NULL) {
 #' envelope actually carries a `value` field.
 #'
 #' `expected_outputs`/`expected_attempt` (both `NULL` by default) are set only
-#' when inspecting a `batch_task()` (declared-output commit) result: the value
+#' when inspecting a `run_and_write_files_atomically()` (declared-output
+#' commit) result: the value
 #' field is then a commit record, not raw data, and is checked against the
 #' `outputs` actually DISPATCHED for this item (design PHASE6_DESIGN.md
 #' section 3.5) -- names AND paths must match exactly, or a stale/substituted
@@ -834,8 +847,9 @@ package_function <- function(package, symbol, version = NULL) {
   # non-character warnings field is simply dropped, keeping the inspector total.
   if (!is.character(warnings)) warnings <- character()
 
-  # Declared-output commit result (batch_task()): the value is a small commit
-  # record, never raw data. Validate it matches EXACTLY what was dispatched --
+  # Declared-output commit result (run_and_write_files_atomically()): the
+  # value is a small commit record, never raw data. Validate it matches
+  # EXACTLY what was dispatched --
   # names AND paths of the committed map, AND the attempt token THIS dispatch
   # issued (checked for a fresh commit AND a skip; see below) -- so a stale or
   # substituted result can never be accepted as this item's commit.
@@ -846,8 +860,9 @@ package_function <- function(package, symbol, version = NULL) {
     # "skipped"} -- no missing, no blank, and critically no EXTRA field.
     # Allowing extras would let a worker smuggle arbitrary raw data back to
     # the parent (e.g. `list(committed = ..., attempt = ..., raw = <huge>)`),
-    # defeating the whole point of batch_task() (only a small commit record
-    # ever crosses back; see design PHASE6_DESIGN.md section 3.5).
+    # defeating the whole point of run_and_write_files_atomically() (only a
+    # small commit record ever crosses back; see design PHASE6_DESIGN.md
+    # section 3.5).
     if (!is.list(val) || is.null(val_nm) || any(!nzchar(val_nm)) ||
         anyDuplicated(val_nm) ||
         !identical(sort(val_nm), sort(c("committed", "attempt", "skipped")))) {
@@ -982,7 +997,8 @@ package_function <- function(package, symbol, version = NULL) {
 #' fall-through to installed code: the tree must exist, be an R package SOURCE
 #' tree (not an installed package), and name the consumer package. Returns the
 #' normalised path, or `NULL` for the installed-package case. Shared by
-#' [batch_run()] (processx) and [batch_stream()] (mirai) so both enforce the
+#' [run()]/[run_and_collect()]/[run_and_write_files_atomically()] (processx)
+#' and [batch_stream()] (mirai) so all of them enforce the
 #' same policy. `consumer_package` is the target's `package` -- the dev tree must
 #' be the CONSUMER's source, not the runner's.
 #' @noRd
@@ -1045,7 +1061,7 @@ package_function <- function(package, symbol, version = NULL) {
   runner <- .batch_runner_package()
   script <- system.file("batch_worker.R", package = runner)
   if (!nzchar(script) || !file.exists(script)) {
-    stop("batch_run(): inst/batch_worker.R not found in the runner package '",
+    stop(".batch_worker_script(): inst/batch_worker.R not found in the runner package '",
       runner, "'", call. = FALSE)
   }
   script
@@ -1053,8 +1069,9 @@ package_function <- function(package, symbol, version = NULL) {
 
 #' Build a dispatch input envelope
 #'
-#' The ONE place EVERY frontend assembles the wire envelope -- `batch_run()`,
-#' `batch_stream()`, and `batch_task()` -- so none of them can drift in the
+#' The ONE place EVERY frontend assembles the wire envelope -- `run()`,
+#' `run_and_collect()`, `batch_stream()`, and `run_and_write_files_atomically()`
+#' -- so none of them can drift in the
 #' schema the child reads back (`.batch_check_envelope()` / `.batch_execute()`).
 #' `runner` (the runner package name) travels so the worker/daemon knows which
 #' package holds `.batch_execute` -- the field that carries the
@@ -1062,17 +1079,18 @@ package_function <- function(package, symbol, version = NULL) {
 #' index and an explicit character id land identically.
 #'
 #' `fn_kind`/`collect` are the return-value-dispatch fields (unchanged
-#' defaults: `batch_run()`/`batch_stream()` pass only `collect`).
+#' defaults: `run()`/`run_and_collect()`/`batch_stream()` pass only `collect`).
 #' `outputs`/`marker`/`style`/`attempt`/`details` are the declared-output
-#' commit fields `batch_task()` supplies instead (design PHASE6_DESIGN.md
-#' sections 3/4); `collect` and those five are mutually exclusive, enforced by
-#' `.batch_check_envelope()`.
+#' commit fields `run_and_write_files_atomically()` supplies instead (design
+#' PHASE6_DESIGN.md sections 3/4); `collect` and those five are mutually
+#' exclusive, enforced by `.batch_check_envelope()`.
 #'
 #' `fn`/`nonce` are the `fn_kind = "adhoc"` fields (Phase 6' Unit 3, design
 #' sections 1, 4, 9.4): `fn` carries the already-linted, already-baseenv()-
 #' rebased closure itself, and `nonce` is its per-dispatch identity token,
 #' used in place of the package/symbol/hash identity a `package_function` would
-#' otherwise supply -- `batch_fn()` and `batch_task()` (with a bare closure)
+#' otherwise supply -- `run()`/`run_and_collect()` and
+#' `run_and_write_files_atomically()` (with a bare closure)
 #' pass `target = NULL` and these two instead. Forbidden (must stay `NULL`)
 #' for `fn_kind = "package"`, enforced by `.batch_check_envelope()`.
 #' @noRd
@@ -1105,7 +1123,7 @@ package_function <- function(package, symbol, version = NULL) {
   )
 }
 
-#' Derive stable per-item ids for `batch_run` (item names, else index)
+#' Derive stable per-item ids for `run()`/`run_and_collect()` (item names, else index)
 #'
 #' A named item keeps its name; an unnamed one gets its 1-based index. The
 #' result must be unique so a reported failure identifies exactly one item -- a
@@ -1120,7 +1138,7 @@ package_function <- function(package, symbol, version = NULL) {
   blank <- !nzchar(ids)
   ids[blank] <- as.character(seq_len(n))[blank]
   if (anyDuplicated(ids)) {
-    stop(sprintf(paste0("batch_run(): item ids are not unique: %s. Name items ",
+    stop(sprintf(paste0(".batch_item_ids(): item ids are not unique: %s. Name items ",
       "uniquely, or leave them all unnamed to use positional indices."),
       paste(unique(ids[duplicated(ids)]), collapse = ", ")), call. = FALSE)
   }
@@ -1170,38 +1188,57 @@ package_function <- function(package, symbol, version = NULL) {
 
 # --- shape A: fresh subprocess per item, via processx ------------------------
 
-#' Run a target on each of a fixed list of items, one subprocess per item
+#' Shared shape-A transport: run `fn` on each of a fixed list of items
 #'
-#' Shape A of the contract: the items already exist (each a small named list of
-#' the target's formals; the worker opens its own data), so a fresh R process per
+#' The ONE internal implementation behind [run()], [run_and_collect()], and
+#' (via a bare closure) the former ad-hoc-closure frontend -- folded in here rather than
+#' kept as a separate frontend, since the package-vs-closure choice is a
+#' property of the `fn` argument's TYPE, not a separate function name. `fn` is
+#' EITHER a `package_function` descriptor from [package_function()]
+#' (`fn_kind = "package"`) OR a bare closure (`fn_kind = "adhoc"`):
+#' self-contained (base R, `pkg::`-qualified calls, and its own formals only
+#' -- see `.batch_lint_adhoc_fn()`), not a primitive, and not taking `...`. A
+#' closure is gated by that self-containedness LINT and unconditionally
+#' rebased onto `baseenv()` before it is ever serialized (see
+#' `.batch_rebase_adhoc_closure()`); production/auditable stages should prefer
+#' a `package_function()` descriptor (hash-verified, resolvable by
+#' package+symbol) -- `adhoc` dispatch is for throwaway/exploratory work where
+#' that overhead is not the point.
+#'
+#' Shape A of the contract: the items already exist (each a small named list
+#' of `fn`'s formals; the worker opens its own data), so a fresh R process per
 #' item is not a cost to amortise but the memory strategy itself -- a large
 #' analysis item can peak at tens of GB and R does not return that memory to the
 #' OS, so process exit is how it is reclaimed. This is why batchit does NOT reuse
 #' workers: worker reuse would defeat exactly this.
 #'
-#' Both-end validation, a hash-verified target descriptor, per-item logs written
-#' to files (never pipes -- a chatty worker filling the OS pipe buffer is what
-#' deadlocks a pipe transport), a bounded log tail on failure, and a loud stop on
-#' the first failure. Warnings a target captures are surfaced in the parent,
-#' tagged by item id.
+#' Both-end validation, a hash-verified target descriptor (or, for `adhoc`, a
+#' per-dispatch identity nonce), per-item logs written to files (never pipes
+#' -- a chatty worker filling the OS pipe buffer is what deadlocks a pipe
+#' transport), a bounded log tail on failure, and a loud stop on the first
+#' failure. Warnings a target captures are surfaced in the parent, tagged by
+#' item id.
 #'
 #' batchit is thread-agnostic: it sets no BLAS / data.table thread counts and
-#' passes none to the worker. If a target is itself multi-threaded, dividing
+#' passes none to the worker. If `fn` is itself multi-threaded, dividing
 #' cores across `n_workers` (to avoid oversubscription) is the CONSUMER's
 #' responsibility, not the runner's.
 #'
 #' The worker script is always the runner's (batchit's); `dev_path`, when given,
-#' is the CONSUMER's source tree. When runner and consumer differ, the worker
+#' is the CONSUMER's source tree for `fn_kind = "package"` (or batchit's own
+#' source tree for `fn_kind = "adhoc"` -- an adhoc closure has no separate
+#' consumer identity to load). When runner and consumer differ, the worker
 #' loads both (the consumer via `dev_path`/`requireNamespace`, the runner via
 #' `requireNamespace`).
 #'
-#' @param target A `package_function` descriptor from [package_function()].
-#' @param items List of items; each a fully-named list of the target's formals.
+#' @param fn EITHER a `package_function` descriptor from [package_function()]
+#'   OR a bare closure -- see the details above.
+#' @param items List of items; each a fully-named list of `fn`'s formals.
 #'   Named items keep their name as the item id; unnamed items get their index.
 #' @param n_workers Concurrent subprocesses (validated: finite, whole, >= 1).
-#' @param dev_path Consumer-package source tree for `devtools::load_all()` in the
-#'   worker, or `NULL` for the installed consumer package. A given-but-wrong path
-#'   errors rather than silently falling back to installed code.
+#' @param dev_path Source tree for `devtools::load_all()` in the worker, or
+#'   `NULL` for the installed package. A given-but-wrong path errors rather
+#'   than silently falling back to installed code.
 #' @param collect If `TRUE`, return each item's value in item order; if `FALSE`,
 #'   the worker still reports status but its value never crosses back (for
 #'   targets that write their output themselves).
@@ -1211,37 +1248,59 @@ package_function <- function(package, symbol, version = NULL) {
 #' @param timeout Per-item wall-clock limit in seconds; a worker that exceeds it
 #'   is killed and reported as a failure. Defaults to a generous hang-catcher
 #'   (the internal `.BATCH_DEFAULT_TIMEOUT`, 6 hours); pass `Inf` to disable.
+#' @param .caller The public-facing caller name (`"run"` or `"run_and_collect"`),
+#'   used only to make error/label strings read correctly.
 #' @return If `collect`, a list of values in item order; else `invisible(NULL)`.
-#' @examples
-#' \dontrun{
-#' t <- package_function("mypkg", "process_one_slice")
-#' out <- batch_run(t, items = list(list(x = 1), list(x = 2)), n_workers = 2)
-#' }
-#' @export
-batch_run <- function(
-  target,
+#' @noRd
+.batch_run_impl <- function(
+  fn,
   items,
   n_workers,
   dev_path = NULL,
-  collect = TRUE,
+  collect,
   p = NULL,
   label = NULL,
-  timeout = .BATCH_DEFAULT_TIMEOUT
+  timeout = .BATCH_DEFAULT_TIMEOUT,
+  .caller
 ) {
-  if (!inherits(target, "package_function")) {
-    stop("batch_run(): `target` must come from package_function()", call. = FALSE)
+  # `fn` is EITHER a package_function() descriptor (fn_kind = "package") OR a bare
+  # closure (fn_kind = "adhoc", folded in from the former ad-hoc-closure
+  # frontend) -- resolved
+  # here, ONCE, into the two variables (`fn_kind`, and either `target` or a
+  # lint-passed, baseenv()-rebased `fn`) every step below branches on. Mirrors
+  # run_and_write_files_atomically()'s identical dispatch (the declared-output
+  # commit-engine source file).
+  if (inherits(fn, "package_function")) {
+    fn_kind <- "package"
+    target <- fn
+    formal_names <- target$formal_names
+  } else if (is.function(fn)) {
+    fn_kind <- "adhoc"
+    .batch_lint_adhoc_fn(fn, where = "parent")
+    fn <- .batch_rebase_adhoc_closure(fn)
+    formal_names <- names(formals(fn))
+    if (is.null(formal_names)) formal_names <- character(0)
+    target <- NULL
+  } else {
+    stop(sprintf("%s(): `fn` must come from package_function() or be a function",
+      .caller), call. = FALSE)
   }
-  n_workers <- .batch_validate_n_workers(n_workers, "batch_run()")
+
+  n_workers <- .batch_validate_n_workers(n_workers, sprintf("%s()", .caller))
   # Validate ALL config BEFORE the empty-workload early return -- otherwise a bad
   # dev_path/timeout/collect is silently accepted whenever there is no work.
-  collect <- .batch_validate_collect(collect, "batch_run()")
-  timeout <- .batch_validate_timeout(timeout, "batch_run()")
-  dev_path <- .batch_validate_dev_path(dev_path, target$package)
+  collect <- .batch_validate_collect(collect, sprintf("%s()", .caller))
+  timeout <- .batch_validate_timeout(timeout, sprintf("%s()", .caller))
+  # For "package", dev_path names the CONSUMER's tree (target$package). For
+  # "adhoc" there is no consumer identity -- dev_path instead names BATCHIT'S
+  # OWN tree (an adhoc closure has no separate consumer identity to load).
+  dev_path <- .batch_validate_dev_path(dev_path,
+    if (identical(fn_kind, "package")) target$package else "batchit")
   # `items` must be a LIST of items, checked before the empty-workload return so
   # an empty atomic (character(0)/numeric(0)) cannot slip past the container
   # contract while a non-empty atomic would be rejected.
   if (!is.list(items)) {
-    stop(sprintf("batch_run(): `items` must be a list, got %s", class(items)[1L]),
+    stop(sprintf("%s(): `items` must be a list, got %s", .caller, class(items)[1L]),
       call. = FALSE)
   }
 
@@ -1255,7 +1314,21 @@ batch_run <- function(
   # Validate EVERY item up front (not items[[1]]): item schemas are legitimately
   # heterogeneous, so a bad one hides behind a good first one.
   for (i in seq_len(n_items)) {
-    .batch_validate_item(target, items[[i]], where = "parent", id = ids[i])
+    if (identical(fn_kind, "package")) {
+      .batch_validate_item(target, items[[i]], where = "parent", id = ids[i])
+    } else {
+      .batch_validate_adhoc_item(formal_names, items[[i]], where = "parent", id = ids[i])
+    }
+  }
+
+  # fn_kind == "adhoc": a fresh, high-entropy per-item identity nonce -- an
+  # adhoc envelope has no package/symbol/hash for the parent to check the
+  # result against, so this token (echoed back by the child) takes that role.
+  # Unused (stays NULL) for "package".
+  nonces <- if (identical(fn_kind, "adhoc")) {
+    vapply(seq_len(n_items), function(i) .batch_new_attempt_token(), character(1))
+  } else {
+    NULL
   }
 
   script_path <- .batch_worker_script()
@@ -1293,8 +1366,15 @@ batch_run <- function(
 
   runner_pkg <- .batch_runner_package()
   for (i in seq_len(n_items)) {
-    envelope <- .batch_input_envelope(
-      target, dev_path, runner_pkg, ids[i], items[[i]], collect = collect)
+    envelope <- if (identical(fn_kind, "package")) {
+      .batch_input_envelope(
+        target, dev_path, runner_pkg, ids[i], items[[i]], collect = collect)
+    } else {
+      .batch_input_envelope(
+        target = NULL, dev_path = dev_path, runner = runner_pkg, id = ids[i],
+        args = items[[i]], fn_kind = "adhoc", collect = collect,
+        fn = fn, nonce = nonces[i])
+    }
     .batch_write_envelope(envelope, input_paths[i])
   }
 
@@ -1335,7 +1415,7 @@ batch_run <- function(
         "\n--- item '%s' failed ---\nOUTPUT (stdout+stderr):\n%s\n---",
         ids[idx], tail_txt))
     }
-    stop(sprintf("batch_run(): item '%s' %s", ids[idx], what), call. = FALSE)
+    stop(sprintf("%s(): item '%s' %s", .caller, ids[idx], what), call. = FALSE)
   }
 
   # Read + validate one finished item's result envelope while its log is still on
@@ -1359,7 +1439,12 @@ batch_run <- function(
           path, conditionMessage(e)))
       }
     )
-    insp <- .batch_inspect_result(envelope, ids[idx], target)
+    insp <- if (identical(fn_kind, "package")) {
+      .batch_inspect_result(envelope, ids[idx], target)
+    } else {
+      .batch_inspect_result(envelope, ids[idx], target = NULL,
+        expected_nonce = nonces[idx])
+    }
     if (!insp$ok) .fail(entry, insp$reason)
     .batch_surface_warnings(insp$warnings, ids[idx])
     insp$value
@@ -1412,6 +1497,125 @@ batch_run <- function(
   if (collect) results else invisible(NULL)
 }
 
+#' Run `fn` on each of a fixed list of items, one subprocess per item, returning nothing
+#'
+#' The `collect = FALSE` sibling of [run_and_collect()] -- same shape-A
+#' transport (see [run_and_collect()] and `.batch_run_impl()` for the shared
+#' contract details: hash-verified target/adhoc dispatch, both-end
+#' validation, per-item logs, bounded log tail, loud failure). Use this when
+#' `fn` writes its own output (or is called purely for a side effect) and no
+#' value needs to cross back to the parent.
+#'
+#' `fn` is EITHER a `package_function()` descriptor (hash-verified,
+#' auditable; use in production) OR a bare closure (ad-hoc, gated by a static
+#' self-containedness lint and a mandatory `baseenv()` rebase; for tests and
+#' one-offs only -- this folds in the former ad-hoc-closure frontend).
+#'
+#' @param fn EITHER a `package_function` descriptor from [package_function()]
+#'   OR a bare closure -- see the details above.
+#' @param items List of items; each a fully-named list of `fn`'s formals.
+#'   Named items keep their name as the item id; unnamed items get their index.
+#' @param n_workers Concurrent subprocesses (validated: finite, whole, >= 1).
+#' @param dev_path Source tree for `devtools::load_all()` in the worker, or
+#'   `NULL` for the installed package. For a `package_function()` `fn` this is
+#'   the CONSUMER's source tree; for a bare-closure `fn` it is batchit's own
+#'   (an adhoc closure has no separate consumer identity to load). A
+#'   given-but-wrong path errors rather than silently falling back to
+#'   installed code.
+#' @param p A progress callback such as a `progressr` progressor, or `NULL`. It
+#'   is called once per completed item with `message = <id and time>`.
+#' @param label Optional short stage tag prefixed to the progress message.
+#' @param timeout Per-item wall-clock limit in seconds; a worker that exceeds it
+#'   is killed and reported as a failure. Defaults to a generous hang-catcher
+#'   (the internal `.BATCH_DEFAULT_TIMEOUT`, 6 hours); pass `Inf` to disable.
+#' @return `invisible(NULL)`.
+#' @examples
+#' \dontrun{
+#' t <- package_function("mypkg", "process_one_slice")
+#' run(t, items = list(list(x = 1), list(x = 2)), n_workers = 2)
+#' }
+#' @export
+run <- function(
+  fn,
+  items,
+  n_workers,
+  dev_path = NULL,
+  p = NULL,
+  label = NULL,
+  timeout = .BATCH_DEFAULT_TIMEOUT
+) {
+  .batch_run_impl(fn, items, n_workers, dev_path = dev_path, collect = FALSE,
+    p = p, label = label, timeout = timeout, .caller = "run")
+}
+
+#' Run `fn` on each of a fixed list of items, one subprocess per item, collecting values
+#'
+#' Shape A of the contract: the items already exist (each a small named list of
+#' `fn`'s formals; the worker opens its own data), so a fresh R process per
+#' item is not a cost to amortise but the memory strategy itself -- a large
+#' analysis item can peak at tens of GB and R does not return that memory to the
+#' OS, so process exit is how it is reclaimed. This is why batchit does NOT reuse
+#' workers: worker reuse would defeat exactly this.
+#'
+#' `fn` is EITHER a `package_function()` descriptor (hash-verified,
+#' auditable; use in production) OR a bare closure (ad-hoc, gated by a static
+#' self-containedness lint and a mandatory `baseenv()` rebase; for tests and
+#' one-offs only -- this folds in the former ad-hoc-closure frontend).
+#'
+#' Both-end validation, a hash-verified target descriptor (or, for a bare
+#' closure, a per-dispatch identity nonce), per-item logs written to files
+#' (never pipes -- a chatty worker filling the OS pipe buffer is what
+#' deadlocks a pipe transport), a bounded log tail on failure, and a loud stop
+#' on the first failure. Warnings a target captures are surfaced in the
+#' parent, tagged by item id.
+#'
+#' batchit is thread-agnostic: it sets no BLAS / data.table thread counts and
+#' passes none to the worker. If `fn` is itself multi-threaded, dividing
+#' cores across `n_workers` (to avoid oversubscription) is the CONSUMER's
+#' responsibility, not the runner's.
+#'
+#' The worker script is always the runner's (batchit's); `dev_path`, when given,
+#' is the CONSUMER's source tree. When runner and consumer differ, the worker
+#' loads both (the consumer via `dev_path`/`requireNamespace`, the runner via
+#' `requireNamespace`).
+#'
+#' @param fn EITHER a `package_function` descriptor from [package_function()]
+#'   OR a bare closure -- see the details above.
+#' @param items List of items; each a fully-named list of `fn`'s formals.
+#'   Named items keep their name as the item id; unnamed items get their index.
+#' @param n_workers Concurrent subprocesses (validated: finite, whole, >= 1).
+#' @param dev_path Source tree for `devtools::load_all()` in the worker, or
+#'   `NULL` for the installed package. For a `package_function()` `fn` this is
+#'   the CONSUMER's source tree; for a bare-closure `fn` it is batchit's own
+#'   (an adhoc closure has no separate consumer identity to load). A
+#'   given-but-wrong path errors rather than silently falling back to
+#'   installed code.
+#' @param p A progress callback such as a `progressr` progressor, or `NULL`. It
+#'   is called once per completed item with `message = <id and time>`.
+#' @param label Optional short stage tag prefixed to the progress message.
+#' @param timeout Per-item wall-clock limit in seconds; a worker that exceeds it
+#'   is killed and reported as a failure. Defaults to a generous hang-catcher
+#'   (the internal `.BATCH_DEFAULT_TIMEOUT`, 6 hours); pass `Inf` to disable.
+#' @return A list of values in item order.
+#' @examples
+#' \dontrun{
+#' t <- package_function("mypkg", "process_one_slice")
+#' out <- run_and_collect(t, items = list(list(x = 1), list(x = 2)), n_workers = 2)
+#' }
+#' @export
+run_and_collect <- function(
+  fn,
+  items,
+  n_workers,
+  dev_path = NULL,
+  p = NULL,
+  label = NULL,
+  timeout = .BATCH_DEFAULT_TIMEOUT
+) {
+  .batch_run_impl(fn, items, n_workers, dev_path = dev_path, collect = TRUE,
+    p = p, label = label, timeout = timeout, .caller = "run_and_collect")
+}
+
 # --- shape B: lazy producer, bounded queue, via mirai ------------------------
 
 # Session-local counter + high-entropy session nonce for private mirai
@@ -1451,7 +1655,7 @@ batch_run <- function(
 #' and in-memory transport are exactly this shape; the shape-A
 #' materialise-every-item-to-a-tempfile model is exactly the wrong one for it.
 #'
-#' Same contract as [batch_run()] -- target descriptor, both-end validation,
+#' Same contract as [run()]/[run_and_collect()] -- target descriptor, both-end validation,
 #' result-envelope inspection, warning surfacing and loud failure -- over a
 #' different transport. At most `2 * n_workers` items are in flight; the producer
 #' for the next id is not called until an in-flight slot frees, which is the
@@ -1465,7 +1669,7 @@ batch_run <- function(
 #' name can never be "default" (that guarantee holds by construction), and a
 #' registry collision would require another party to have claimed a name under
 #' that same nonce-namespaced prefix in this session. It tears only its own
-#' profile down. As with [batch_run()], batchit is thread-agnostic: any within-
+#' profile down. As with [run()]/[run_and_collect()], batchit is thread-agnostic: any within-
 #' item thread policy is the consumer's.
 #'
 #' The daemon loads the CONSUMER package (via `dev_path`/`requireNamespace`) and,
@@ -1589,7 +1793,7 @@ batch_stream <- function(
   }
 
   # Drain the OLDEST in-flight task (FIFO). Two failure channels, identical in
-  # spirit to batch_run: a daemon-level error value (the task expression itself
+  # spirit to run()/run_and_collect(): a daemon-level error value (the task expression itself
   # blew up, the package would not load, or the per-task timeout fired) and a
   # target-level error envelope, both routed through the shared inspector.
   drain_one <- function() {
@@ -1602,7 +1806,7 @@ batch_stream <- function(
     if (!insp$ok) .stream_fail(item, insp$reason)
     .batch_surface_warnings(insp$warnings, item$id)
     # results[pos] <- list(value), not [[<-: the same NULL-deletion trap as
-    # batch_run -- a target returning NULL must keep its slot, not vanish.
+    # run()/run_and_collect() -- a target returning NULL must keep its slot, not vanish.
     if (collect) results[item$pos] <<- list(insp$value)
     inflight[[1L]] <<- NULL
     n_done <<- n_done + 1L

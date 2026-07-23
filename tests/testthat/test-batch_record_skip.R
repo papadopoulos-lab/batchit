@@ -1,6 +1,6 @@
 # Opt-in consumer skip -- batch_record()/batch_prior()/batch_skip() (Phase 6'
 # Unit 4; see PHASE6_DESIGN.md sections 7, 9.2, 9.3). Same real-subprocess
-# discipline as test-batch_task.R: these drive the ACTUAL inst/batch_worker.R
+# discipline as the declared-output-commit test file: these drive the ACTUAL inst/batch_worker.R
 # through the real processx transport and the real .batch_commit_task()/
 # .batch_commit_task_skip() paths -- never a mocked commit path.
 
@@ -25,7 +25,7 @@ test_that("batch_record(details) lands in the item's new marker, through the rea
   out1 <- file.path(dir, "rec_primary.qs2")
   out2 <- file.path(dir, "rec_secondary.qs2")
 
-  batchit::batch_task(
+  batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_report_prior"),
     items = named_list("only", list(x = 42L)),
     outputs = named_list("only", c(primary = out1, secondary = out2)),
@@ -44,7 +44,7 @@ test_that("batch_record() called TWICE -> the LAST call wins (design section 9.3
   out1 <- file.path(dir, "twice_primary.qs2")
   out2 <- file.path(dir, "twice_secondary.qs2")
 
-  batchit::batch_task(
+  batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_record_twice"),
     items = named_list("only", list(x = 7L)),
     outputs = named_list("only", c(primary = out1, secondary = out2)),
@@ -65,7 +65,7 @@ test_that("batch_prior() returns NULL on a first run (no prior marker); a SECOND
   out1 <- file.path(dir, paste0(id, "_primary.qs2"))
   out2 <- file.path(dir, paste0(id, "_secondary.qs2"))
 
-  r1 <- batchit::batch_task(
+  r1 <- batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_report_prior"),
     items = named_list(id, list(x = 5L)),
     outputs = named_list(id, c(primary = out1, secondary = out2)),
@@ -75,7 +75,7 @@ test_that("batch_prior() returns NULL on a first run (no prior marker); a SECOND
   # NULL, since there was no marker before this run.
   expect_null(qs2::qs_read(out1))
 
-  r2 <- batchit::batch_task(
+  r2 <- batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_report_prior"),
     items = named_list(id, list(x = 9L)),
     outputs = named_list(id, c(primary = out1, secondary = out2)),
@@ -98,7 +98,7 @@ test_that("a malformed/foreign marker at the derived path -> batch_prior() retur
   # not even a valid qs2 payload
   writeLines("not a real marker, and not even qs2", marker)
 
-  r <- batchit::batch_task(
+  r <- batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_report_prior"),
     items = named_list(id, list(x = 3L)),
     outputs = named_list(id, c(primary = out1, secondary = out2)),
@@ -130,7 +130,7 @@ test_that("a WELL-FORMED marker for a DIFFERENT output map (stale/foreign shape)
     details = list(computed_from = 999L))
   qs2::qs_save(fake_record, marker)
 
-  r <- batchit::batch_task(
+  r <- batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_report_prior"),
     items = named_list(id, list(x = 3L)),
     outputs = named_list(id, c(primary = out1, secondary = out2)),
@@ -150,7 +150,7 @@ test_that("batch_skip(): a second run whose target inspects batch_prior() and re
   out2 <- file.path(dir, paste0(id, "_secondary.qs2"))
   marker <- file.path(dir, paste0(".batchit__", id))
 
-  r1 <- batchit::batch_task(
+  r1 <- batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_skip_if_prior"),
     items = named_list(id, list(x = 5L)),
     outputs = named_list(id, c(primary = out1, secondary = out2)),
@@ -163,7 +163,7 @@ test_that("batch_skip(): a second run whose target inspects batch_prior() and re
   # would recompute and overwrite out1/out2 with 999L-derived values, and
   # would mint a NEW attempt token in a NEW marker. With the skip path, the
   # target sees a valid prior and returns batch_skip() instead.
-  r2 <- batchit::batch_task(
+  r2 <- batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_skip_if_prior"),
     items = named_list(id, list(x = 999L)),
     outputs = named_list(id, c(primary = out1, secondary = out2)),
@@ -197,7 +197,7 @@ test_that("batch_skip() with no valid prior (first run) -> error, marker untouch
   marker <- file.path(dir, ".batchit__1")
 
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_always_skip"),
       items = list(list(x = 1L)),
       outputs = list(c(primary = out1, secondary = out2)),
@@ -220,7 +220,7 @@ test_that("batch_skip() when a declared output was externally deleted -> fails l
   out2 <- file.path(dir, paste0(id, "_secondary.qs2"))
   marker <- file.path(dir, paste0(".batchit__", id))
 
-  batchit::batch_task(
+  batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_skip_if_prior"),
     items = named_list(id, list(x = 5L)),
     outputs = named_list(id, c(primary = out1, secondary = out2)),
@@ -230,7 +230,7 @@ test_that("batch_skip() when a declared output was externally deleted -> fails l
   file.remove(out1)
 
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_skip_if_prior"),
       items = named_list(id, list(x = 999L)),
       outputs = named_list(id, c(primary = out1, secondary = out2)),
@@ -247,7 +247,7 @@ test_that("batch_skip() when a declared output was externally deleted -> fails l
 
 # --- 6: staged_writer target writes a stage then batch_skip()s --------------
 
-test_that("batch_task() style = \"staged_writer\": a target that writes a stage then batch_skip()s -> the stage temp is cleaned; prior outputs preserved", {
+test_that("run_and_write_files_atomically() style = \"staged_writer\": a target that writes a stage then batch_skip()s -> the stage temp is cleaned; prior outputs preserved", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   id <- "staged_skip"
@@ -255,7 +255,7 @@ test_that("batch_task() style = \"staged_writer\": a target that writes a stage 
   out2 <- file.path(dir, paste0(id, "_secondary.qs2"))
   marker <- file.path(dir, paste0(".batchit__", id))
 
-  r1 <- batchit::batch_task(
+  r1 <- batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_staged_skip_if_prior"),
     items = named_list(id, list(x = 5L)),
     outputs = named_list(id, c(primary = out1, secondary = out2)),
@@ -265,7 +265,7 @@ test_that("batch_task() style = \"staged_writer\": a target that writes a stage 
   expect_false(r1[[id]]$skipped)
   rec1 <- qs2::qs_read(marker)
 
-  r2 <- batchit::batch_task(
+  r2 <- batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_staged_skip_if_prior"),
     items = named_list(id, list(x = 999L)),
     outputs = named_list(id, c(primary = out1, secondary = out2)),
@@ -286,8 +286,8 @@ test_that("batch_task() style = \"staged_writer\": a target that writes a stage 
 
 # --- 7: S0 lockdown, extended to Unit 4 --------------------------------------
 
-test_that("batch_task()'s parent body never references the Unit 4 CHILD-only skip helpers", {
-  src <- paste(deparse(body(batchit::batch_task)), collapse = "\n")
+test_that("run_and_write_files_atomically()'s parent body never references the Unit 4 CHILD-only skip helpers", {
+  src <- paste(deparse(body(batchit::run_and_write_files_atomically)), collapse = "\n")
   forbidden <- c(".batch_read_prior_marker", ".batch_commit_task_skip",
     ".batch_record_scope_enter", ".batch_record_scope_exit",
     "batch_prior(", "batch_skip(", "batch_record(")
@@ -295,8 +295,8 @@ test_that("batch_task()'s parent body never references the Unit 4 CHILD-only ski
   expect_length(hits, 0L)
 })
 
-test_that("batch_task() dispatch/commit is identical whether a REAL VALID prior marker exists or not, for a target that never calls batch_prior()/batch_skip() (S0 lockdown, extended to Unit 4)", {
-  # The existing S0 lockdown test in test-batch_task.R proves this for an
+test_that("run_and_write_files_atomically() dispatch/commit is identical whether a REAL VALID prior marker exists or not, for a target that never calls batch_prior()/batch_skip() (S0 lockdown, extended to Unit 4)", {
+  # The existing S0 lockdown test in the declared-output-commit test file proves this for an
   # ABSENT and a GARBAGE marker. This extends it to a REAL, VALID marker
   # (produced by an actual prior commit) -- proving that a marker's
   # VALIDITY, not just its absence or corruption, has zero effect on
@@ -310,7 +310,7 @@ test_that("batch_task() dispatch/commit is identical whether a REAL VALID prior 
   marker <- file.path(dir, paste0(".batchit__", id))
 
   run_once <- function(x) {
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_ok"),
       items = named_list(id, list(x = x)),
       outputs = named_list(id, c(primary = out1, secondary = out2)),
@@ -333,16 +333,16 @@ test_that("batch_task() dispatch/commit is identical whether a REAL VALID prior 
 
 # --- 8: batch_record()/batch_prior()/batch_skip() error outside a target run
 
-test_that("batch_record() errors when called outside an active batch_task() target run", {
-  expect_error(batchit::batch_record(list(x = 1)), "no batch_task\\(\\) target run is active")
+test_that("batch_record() errors when called outside an active run_and_write_files_atomically() target run", {
+  expect_error(batchit::batch_record(list(x = 1)), "no run_and_write_files_atomically\\(\\) target run is active")
 })
 
-test_that("batch_prior() errors when called outside an active batch_task() target run", {
-  expect_error(batchit::batch_prior(), "no batch_task\\(\\) target run is active")
+test_that("batch_prior() errors when called outside an active run_and_write_files_atomically() target run", {
+  expect_error(batchit::batch_prior(), "no run_and_write_files_atomically\\(\\) target run is active")
 })
 
-test_that("batch_skip() errors when called outside an active batch_task() target run", {
-  expect_error(batchit::batch_skip(), "no batch_task\\(\\) target run is active")
+test_that("batch_skip() errors when called outside an active run_and_write_files_atomically() target run", {
+  expect_error(batchit::batch_skip(), "no run_and_write_files_atomically\\(\\) target run is active")
 })
 
 # --- the current-dispatch attempt token binds a SKIP result too --------------
@@ -369,7 +369,7 @@ test_that(".batch_inspect_result rejects a skip result whose attempt token is NO
 
 # --- a SYMLINKED marker path -> prior=NULL + normal recompute (not rejection) -
 
-test_that("batch_task(): a marker path that is a SYMLINK does not reject the envelope -- it recomputes (prior = NULL)", {
+test_that("run_and_write_files_atomically(): a marker path that is a SYMLINK does not reject the envelope -- it recomputes (prior = NULL)", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "sym_primary.qs2")
@@ -384,7 +384,7 @@ test_that("batch_task(): a marker path that is a SYMLINK does not reject the env
   skip_if_not(isTRUE(ok) && nzchar(suppressWarnings(Sys.readlink(marker))),
     "symlinks unsupported here")
 
-  batchit::batch_task(
+  batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_ok"),
     items = named_list("only", list(x = 7L)),
     outputs = named_list("only", c(primary = out1, secondary = out2)),

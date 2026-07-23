@@ -16,7 +16,7 @@ back or move/rename it yourself -- batchit renames it to the final
 destination once every declared output has been staged.
 }
 \description{
-Inside a \code{style = "staged_writer"} \code{\link[=batch_task]{batch_task()}} target, WRITE each
+Inside a \code{style = "staged_writer"} \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} target, WRITE each
 declared output to \verb{where_to_write_output(<name>)} -- an attempt-scoped temp
 path in the SAME directory as that output's final destination (so the
 later commit rename is same-filesystem) -- instead of returning it. The
@@ -28,7 +28,7 @@ fails the whole item, with zero renames.
 }
 \details{
 Only callable from inside the \code{do.call()} of a \code{style = "staged_writer"}
-\code{batch_task()} item -- i.e. only in a batchit worker subprocess, while
+\code{run_and_write_files_atomically()} item -- i.e. only in a batchit worker subprocess, while
 that one target call is running. Calling it any other time (outside a
 staged_writer run entirely, or for a \code{name} this item never declared) is
 an error.

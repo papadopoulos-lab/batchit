@@ -1,9 +1,11 @@
-# Declared-output commit engine (batch_task()) -- Phase 6' Units 1-4. Package
+# Declared-output commit engine (run_and_write_files_atomically()) -- Phase 6'
+# Units 1-4. Package
 # targets, both commit styles: `return` (Unit 1, the target returns a named
 # list) and `staged_writer` (Unit 2, the target streams each output to
 # `where_to_write_output(<name>)` instead); see PHASE6_DESIGN.md sections 2-4, 9.1,
 # 9.5.
-# batch_task() reuses batch_run()'s transport (a fresh subprocess per item via
+# run_and_write_files_atomically() reuses run()/run_and_collect()'s transport
+# (a fresh subprocess per item via
 # processx, the SAME inst/batch_worker.R) but replaces the raw return-value
 # result with a small, non-negotiable commit record: `outputs[[i]]` names the
 # files the target must produce, and the CHILD -- never the parent -- writes
@@ -25,7 +27,8 @@
 # consumer its own prior `details` (step 0, `.batch_read_prior_marker()`,
 # CHILD-side, before `do.call()`), and honours an explicit `batch_skip()`
 # sentinel the target RETURNS (`.batch_commit_task_skip()`, CHILD-side, after
-# `do.call()`). Neither is ever called from `batch_task()`'s own (parent) body.
+# `do.call()`). Neither is ever called from `run_and_write_files_atomically()`'s
+# own (parent) body.
 #
 # Doctrine (PHASE6_DESIGN.md section 0, normative): no batchit LAUNCH decision
 # may depend on marker existence or contents. The parent-side functions in this
@@ -40,7 +43,7 @@
 
 # --- outputs spec: alignment, structural validation, path validation --------
 
-#' Align a `batch_task()` `outputs` list to the item ids
+#' Align a `run_and_write_files_atomically()` `outputs` list to the item ids
 #'
 #' `outputs` is either POSITIONAL (an unnamed list, 1:1 with `items`/`ids`) or,
 #' when the caller wants to name items instead of relying on position, NAMED BY
@@ -71,14 +74,14 @@
 
 #' Validate one item's output map STRUCTURE (design PHASE6_DESIGN.md section 3.1)
 #'
-#' Both-ends: the parent calls this at `batch_task()` dispatch time, the child
+#' Both-ends: the parent calls this at `run_and_write_files_atomically()` dispatch time, the child
 #' again inside `.batch_check_envelope()` (a mismatched/corrupted envelope must
 #' not reach `do.call()`). Non-empty; every name non-blank and unique; every
 #' path a non-empty string; every path unique within this item.
 #' @param map A named character vector: `<output name> = <final path>`.
 #' @noRd
 .batch_validate_output_map <- function(map, where, id) {
-  lead <- sprintf("batch_task() %s-validation [item '%s']", where, id)
+  lead <- sprintf("run_and_write_files_atomically() %s-validation [item '%s']", where, id)
   if (!is.character(map) || length(map) == 0L) {
     stop(sprintf("%s: outputs must be a non-empty named character vector", lead),
       call. = FALSE)
@@ -149,7 +152,7 @@
 #' this one.
 #' @noRd
 .batch_validate_output_paths <- function(map, id) {
-  lead <- sprintf("batch_task() parent-validation [item '%s']", id)
+  lead <- sprintf("run_and_write_files_atomically() parent-validation [item '%s']", id)
   out <- map
   for (nm in names(map)) {
     path <- map[[nm]]
@@ -200,7 +203,7 @@
 
 #' Invocation-wide output/marker collision check (design PHASE6_DESIGN.md 3.1, 9.1)
 #'
-#' Within ONE `batch_task()` call, no two paths -- across every item's outputs
+#' Within ONE `run_and_write_files_atomically()` call, no two paths -- across every item's outputs
 #' AND every item's marker -- may alias each other. The doctrine (section 0/9.1)
 #' forbids any LAUNCH decision depending on marker filesystem state. The markers
 #' are ALREADY canonical (each derived from a normalized output dir + a plain
@@ -215,7 +218,7 @@
   if (anyDuplicated(all_paths)) {
     dup <- unique(all_paths[duplicated(all_paths)])
     stop(sprintf(paste0(
-      "batch_task(): output/marker path collision within this invocation ",
+      "run_and_write_files_atomically(): output/marker path collision within this invocation ",
       "(every output and marker must be unique across ALL items): %s"),
       paste(dup, collapse = ", ")), call. = FALSE)
   }
@@ -373,7 +376,7 @@
 
 #' The staging path batchit pre-computed for one declared output
 #'
-#' Inside a `style = "staged_writer"` [batch_task()] target, WRITE each
+#' Inside a `style = "staged_writer"` [run_and_write_files_atomically()] target, WRITE each
 #' declared output to `where_to_write_output(<name>)` -- an attempt-scoped temp
 #' path in the SAME directory as that output's final destination (so the
 #' later commit rename is same-filesystem) -- instead of returning it. The
@@ -384,7 +387,7 @@
 #' fails the whole item, with zero renames.
 #'
 #' Only callable from inside the `do.call()` of a `style = "staged_writer"`
-#' `batch_task()` item -- i.e. only in a batchit worker subprocess, while
+#' `run_and_write_files_atomically()` item -- i.e. only in a batchit worker subprocess, while
 #' that one target call is running. Calling it any other time (outside a
 #' staged_writer run entirely, or for a `name` this item never declared) is
 #' an error.
@@ -406,8 +409,8 @@
 where_to_write_output <- function(name) {
   if (!isTRUE(.batch_stage_env$active)) {
     stop(paste0(
-      "where_to_write_output(): no staged_writer batch_task() run is active -- only ",
-      "callable from inside the target of a style = \"staged_writer\" batch_task() item"),
+      "where_to_write_output(): no staged_writer run_and_write_files_atomically() run is active -- only ",
+      "callable from inside the target of a style = \"staged_writer\" run_and_write_files_atomically() item"),
       call. = FALSE)
   }
   if (!is.character(name) || length(name) != 1L || is.na(name) || !nzchar(name)) {
@@ -425,7 +428,7 @@ where_to_write_output <- function(name) {
 # --- batch_record()/batch_prior()/batch_skip() scoped accessor --------------
 # (design PHASE6_DESIGN.md sections 7, 9.2, 9.3)
 
-# One package-level environment holding the CURRENT batch_task() item's
+# One package-level environment holding the CURRENT run_and_write_files_atomically() item's
 # opt-in consumer-skip state: whether the accessor is answerable at all
 # (`active`), the PRIOR marker's own record captured at step 0 (`prior`, or
 # `NULL`) -- batch_prior() reads `prior$details` from this -- and whatever
@@ -467,7 +470,7 @@ where_to_write_output <- function(name) {
 
 #' Attach an opaque `details` value to THIS item's new marker
 #'
-#' Callable ONLY from inside the target of a `batch_task()` item (i.e. only
+#' Callable ONLY from inside the target of a `run_and_write_files_atomically()` item (i.e. only
 #' in a batchit worker subprocess, while that one target call is running,
 #' between the `.batch_record_scope_enter()`/`_exit()` pair tightly wrapping
 #' `do.call()` in `.batch_execute()`) -- the opt-in half of the consumer-skip
@@ -483,15 +486,15 @@ where_to_write_output <- function(name) {
 #' marker is removed, so a failing `batch_record()` payload can never destroy
 #' a previously valid commit.
 #'
-#' Calling this outside an active `batch_task()` target run -- including
-#' during a return-value dispatch ([batch_run()]/[batch_stream()]/
-#' [batch_fn()]), which has no marker/skip machinery at all -- is an error.
+#' Calling this outside an active `run_and_write_files_atomically()` target run -- including
+#' during a return-value dispatch ([run()]/[run_and_collect()]/[batch_stream()]),
+#' which has no marker/skip machinery at all -- is an error.
 #'
 #' @param details Any value [qs2::qs_save()] can serialize.
 #' @return `invisible(NULL)`.
 #' @examples
 #' \dontrun{
-#' # inside a batch_task() target:
+#' # inside a run_and_write_files_atomically() target:
 #' my_target <- function(x) {
 #'   batch_record(list(computed_from = x))
 #'   list(primary = x)
@@ -501,8 +504,8 @@ where_to_write_output <- function(name) {
 batch_record <- function(details) {
   if (!isTRUE(.batch_record_env$active)) {
     stop(paste0(
-      "batch_record(): no batch_task() target run is active -- only callable ",
-      "from inside the target of a batch_task() item"), call. = FALSE)
+      "batch_record(): no run_and_write_files_atomically() target run is active -- only callable ",
+      "from inside the target of a run_and_write_files_atomically() item"), call. = FALSE)
   }
   .batch_record_env$details <- details
   invisible(NULL)
@@ -510,7 +513,7 @@ batch_record <- function(details) {
 
 #' Return the PRIOR run's `batch_record()` details for THIS item
 #'
-#' Callable ONLY from inside the target of a `batch_task()` item, exactly
+#' Callable ONLY from inside the target of a `run_and_write_files_atomically()` item, exactly
 #' like [batch_record()]. Returns the `details` value THIS SAME item's PRIOR
 #' successful commit passed to `batch_record()`, captured at STEP 0 -- before
 #' `do.call()` even started (design PHASE6_DESIGN.md section 9.2) -- from the
@@ -545,8 +548,8 @@ batch_record <- function(details) {
 batch_prior <- function() {
   if (!isTRUE(.batch_record_env$active)) {
     stop(paste0(
-      "batch_prior(): no batch_task() target run is active -- only callable ",
-      "from inside the target of a batch_task() item"), call. = FALSE)
+      "batch_prior(): no run_and_write_files_atomically() target run is active -- only callable ",
+      "from inside the target of a run_and_write_files_atomically() item"), call. = FALSE)
   }
   prior <- .batch_record_env$prior
   if (is.null(prior)) return(NULL)
@@ -555,7 +558,7 @@ batch_prior <- function() {
 
 #' Sentinel: tell batchit the prior committed outputs are current
 #'
-#' RETURN this from a `batch_task()` target (do not call it merely for a
+#' RETURN this from a `run_and_write_files_atomically()` target (do not call it merely for a
 #' side effect) to mean "do not recompute -- the outputs a prior run of this
 #' item already committed are still current; reuse them" (design
 #' PHASE6_DESIGN.md sections 7, 9.2). Reachable only when [batch_prior()]
@@ -565,7 +568,7 @@ batch_prior <- function() {
 #' valid prior, or whose prior/outputs no longer verify at that moment,
 #' fails loud with the marker left completely untouched. Like
 #' [batch_record()]/[batch_prior()], only callable from inside the target of
-#' an active `batch_task()` item.
+#' an active `run_and_write_files_atomically()` item.
 #'
 #' @return A sentinel object (class `"batch_skip"`); RETURN it, do not act on
 #'   it yourself.
@@ -580,8 +583,8 @@ batch_prior <- function() {
 batch_skip <- function() {
   if (!isTRUE(.batch_record_env$active)) {
     stop(paste0(
-      "batch_skip(): no batch_task() target run is active -- only callable ",
-      "from inside the target of a batch_task() item"), call. = FALSE)
+      "batch_skip(): no run_and_write_files_atomically() target run is active -- only callable ",
+      "from inside the target of a run_and_write_files_atomically() item"), call. = FALSE)
   }
   structure(list(), class = "batch_skip")
 }
@@ -920,31 +923,32 @@ batch_skip <- function() {
   list(committed = outputs, attempt = attempt, skipped = TRUE)
 }
 
-# --- frontend: batch_task() --------------------------------------------------
+# --- frontend: run_and_write_files_atomically() ------------------------------
 
 #' Run a target on each of a fixed list of items, committing DECLARED OUTPUT
 #' FILES instead of returning a value
 #'
-#' The declared-output sibling of [batch_run()] (design PHASE6_DESIGN.md
-#' sections 2-3): same transport (a fresh subprocess per item via `processx`,
-#' the same worker script, the same both-ends item validation and hash-verified
-#' target), but instead of a raw return value crossing back, the target's
-#' return is committed to `outputs[[i]]` -- a named map of final file paths --
-#' by the CHILD, via an all-or-nothing 7-step rename sequence
-#' (`.batch_commit_task()`). A per-item MARKER file is the atomic witness of a
-#' complete commit -- but only a VALID, engine-produced marker (one that
-#' decodes and whose protocol/attempt-token/committed-output-map verify) is
-#' that witness; bare pathname EXISTENCE is not. A target that errors before
-#' the old marker is removed (commit step 4) leaves an unrelated pre-existing
-#' marker at that path completely untouched, so a file sitting at the marker
-#' path does not by itself mean this attempt committed.
+#' The declared-output sibling of [run()]/[run_and_collect()] (design
+#' PHASE6_DESIGN.md sections 2-3): same transport (a fresh subprocess per item
+#' via `processx`, the same worker script, the same both-ends item validation
+#' and hash-verified target), but instead of a raw return value crossing
+#' back, the target's return is committed to `outputs[[i]]` -- a named map of
+#' final file paths -- by the CHILD, via an all-or-nothing 7-step rename
+#' sequence (`.batch_commit_task()`). A per-item MARKER file is the atomic
+#' witness of a complete commit -- but only a VALID, engine-produced marker
+#' (one that decodes and whose protocol/attempt-token/committed-output-map
+#' verify) is that witness; bare pathname EXISTENCE is not. A target that
+#' errors before the old marker is removed (commit step 4) leaves an
+#' unrelated pre-existing marker at that path completely untouched, so a file
+#' sitting at the marker path does not by itself mean this attempt committed.
 #'
 #' Two commit styles, for EITHER fn_kind: `style = "return"` (Unit 1 -- the
 #' target returns `list(<name> = <value>, ...)`, names matching the declared
 #' outputs EXACTLY; each value is qs2-serialized to its declared path) and
 #' `style = "staged_writer"` (Unit 2 -- the target instead WRITES each output
 #' to [where_to_write_output()]`(<name>)` as it goes; its return value is ignored).
-#' There is deliberately no `collect` argument -- the point of `batch_task()`
+#' There is deliberately no `collect` argument -- the point of
+#' `run_and_write_files_atomically()`
 #' is that raw values never cross back to the parent; only a small commit
 #' record does.
 #'
@@ -952,7 +956,8 @@ batch_skip <- function() {
 #' bare closure (`fn_kind = "adhoc"`, Phase 6' Unit 3, design PHASE6_DESIGN.md
 #' sections 1-2) -- both drive the SAME commit engine (`.batch_commit_task()`,
 #' both styles, the same marker/§0 doctrine). A closure is gated by the same
-#' self-containedness lint and mandatory `baseenv()` rebase [batch_fn()] uses
+#' self-containedness lint and mandatory `baseenv()` rebase [run()]/
+#' [run_and_collect()] use
 #' (see `.batch_lint_adhoc_fn()`); commit-record identity is unaffected either
 #' way (it is bound to the marker's own attempt token, never to fn_kind).
 #'
@@ -986,13 +991,13 @@ batch_skip <- function() {
 #'   tree for `devtools::load_all()` in the worker (or `NULL` for the
 #'   installed consumer package). For `fn_kind = "adhoc"` there is no
 #'   consumer identity, so this instead names BATCHIT'S OWN source tree (see
-#'   [batch_fn()]'s `dev_path` doc) -- `NULL` (the default) uses the installed
+#'   [run()]'s `dev_path` doc) -- `NULL` (the default) uses the installed
 #'   `batchit`.
 #' @param p A progress callback such as a `progressr` progressor, or `NULL`.
 #' @param label Optional short stage tag prefixed to the progress message.
-#' @param timeout Per-item wall-clock limit in seconds; see [batch_run()].
-#' @param target Deprecated former name of `fn` (Unit 1/2 shipped
-#'   `batch_task(target = ...)`). Pass `fn` instead; supplying both errors.
+#' @param timeout Per-item wall-clock limit in seconds; see [run()].
+#' @param target Deprecated former name of `fn` (Unit 1/2 originally shipped
+#'   this parameter as `target = ...`). Pass `fn` instead; supplying both errors.
 #' @return A list, named by item id, in item order: each element is that item's
 #'   commit record, `list(committed = <named char: name -> final path>,
 #'   attempt = <token>, skipped = <TRUE/FALSE>)`. `skipped` is `TRUE` only
@@ -1003,7 +1008,7 @@ batch_skip <- function() {
 #' @examples
 #' \dontrun{
 #' t <- package_function("mypkg", "process_one_slice")
-#' batch_task(
+#' run_and_write_files_atomically(
 #'   t,
 #'   items = list(list(x = 1), list(x = 2)),
 #'   outputs = list(c(main = "/data/out_1.qs2"), c(main = "/data/out_2.qs2")),
@@ -1011,7 +1016,7 @@ batch_skip <- function() {
 #' )
 #' }
 #' @export
-batch_task <- function(
+run_and_write_files_atomically <- function(
   fn,
   items,
   outputs,
@@ -1023,12 +1028,12 @@ batch_task <- function(
   timeout = .BATCH_DEFAULT_TIMEOUT,
   target = NULL
 ) {
-  # `target` is the DEPRECATED former name of `fn` (Unit 1/2 shipped
-  # `batch_task(target = ...)`; Unit 3 renamed it `fn` because it now also
-  # accepts a bare closure). Preserve the old NAMED spelling.
+  # `target` is the DEPRECATED former name of `fn` (Unit 1/2 originally
+  # shipped this parameter as `target = ...`; Unit 3 renamed it `fn` because
+  # it now also accepts a bare closure). Preserve the old NAMED spelling.
   if (!is.null(target)) {
     if (!missing(fn)) {
-      stop(paste0("batch_task(): pass `fn` only -- `target` is the deprecated ",
+      stop(paste0("run_and_write_files_atomically(): pass `fn` only -- `target` is the deprecated ",
         "former name of `fn`; do not pass both"), call. = FALSE)
     }
     fn <- target
@@ -1049,45 +1054,45 @@ batch_task <- function(
     if (is.null(formal_names)) formal_names <- character(0)
     target <- NULL
   } else {
-    stop(paste0("batch_task(): `fn` must come from package_function() (fn_kind = ",
+    stop(paste0("run_and_write_files_atomically(): `fn` must come from package_function() (fn_kind = ",
       "\"package\") or be a bare closure (fn_kind = \"adhoc\")"), call. = FALSE)
   }
   if (!is.character(style) || length(style) != 1L || is.na(style) || !nzchar(style)) {
-    stop("batch_task(): `style` must be a single non-empty string", call. = FALSE)
+    stop("run_and_write_files_atomically(): `style` must be a single non-empty string", call. = FALSE)
   }
   if (!(style %in% c("return", "staged_writer"))) {
     stop(sprintf(
-      "batch_task(): unknown style '%s' (must be \"return\" or \"staged_writer\")",
+      "run_and_write_files_atomically(): unknown style '%s' (must be \"return\" or \"staged_writer\")",
       style), call. = FALSE)
   }
-  n_workers <- .batch_validate_n_workers(n_workers, "batch_task()")
+  n_workers <- .batch_validate_n_workers(n_workers, "run_and_write_files_atomically()")
   # Validate ALL config BEFORE the empty-workload early return -- otherwise a
   # bad dev_path/timeout is silently accepted whenever there is no work.
-  timeout <- .batch_validate_timeout(timeout, "batch_task()")
+  timeout <- .batch_validate_timeout(timeout, "run_and_write_files_atomically()")
   # For "package", dev_path names the CONSUMER's tree (target$package). For
   # "adhoc" there is no consumer identity -- dev_path instead names BATCHIT'S
-  # OWN tree (see batch_fn()'s dev_path doc; the worker interprets it the
+  # OWN tree (see run()'s dev_path doc; the worker interprets it the
   # same way).
   dev_path <- .batch_validate_dev_path(dev_path,
     if (identical(fn_kind, "package")) target$package else "batchit")
   if (!is.list(items)) {
-    stop(sprintf("batch_task(): `items` must be a list, got %s", class(items)[1L]),
+    stop(sprintf("run_and_write_files_atomically(): `items` must be a list, got %s", class(items)[1L]),
       call. = FALSE)
   }
   if (!is.list(outputs)) {
-    stop(sprintf("batch_task(): `outputs` must be a list, got %s", class(outputs)[1L]),
+    stop(sprintf("run_and_write_files_atomically(): `outputs` must be a list, got %s", class(outputs)[1L]),
       call. = FALSE)
   }
   if (length(outputs) != length(items)) {
     stop(sprintf(
-      "batch_task(): `outputs` must have the same length as `items` (%d), got %d",
+      "run_and_write_files_atomically(): `outputs` must have the same length as `items` (%d), got %d",
       length(items), length(outputs)), call. = FALSE)
   }
 
   n_items <- length(items)
   if (n_items == 0L) return(list())
 
-  # Stable per-item ids (item names, else the index) -- shared with batch_run().
+  # Stable per-item ids (item names, else the index) -- shared with run()/run_and_collect().
   ids <- .batch_item_ids(items)
   # `.batch_task_marker_path()` interpolates the id straight into a filename
   # (`.batchit__<id>`); a `/` or `\` in an id would place that marker in a
@@ -1104,11 +1109,11 @@ batch_task <- function(
   bad_ids <- ids[grepl("[/\\\\]", ids, perl = TRUE)]
   if (length(bad_ids) > 0L) {
     stop(sprintf(paste0(
-      "batch_task(): item id(s) must not contain '/' or '\\\\' (interpolated into the ",
+      "run_and_write_files_atomically(): item id(s) must not contain '/' or '\\\\' (interpolated into the ",
       "per-item marker filename .batchit__<id>): %s"),
       paste(unique(bad_ids), collapse = ", ")), call. = FALSE)
   }
-  outputs <- .batch_align_outputs_to_ids(outputs, ids, "batch_task()")
+  outputs <- .batch_align_outputs_to_ids(outputs, ids, "run_and_write_files_atomically()")
 
   # Validate EVERY item's args and EVERY item's output map up front (not just
   # the first): item schemas are legitimately heterogeneous, so a bad one hides
@@ -1154,7 +1159,7 @@ batch_task <- function(
   output_paths <- vapply(seq_len(n_items), function(i) {
     tempfile(pattern = paste0("batch_out_", i, "_"), fileext = ".qs2")
   }, character(1))
-  # Per-item stdout/stderr goes to a file, not a pipe -- see batch_run()'s log
+  # Per-item stdout/stderr goes to a file, not a pipe -- see run()/run_and_collect()'s log
   # handling, which this mirrors exactly.
   log_paths <- vapply(seq_len(n_items), function(i) {
     tempfile(pattern = paste0("batch_log_", i, "_"), fileext = ".log")
@@ -1167,7 +1172,7 @@ batch_task <- function(
   }, add = TRUE)
 
   # --vanilla does not reproduce the parent's library path; force it via
-  # R_LIBS before startup, exactly like batch_run().
+  # R_LIBS before startup, exactly like run()/run_and_collect().
   worker_env <- c(
     "current",
     R_LIBS = paste(.libPaths(), collapse = .Platform$path.sep)
@@ -1228,8 +1233,8 @@ batch_task <- function(
   # errored) attempt may have left behind (see .batch_sweep_task_temps() --
   # the SIGKILL/timeout case is exactly why this is the parent's job: a
   # kill_tree() reaches the child before its own on.exit cleanup can run),
-  # surface its log tail, then stop. Identical shape to batch_run()'s
-  # .fail(), tagged with batch_task() in the message.
+  # surface its log tail, then stop. Identical shape to run()/run_and_collect()'s
+  # .fail(), tagged with run_and_write_files_atomically() in the message.
   .fail <- function(entry, what) {
     idx <- entry$idx
     .batch_sweep_task_temps(outputs[[idx]], markers[idx], attempts[idx])
@@ -1239,7 +1244,7 @@ batch_task <- function(
         "\n--- item '%s' failed ---\nOUTPUT (stdout+stderr):\n%s\n---",
         ids[idx], tail_txt))
     }
-    stop(sprintf("batch_task(): item '%s' %s", ids[idx], what), call. = FALSE)
+    stop(sprintf("run_and_write_files_atomically(): item '%s' %s", ids[idx], what), call. = FALSE)
   }
 
   # Read + validate one finished item's result envelope while its log is still
@@ -1288,7 +1293,7 @@ batch_task <- function(
       if (!entry$proc$is_alive()) {
         value <- .collect(entry)
         # results[idx] <- list(value), NOT results[[idx]] <- value: the usual
-        # NULL-deletion trap (see batch_run()) -- moot here in practice (a
+        # NULL-deletion trap (see run()/run_and_collect()) -- moot here in practice (a
         # commit record is never NULL), kept for consistency/robustness.
         results[entry$idx] <- list(value)
         unlink(log_paths[entry$idx], force = TRUE)

@@ -59,7 +59,7 @@
 # Writes ~n_kb KB to EACH of stdout and stderr. Exercises the deadlock class that
 # killed the originating pipeline's pipe transport: a child out-writing the OS
 # pipe buffer (64 KB on Linux) blocks forever in write() if the parent only reads
-# after exit. batch_run's file-backed logs must swallow this without blocking.
+# after exit. run()/run_and_collect()'s file-backed logs must swallow this without blocking.
 #' @noRd
 .batch_fixture_chatty <- function(n_kb) {
   line <- paste(rep("x", 1023L), collapse = "")
@@ -70,10 +70,10 @@
   invisible(NULL)
 }
 
-# --- Phase 6' Unit 1 fixtures: declared-output commit (batch_task()) --------
+# --- Phase 6' Unit 1 fixtures: declared-output commit (run_and_write_files_atomically()) --------
 # Targets for the return-style commit engine: a target's return must be a
 # named list whose names are EXACTLY the declared outputs (see
-# .batch_commit_task() in R/batch_task.R). These fixtures exercise the
+# .batch_commit_task(), in the commit-engine source file). These fixtures exercise the
 # well-formed case and every documented failure shape.
 
 # Returns exactly two named values -- the well-formed case (declared outputs
@@ -112,8 +112,8 @@
 # Sleeps `seconds` (well past any short test timeout), THEN returns the
 # well-formed declared-outputs shape -- lets a test force a real timeout
 # kill_tree() (via a short `timeout`) that lands during do.call(), i.e.
-# BEFORE .batch_commit_task() ever starts, exercising batch_task()'s
-# timeout/SIGKILL failure path against a REAL subprocess.
+# BEFORE .batch_commit_task() ever starts, exercising
+# run_and_write_files_atomically()'s timeout/SIGKILL failure path against a REAL subprocess.
 #' @noRd
 .batch_fixture_task_slow <- function(x, seconds) {
   Sys.sleep(seconds)
@@ -170,7 +170,7 @@
 # Sleeps `seconds` (well past any short test timeout), THEN streams both
 # declared outputs -- lets a test force a real timeout kill_tree() that lands
 # during do.call(), i.e. before any output is actually staged, exercising
-# batch_task()'s timeout/SIGKILL sweep for staged_writer's OWN temp shape
+# run_and_write_files_atomically()'s timeout/SIGKILL sweep for staged_writer's OWN temp shape
 # (`.stage`, not `.tmp`).
 #' @noRd
 .batch_fixture_task_staged_slow <- function(x, seconds) {
@@ -193,7 +193,7 @@
 # (design PHASE6_DESIGN.md sections 7, 9.2, 9.3). These exercise the opt-in
 # consumer-skip mechanism through the REAL worker: batch_prior()/
 # batch_record()/batch_skip() are only answerable INSIDE the do.call() of a
-# style-agnostic batch_task() item, so (like the staged_writer fixtures
+# style-agnostic run_and_write_files_atomically() item, so (like the staged_writer fixtures
 # above) they must live in the package, package-resolvable, not as closures
 # defined inside a test.
 

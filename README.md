@@ -14,19 +14,29 @@ status, value-or-error, executed-target identity, captured warnings).
 
 There is one contract and two transports, matched to two real workload shapes.
 
-**Shape A — `batch_run()`**: the items already exist; run a fresh process per
-item. Process exit *is* the memory strategy for memory-bound work (a worker that
-peaks at tens of GB does not hand that memory back to the OS, so reuse would be
-the wrong thing). Transport: `processx`, one child per item.
+**Shape A — `run()` / `run_and_collect()`**: the items already exist; run a
+fresh process per item. Process exit *is* the memory strategy for
+memory-bound work (a worker that peaks at tens of GB does not hand that
+memory back to the OS, so reuse would be the wrong thing). Transport:
+`processx`, one child per item. `run()` returns nothing (for a target that
+writes its own output); `run_and_collect()` returns each item's value, in
+item order. `fn` is either a `package_function()` descriptor (hash-verified,
+production) or a bare closure (ad-hoc, gated by a self-containedness lint —
+for tests and one-offs).
 
 ```r
 t <- batchit::package_function("mypkg", "process_one_slice")
-out <- batchit::batch_run(
+out <- batchit::run_and_collect(
   t,
   items = list(list(x = 1), list(x = 2), list(x = 3)),
   n_workers = 3
 )
 ```
+
+**Shape A, declared-output variant — `run_and_write_files_atomically()`**:
+same transport, but instead of a value crossing back, each item commits its
+declared output files atomically (a 7-step rename sequence, witnessed by a
+per-item marker file) — see `PUBLIC_API.md` section 3.1.
 
 **Shape B — `batch_stream()`**: the parent *is* the producer and each item is
 itself the payload (a data slice), generated lazily under bounded backpressure so
@@ -56,8 +66,9 @@ batchit::batch_stream(
 - **Result envelope**: protocol, id, status, value-or-structured-error, executed
   target identity (package + symbol + hash), captured warnings. Atomicity is
   scoped to the envelope, not to whatever files a target writes.
-- **`collect = FALSE`** drops the value entirely — for targets that write their
-  own output, only the status crosses back.
+- **`run()` drops the value entirely** — for targets that write their own
+  output, only the status crosses back; `run_and_collect()` is the sibling
+  that returns each item's value.
 - **The default mirai profile is never touched**; each stream claims a fresh,
   nonce-namespaced private profile and tears only it down.
 - **Thread-agnostic**: batchit sets no BLAS / data.table thread counts. Any

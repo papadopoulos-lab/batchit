@@ -11,7 +11,7 @@ A sentinel object (class \code{"batch_skip"}); RETURN it, do not act on
 it yourself.
 }
 \description{
-RETURN this from a \code{batch_task()} target (do not call it merely for a
+RETURN this from a \code{run_and_write_files_atomically()} target (do not call it merely for a
 side effect) to mean "do not recompute -- the outputs a prior run of this
 item already committed are still current; reuse them" (design
 PHASE6_DESIGN.md sections 7, 9.2). Reachable only when \code{\link[=batch_prior]{batch_prior()}}
@@ -21,7 +21,7 @@ marker and RE-STATS every declared output before honouring the request
 valid prior, or whose prior/outputs no longer verify at that moment,
 fails loud with the marker left completely untouched. Like
 \code{\link[=batch_record]{batch_record()}}/\code{\link[=batch_prior]{batch_prior()}}, only callable from inside the target of
-an active \code{batch_task()} item.
+an active \code{run_and_write_files_atomically()} item.
 }
 \examples{
 \dontrun{

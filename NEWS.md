@@ -1,5 +1,26 @@
 # batchit (development)
 
+Public API migration, Stage 2 (see `PUBLIC_API.md`): the naming-v2 rename
+sweep. `batch_run(target, items, ..., collect = TRUE/FALSE)` is now TWO
+functions with `collect` folded into the name — `run(fn, items, ...)`
+(`collect = FALSE`) and `run_and_collect(fn, items, ...)` (`collect = TRUE`)
+— sharing one internal implementation (`.batch_run_impl()`). `batch_fn()` is
+retired as a separate export: both `run()` and `run_and_collect()` now accept
+`fn` as EITHER a `package_function()` descriptor OR a bare closure (the
+former `batch_fn()` behaviour), gated by the same self-containedness lint and
+mandatory `baseenv()` rebase as before. `batch_task()` is renamed to
+`run_and_write_files_atomically()` — a pure name change; its body (styles
+`"return"`/`"staged_writer"`, the `target =` deprecated-alias support, the
+declared-output commit engine) is unchanged. `package_function()` and
+`where_to_write_output()` (renamed in Stage 1) are unaffected.
+`batch_record()`/`batch_prior()`/`batch_skip()` keep their names (scheduled
+for deletion in a later stage, PUBLIC_API.md section 5) — only their
+error-message text was updated to reference `run_and_write_files_atomically()`
+instead of the old `batch_task()` name, since they are only ever callable
+from inside one of its targets. `batch_stream()` is untouched (Shape B,
+handled in a later stage). See `PUBLIC_API.md` section 4 for the full
+old->new mapping.
+
 Phase 6' Unit 4 (see `PHASE6_DESIGN.md`): the OPT-IN consumer-skip
 mechanism — new exported `batch_record(details)`, `batch_prior()`, and
 `batch_skip()`, callable ONLY from inside the target of a `batch_task()`

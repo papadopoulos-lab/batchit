@@ -10,7 +10,7 @@ batch_prior()
 The prior \code{details} value, or \code{NULL}.
 }
 \description{
-Callable ONLY from inside the target of a \code{batch_task()} item, exactly
+Callable ONLY from inside the target of a \code{run_and_write_files_atomically()} item, exactly
 like \code{\link[=batch_record]{batch_record()}}. Returns the \code{details} value THIS SAME item's PRIOR
 successful commit passed to \code{batch_record()}, captured at STEP 0 -- before
 \code{do.call()} even started (design PHASE6_DESIGN.md section 9.2) -- from the

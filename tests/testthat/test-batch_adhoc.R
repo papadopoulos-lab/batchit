@@ -1,8 +1,8 @@
 # The `adhoc` fn_kind (Phase 6' Unit 3, see PHASE6_DESIGN.md sections 1, 2, 4,
 # 5, 9.4): dispatch a bare closure VALUE, gated by a self-containedness LINT
 # (codetools::findGlobals()) applied at BOTH ends, with a mandatory baseenv()
-# rebase before serialization. Same real-subprocess discipline as
-# test-batch_run.R/test-batch_task.R: end-to-end tests drive the ACTUAL
+# rebase before serialization. Same real-subprocess discipline as the
+# shape-A / declared-output-commit test files: end-to-end tests drive the ACTUAL
 # inst/batch_worker.R through the REAL processx transport, never a mocked
 # execution path.
 
@@ -13,7 +13,7 @@ have_tree <- file.exists(file.path(dev_tree, "DESCRIPTION")) &&
 PROTO <- batchit:::.BATCH_PROTOCOL
 
 # Hand-crafts a raw adhoc envelope and feeds it DIRECTLY to the real worker
-# script, bypassing batch_fn()'s own parent-side lint entirely -- the only way
+# script, bypassing run()/run_and_collect()'s own parent-side lint entirely -- the only way
 # to prove the CHILD independently re-lints (design section 5: "applied at
 # BOTH ends") rather than merely trusting whatever a frontend already checked.
 .run_adhoc_worker_directly <- function(fn, args = list(), nonce = "tok-fixed",
@@ -39,27 +39,27 @@ PROTO <- batchit:::.BATCH_PROTOCOL
   )
 }
 
-# --- 1: batch_fn() runs a self-contained closure, collect TRUE/FALSE --------
+# --- 1: run()/run_and_collect() run a self-contained closure ----------------
 
-test_that("batch_fn() runs a self-contained closure over items and returns per-item values (collect = TRUE)", {
+test_that("run_and_collect() runs a self-contained closure over items and returns per-item values", {
   skip_if_not(have_tree, "package source tree not available")
-  r <- batchit::batch_fn(
+  r <- batchit::run_and_collect(
     function(x) x * 2,
     items = list(list(x = 1), list(x = 2), list(x = c(3, 4))),
-    n_workers = 2L, dev_path = dev_tree, collect = TRUE
+    n_workers = 2L, dev_path = dev_tree
   )
   expect_identical(r, list(2, 4, c(6, 8)))
 })
 
-test_that("batch_fn(): collect = FALSE (the default) drops values but still reports failures", {
+test_that("run(): drops values but still reports failures", {
   skip_if_not(have_tree, "package source tree not available")
-  out <- batchit::batch_fn(
+  out <- batchit::run(
     function(x) x * 2,
     items = list(list(x = 1L)), n_workers = 1L, dev_path = dev_tree
   )
   expect_null(out)
   expect_error(
-    batchit::batch_fn(
+    batchit::run(
       function(x) stop("adhoc boom: ", x, call. = FALSE),
       items = list(list(x = "Y")), n_workers = 1L, dev_path = dev_tree
     ),
@@ -67,27 +67,27 @@ test_that("batch_fn(): collect = FALSE (the default) drops values but still repo
   )
 })
 
-test_that("batch_fn(): a clean closure using base R + an explicit pkg::fun() call passes the lint and runs", {
+test_that("run_and_collect(): a clean closure using base R + an explicit pkg::fun() call passes the lint and runs", {
   skip_if_not(have_tree, "package source tree not available")
-  r <- batchit::batch_fn(
+  r <- batchit::run_and_collect(
     function(x) stats::sd(x) + 1,
     items = list(list(x = c(1, 2, 3, 4, 5))),
-    n_workers = 1L, dev_path = dev_tree, collect = TRUE
+    n_workers = 1L, dev_path = dev_tree
   )
   expect_equal(r[[1]], stats::sd(c(1, 2, 3, 4, 5)) + 1)
 })
 
-test_that("batch_fn() validates every item's args against fn's own formals, not just the first", {
+test_that("run(): validates every item's args against fn's own formals, not just the first", {
   expect_error(
-    batchit::batch_fn(function(x) x, items = list(list(x = 1L), list()), n_workers = 1L),
+    batchit::run(function(x) x, items = list(list(x = 1L), list()), n_workers = 1L),
     "not supplied"
   )
 })
 
-test_that("batch_fn(): an empty item list returns without dispatching", {
-  expect_identical(batchit::batch_fn(function(x) x, items = list(), n_workers = 1L, collect = TRUE),
+test_that("run()/run_and_collect(): an empty item list returns without dispatching", {
+  expect_identical(batchit::run_and_collect(function(x) x, items = list(), n_workers = 1L),
     list())
-  expect_null(batchit::batch_fn(function(x) x, items = list(), n_workers = 1L, collect = FALSE))
+  expect_null(batchit::run(function(x) x, items = list(), n_workers = 1L))
 })
 
 # --- 2: the self-containedness LINT, at BOTH ends ----------------------------
@@ -111,19 +111,19 @@ test_that(".batch_lint_adhoc_fn() accepts a closure using only base R + pkg::fun
   expect_true(batchit:::.batch_lint_adhoc_fn(ok, where = "parent"))
 })
 
-test_that("batch_fn() (the PARENT) rejects a closure with a free global variable, naming it, BEFORE any dispatch", {
+test_that("run() (the PARENT) rejects a closure with a free global variable, naming it, BEFORE any dispatch", {
   outer_val <- 7
   bad <- function(x) x + outer_val
   expect_error(
-    batchit::batch_fn(bad, items = list(list(x = 1L)), n_workers = 1L),
+    batchit::run(bad, items = list(list(x = 1L)), n_workers = 1L),
     "outer_val"
   )
 })
 
-test_that("batch_fn() (the PARENT) rejects a closure calling an unqualified non-base helper, naming it", {
+test_that("run() (the PARENT) rejects a closure calling an unqualified non-base helper, naming it", {
   bad <- function(x) not_a_real_helper(x)
   expect_error(
-    batchit::batch_fn(bad, items = list(list(x = 1L)), n_workers = 1L),
+    batchit::run(bad, items = list(list(x = 1L)), n_workers = 1L),
     "not_a_real_helper"
   )
 })
@@ -136,7 +136,7 @@ test_that("the REAL worker (the CHILD) independently re-lints and rejects a free
   # .batch_check_envelope() runs inside .batch_execute()'s TOTAL tryCatch, so
   # an adhoc lint failure is a normal "status = error" result (exit 0), not a
   # worker crash -- exactly like the existing "unsupported style" child-side
-  # test in test-batch_run.R.
+  # test in the shape-A test file.
   expect_true(r$wrote_output)
   expect_identical(r$result$status, "error")
   expect_match(r$result$error$message, "leaky_secret")
@@ -161,21 +161,21 @@ test_that("the REAL worker (the CHILD) accepts and runs a clean self-contained c
 
 # --- 3: `...` and non-function rejected --------------------------------------
 
-test_that("batch_fn(): an adhoc closure taking `...` is rejected", {
+test_that("run(): an adhoc closure taking `...` is rejected", {
   expect_error(
-    batchit::batch_fn(function(x, ...) x, items = list(list(x = 1L)), n_workers = 1L),
+    batchit::run(function(x, ...) x, items = list(list(x = 1L)), n_workers = 1L),
     "\\.\\.\\."
   )
 })
 
-test_that("batch_fn(): a non-function `fn` is rejected", {
+test_that("run(): a non-function `fn` is rejected", {
   expect_error(
-    batchit::batch_fn(42, items = list(list(x = 1L)), n_workers = 1L),
-    "must be a function"
+    batchit::run(42, items = list(list(x = 1L)), n_workers = 1L),
+    "must come from package_function\\(\\) or be a function"
   )
   expect_error(
-    batchit::batch_fn("not a function either", items = list(list(x = 1L)), n_workers = 1L),
-    "must be a function"
+    batchit::run("not a function either", items = list(list(x = 1L)), n_workers = 1L),
+    "must come from package_function\\(\\) or be a function"
   )
 })
 
@@ -197,7 +197,7 @@ test_that(".batch_rebase_adhoc_closure() severs the closure's original environme
   expect_error(rebased(), "shared_secret")  # object 'shared_secret' not found
 })
 
-test_that("batch_fn(): a closure that passes the lint via get()/environment() (a documented blind spot) still FAILS at runtime, because the rebase severed its enclosing env -- proving the env is NOT carried across the real subprocess boundary", {
+test_that("run_and_collect(): a closure that passes the lint via get()/environment() (a documented blind spot) still FAILS at runtime, because the rebase severed its enclosing env -- proving the env is NOT carried across the real subprocess boundary", {
   skip_if_not(have_tree, "package source tree not available")
   e <- new.env()
   e$shared_secret <- "TOP SECRET VALUE"
@@ -211,21 +211,20 @@ test_that("batch_fn(): a closure that passes the lint via get()/environment() (a
   # baseenv() before it was ever serialized.
   expect_true(batchit:::.batch_lint_adhoc_fn(leaky, where = "parent"))
   expect_error(
-    batchit::batch_fn(leaky, items = list(list()), n_workers = 1L, dev_path = dev_tree,
-      collect = TRUE),
+    batchit::run_and_collect(leaky, items = list(list()), n_workers = 1L, dev_path = dev_tree),
     "shared_secret"
   )
 })
 
-# --- 5: batch_task() with a bare closure (adhoc) + declared outputs ---------
+# --- 5: run_and_write_files_atomically() with a bare closure (adhoc) + declared outputs ---------
 
-test_that("batch_task() with a bare closure (adhoc) commits every declared output + a marker, through the real worker", {
+test_that("run_and_write_files_atomically() with a bare closure (adhoc) commits every declared output + a marker, through the real worker", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "a_primary.qs2")
   out2 <- file.path(dir, "a_secondary.qs2")
 
-  r <- batchit::batch_task(
+  r <- batchit::run_and_write_files_atomically(
     function(x) list(primary = x, secondary = x * 10),
     items = list(only = list(x = 21L)),
     outputs = list(only = c(primary = out1, secondary = out2)),
@@ -248,13 +247,13 @@ test_that("batch_task() with a bare closure (adhoc) commits every declared outpu
   expect_true(is.character(r$only$attempt) && nzchar(r$only$attempt))
 })
 
-test_that("batch_task() with a bare closure (adhoc) + style = \"staged_writer\" commits via where_to_write_output()", {
+test_that("run_and_write_files_atomically() with a bare closure (adhoc) + style = \"staged_writer\" commits via where_to_write_output()", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "sw_primary.qs2")
   out2 <- file.path(dir, "sw_secondary.qs2")
 
-  r <- batchit::batch_task(
+  r <- batchit::run_and_write_files_atomically(
     function(x) {
       qs2::qs_save(x, batchit::where_to_write_output("primary"))
       qs2::qs_save(x * 10, batchit::where_to_write_output("secondary"))
@@ -273,19 +272,19 @@ test_that("batch_task() with a bare closure (adhoc) + style = \"staged_writer\" 
   expect_setequal(names(r$only$committed), c("primary", "secondary"))
 })
 
-test_that("batch_task() with a bare closure (adhoc): a bad closure is rejected at DISPATCH, before any worker runs", {
+test_that("run_and_write_files_atomically() with a bare closure (adhoc): a bad closure is rejected at DISPATCH, before any worker runs", {
   bad <- function(x) x + some_outer_free_variable
   expect_error(
-    batchit::batch_task(bad, items = list(list(x = 1L)),
+    batchit::run_and_write_files_atomically(bad, items = list(list(x = 1L)),
       outputs = list(c(primary = "/tmp/whatever_a.qs2")),
       n_workers = 1L),
     "some_outer_free_variable"
   )
 })
 
-test_that("batch_task(): `fn` that is neither a package_function() nor a function is rejected", {
+test_that("run_and_write_files_atomically(): `fn` that is neither a package_function() nor a function is rejected", {
   expect_error(
-    batchit::batch_task("not a target or a function",
+    batchit::run_and_write_files_atomically("not a target or a function",
       items = list(list(x = 1L)), outputs = list(c(primary = "/tmp/x.qs2")),
       n_workers = 1L),
     "package_function\\(\\)|bare closure"
@@ -326,7 +325,7 @@ test_that(".batch_inspect_result() rejects an adhoc result claiming the WRONG id
   expect_match(r$reason, "id mismatch")
 })
 
-test_that("batch_fn(): the REAL worker's echoed nonce is verified by the parent inspector (a tampered nonce is rejected)", {
+test_that("run()/run_and_collect(): the REAL worker's echoed nonce is verified by the parent inspector (a tampered nonce is rejected)", {
   skip_if_not(have_tree, "package source tree not available")
   r <- .run_adhoc_worker_directly(function(x) x, args = list(x = 1L), nonce = "the-real-nonce")
   expect_identical(r$result$status, "ok")

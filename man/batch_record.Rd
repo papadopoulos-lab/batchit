@@ -13,7 +13,7 @@ batch_record(details)
 \code{invisible(NULL)}.
 }
 \description{
-Callable ONLY from inside the target of a \code{batch_task()} item (i.e. only
+Callable ONLY from inside the target of a \code{run_and_write_files_atomically()} item (i.e. only
 in a batchit worker subprocess, while that one target call is running,
 between the \code{.batch_record_scope_enter()}/\verb{_exit()} pair tightly wrapping
 \code{do.call()} in \code{.batch_execute()}) -- the opt-in half of the consumer-skip
@@ -30,13 +30,13 @@ marker is removed, so a failing \code{batch_record()} payload can never destroy
 a previously valid commit.
 }
 \details{
-Calling this outside an active \code{batch_task()} target run -- including
-during a return-value dispatch (\code{\link[=batch_run]{batch_run()}}/\code{\link[=batch_stream]{batch_stream()}}/
-\code{\link[=batch_fn]{batch_fn()}}), which has no marker/skip machinery at all -- is an error.
+Calling this outside an active \code{run_and_write_files_atomically()} target run -- including
+during a return-value dispatch (\code{\link[processx:run]{run()}}/\code{\link[=run_and_collect]{run_and_collect()}}/\code{\link[=batch_stream]{batch_stream()}}),
+which has no marker/skip machinery at all -- is an error.
 }
 \examples{
 \dontrun{
-# inside a batch_task() target:
+# inside a run_and_write_files_atomically() target:
 my_target <- function(x) {
   batch_record(list(computed_from = x))
   list(primary = x)

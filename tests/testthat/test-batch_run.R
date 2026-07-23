@@ -1,4 +1,4 @@
-# The one dispatcher (shape A), tested THROUGH the real process boundary.
+# run() / run_and_collect() (shape A), tested THROUGH the real process boundary.
 #
 # Helper tests and dependency demos must not substitute for proving the actual
 # parent -> dispatcher -> worker -> cleanup -> completion path. So the end-to-end
@@ -58,7 +58,7 @@ test_that("package_function()'s identity hash is srcref-independent (the R CMD c
 
 test_that("package_function() normalises a zero-argument target to character(0)", {
   # names(formals(fn)) is NULL for a no-arg function; if that NULL reaches the
-  # descriptor a legitimate target looks malformed and batch_run() rejects it.
+  # descriptor a legitimate target looks malformed and run_and_collect() rejects it.
   tgt <- mk(".batch_fixture_pid")
   expect_identical(tgt$formal_names, character(0))
 })
@@ -96,13 +96,13 @@ test_that(".batch_validate_item() enforces the full item contract", {
   expect_error(batchit:::.batch_validate_item(tgt, 1L), "must be a list")
 })
 
-test_that("batch_run() validates EVERY item, not just the first", {
+test_that("run_and_collect() validates EVERY item, not just the first", {
   skip_if_not(have_tree, "package source tree not available")
   tgt <- mk(".batch_fixture_echo")
   # first item is valid, second is missing its formal: must be rejected before
   # any subprocess is launched (heterogeneous schemas hide behind a good first).
   expect_error(
-    batchit::batch_run(tgt, items = list(list(x = 1L), list()),
+    batchit::run_and_collect(tgt, items = list(list(x = 1L), list()),
       n_workers = 1L, dev_path = dev_tree),
     "not supplied"
   )
@@ -126,9 +126,9 @@ test_that("the envelope codec round-trips and does NOT run any post-read hook", 
 
 # --- end-to-end through a real subprocess ------------------------------------
 
-test_that("batch_run() drives the real worker end-to-end and preserves order", {
+test_that("run_and_collect() drives the real worker end-to-end and preserves order", {
   skip_if_not(have_tree, "package source tree not available")
-  r <- batchit::batch_run(
+  r <- batchit::run_and_collect(
     mk(".batch_fixture_echo"),
     items = list(list(x = "a"), list(x = 2L), list(x = c(3, 4, 5))),
     n_workers = 2L, dev_path = dev_tree
@@ -145,7 +145,7 @@ test_that("a NULL result is PRESERVED in place, not dropped (results[idx] <- lis
   # then item 2's NULL is assigned last. Under the bug that deletes slot 2 and the
   # result is length 2.
   skip_if_not(have_tree, "package source tree not available")
-  r <- batchit::batch_run(
+  r <- batchit::run_and_collect(
     mk(".batch_fixture_slow_echo"),
     items = list(
       list(x = 1L,   seconds = 0),
@@ -163,7 +163,7 @@ test_that("a NULL result is PRESERVED in place, not dropped (results[idx] <- lis
 test_that("a target error returns a STRUCTURED error envelope (exit 0), surfaced by message", {
   skip_if_not(have_tree, "package source tree not available")
   expect_error(
-    batchit::batch_run(mk(".batch_fixture_boom"),
+    batchit::run_and_collect(mk(".batch_fixture_boom"),
       items = list(list(message = "kaboom-XYZ")),
       n_workers = 1L, dev_path = dev_tree),
     "kaboom-XYZ"
@@ -176,7 +176,7 @@ test_that("a worker that dies WITHOUT an envelope is caught by the exit-code cha
   # result envelope. The structured-error channel cannot see this; the exit-code
   # channel must.
   expect_error(
-    batchit::batch_run(mk(".batch_fixture_crash"),
+    batchit::run_and_collect(mk(".batch_fixture_crash"),
       items = list(list()), n_workers = 1L, dev_path = dev_tree),
     "exited 3 before writing a result"
   )
@@ -187,7 +187,7 @@ test_that("the child refuses a target whose code differs from what the parent ha
   bad <- mk(".batch_fixture_echo")
   bad$hash <- "deadbeefdeadbeef"  # a hash the child cannot reproduce
   expect_error(
-    batchit::batch_run(bad, items = list(list(x = 1L)),
+    batchit::run_and_collect(bad, items = list(list(x = 1L)),
       n_workers = 1L, dev_path = dev_tree),
     "DIFFERENT code version"
   )
@@ -195,7 +195,7 @@ test_that("the child refuses a target whose code differs from what the parent ha
 
 test_that("each item runs in a FRESH process (the memory strategy, not an accident)", {
   skip_if_not(have_tree, "package source tree not available")
-  pids <- batchit::batch_run(mk(".batch_fixture_pid"),
+  pids <- batchit::run_and_collect(mk(".batch_fixture_pid"),
     items = list(list(), list(), list()), n_workers = 1L, dev_path = dev_tree)
   expect_length(unique(unlist(pids)), 3L)
 })
@@ -204,7 +204,7 @@ test_that("a per-item timeout kills a runaway worker and reports it", {
   skip_if_not(have_tree, "package source tree not available")
   t0 <- Sys.time()
   expect_error(
-    batchit::batch_run(mk(".batch_fixture_sleep"),
+    batchit::run_and_collect(mk(".batch_fixture_sleep"),
       items = list(list(seconds = 60)),
       n_workers = 1L, dev_path = dev_tree, timeout = 2),
     "timeout"
@@ -213,26 +213,25 @@ test_that("a per-item timeout kills a runaway worker and reports it", {
   expect_lt(as.numeric(difftime(Sys.time(), t0, units = "secs")), 30)
 })
 
-test_that("collect = FALSE reports status but returns no values", {
+test_that("run() reports status but returns no values", {
   skip_if_not(have_tree, "package source tree not available")
   # success path: no error, invisible(NULL)
-  out <- batchit::batch_run(mk(".batch_fixture_echo"),
-    items = list(list(x = 1L)), n_workers = 1L, dev_path = dev_tree,
-    collect = FALSE)
+  out <- batchit::run(mk(".batch_fixture_echo"),
+    items = list(list(x = 1L)), n_workers = 1L, dev_path = dev_tree)
   expect_null(out)
   # and a failure is STILL surfaced even though no value is collected
   expect_error(
-    batchit::batch_run(mk(".batch_fixture_boom"),
+    batchit::run(mk(".batch_fixture_boom"),
       items = list(list(message = "still-loud")),
-      n_workers = 1L, dev_path = dev_tree, collect = FALSE),
+      n_workers = 1L, dev_path = dev_tree),
     "still-loud"
   )
 })
 
-test_that("batch_run() leaves no temp input/output/log files behind", {
+test_that("run_and_collect() leaves no temp input/output/log files behind", {
   skip_if_not(have_tree, "package source tree not available")
   before <- list.files(tempdir(), pattern = "^batch_(in|out|log)_")
-  batchit::batch_run(mk(".batch_fixture_echo"),
+  batchit::run_and_collect(mk(".batch_fixture_echo"),
     items = list(list(x = 1L), list(x = 2L)), n_workers = 2L, dev_path = dev_tree)
   after <- list.files(tempdir(), pattern = "^batch_(in|out|log)_")
   expect_identical(sort(after), sort(before))
@@ -242,7 +241,7 @@ test_that("a FAILING run also leaves no temp files behind", {
   skip_if_not(have_tree, "package source tree not available")
   before <- list.files(tempdir(), pattern = "^batch_(in|out|log)_")
   expect_error(
-    batchit::batch_run(mk(".batch_fixture_boom"),
+    batchit::run_and_collect(mk(".batch_fixture_boom"),
       items = list(list(message = "x")), n_workers = 1L, dev_path = dev_tree),
     "returned an error")
   after <- list.files(tempdir(), pattern = "^batch_(in|out|log)_")
@@ -537,18 +536,21 @@ test_that(".batch_inspect_result() makes protocol, id and FULL target identity l
   expect_true(batchit:::.batch_inspect_result(null_ok, "7", tgt)$ok)
 })
 
-test_that("batch_run() validates timeout and collect as scalars, even for empty work", {
+test_that("run_and_collect() validates timeout as a scalar, even for empty work", {
+  # `collect` is no longer a user-facing parameter (it is now encoded in the
+  # function name, run() vs run_and_collect()), so there is no longer a
+  # caller-supplied `collect` value to validate here -- .batch_validate_collect()
+  # still runs internally, but always against the fixed TRUE/FALSE the
+  # frontend itself passes.
   ie <- list(list(x = 1L))
-  expect_error(batchit::batch_run(mk(".batch_fixture_echo"), ie, 1L,
+  expect_error(batchit::run_and_collect(mk(".batch_fixture_echo"), ie, 1L,
     dev_path = NULL, timeout = c(1, 2)), "single positive")
-  expect_error(batchit::batch_run(mk(".batch_fixture_echo"), ie, 1L,
+  expect_error(batchit::run_and_collect(mk(".batch_fixture_echo"), ie, 1L,
     dev_path = NULL, timeout = NA_real_), "single positive")
-  expect_error(batchit::batch_run(mk(".batch_fixture_echo"), ie, 1L,
+  expect_error(batchit::run_and_collect(mk(".batch_fixture_echo"), ie, 1L,
     dev_path = NULL, timeout = -5), "single positive")
-  expect_error(batchit::batch_run(mk(".batch_fixture_echo"), ie, 1L,
-    dev_path = NULL, collect = 1), "TRUE or FALSE")
   # validated even when there is NO work (no early-return bypass)
-  expect_error(batchit::batch_run(mk(".batch_fixture_echo"), list(), 1L,
+  expect_error(batchit::run_and_collect(mk(".batch_fixture_echo"), list(), 1L,
     dev_path = NULL, timeout = -1), "single positive")
 })
 
@@ -733,10 +735,10 @@ test_that("the REAL worker uses EXACT field extraction (no `$` partial-match ste
   expect_no_match(combined, "attacker/tree", fixed = TRUE)
 })
 
-test_that("batch_run() rejects a non-list `items` container, even when empty", {
-  expect_error(batchit::batch_run(mk(".batch_fixture_echo"), character(0), 1L,
+test_that("run_and_collect() rejects a non-list `items` container, even when empty", {
+  expect_error(batchit::run_and_collect(mk(".batch_fixture_echo"), character(0), 1L,
     dev_path = NULL), "must be a list")
-  expect_error(batchit::batch_run(mk(".batch_fixture_echo"), 1:3, 1L,
+  expect_error(batchit::run_and_collect(mk(".batch_fixture_echo"), 1:3, 1L,
     dev_path = NULL), "must be a list")
 })
 
@@ -745,7 +747,7 @@ test_that("batch_run() rejects a non-list `items` container, even when empty", {
 test_that("a successful target's warnings are surfaced in the parent, tagged by id", {
   skip_if_not(have_tree, "package source tree not available")
   expect_warning(
-    batchit::batch_run(mk(".batch_fixture_warn"),
+    batchit::run_and_collect(mk(".batch_fixture_warn"),
       items = list(only = list(x = "WOT")), n_workers = 1L, dev_path = dev_tree),
     "\\[batch item 'only'\\].*WOT"
   )
@@ -770,7 +772,7 @@ test_that("collect = FALSE drops the target value before it enters the envelope"
 test_that("a given-but-wrong dev_path errors EVEN for an empty workload", {
   # An early return must not skip input validation.
   expect_error(
-    batchit::batch_run(mk(".batch_fixture_echo"), items = list(),
+    batchit::run_and_collect(mk(".batch_fixture_echo"), items = list(),
       n_workers = 1L, dev_path = "/no/such/tree"),
     "does not exist")
 })
@@ -810,7 +812,7 @@ test_that("duplicate item ids are rejected", {
   bad <- list(list(x = 1L), list(x = 2L))
   names(bad) <- c("dup", "dup")
   expect_error(
-    batchit::batch_run(mk(".batch_fixture_echo"), items = bad,
+    batchit::run_and_collect(mk(".batch_fixture_echo"), items = bad,
       n_workers = 1L, dev_path = NULL),
     "not unique")
 })

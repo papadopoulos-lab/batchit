@@ -3,7 +3,7 @@
 # what a data-producing caller needs (its items ARE the data slices, so
 # materialising them all up front means the whole dataset on disk/in RAM twice).
 # batch_stream shares target resolution, validation, the result envelope and the
-# failure semantics with batch_run; only the transport differs (mirai in-memory
+# failure semantics with run()/run_and_collect(); only the transport differs (mirai in-memory
 # vs processx qs2 files). Tested through a REAL mirai daemon, not a mock.
 # (Here runner == consumer == batchit; runner != consumer is proven in
 # test-batch_seam.R.)
@@ -75,7 +75,7 @@ test_that("batch_stream() surfaces a target error rather than swallowing it", {
 test_that("batch_stream() preserves a NULL result in place (results[pos] <- list())", {
   skip_on_cran()
   skip_if_not(have_tree, "package source tree not available")
-  # Same [[<- deletion trap as batch_run. batch_stream drains strictly FIFO, so
+  # Same [[<- deletion trap as run()/run_and_collect(). batch_stream drains strictly FIFO, so
   # results are assigned in position order and a MID-list NULL would be masked by
   # the next assignment extending the list back. The corrupting case under FIFO is
   # a NULL in the LAST position: `results[[n]] <- NULL` deletes it and nothing

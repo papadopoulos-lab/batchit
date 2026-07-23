@@ -87,7 +87,7 @@ if (seam_ready) {
   .libPaths(c(seam_lib, old_libpaths))
   withr::defer(.libPaths(old_libpaths), teardown_env())
   # Export the library path so the fresh Rscript worker (shape A) AND the mirai
-  # daemon (shape B) both inherit it. batch_run sets R_LIBS from .libPaths()
+  # daemon (shape B) both inherit it. run()/run_and_collect() set R_LIBS from .libPaths()
   # itself, but the mirai daemon relies on the inherited environment.
   old_rlibs <- Sys.getenv("R_LIBS", unset = NA_character_)
   Sys.setenv(R_LIBS = paste(.libPaths(), collapse = .Platform$path.sep))
@@ -96,9 +96,9 @@ if (seam_ready) {
   }, teardown_env())
 }
 
-# --- (1) shape A: batch_run through the REAL worker, both packages installed ---
+# --- (1) shape A: run_and_collect() through the REAL worker, both packages installed ---
 
-test_that("batch_run: runner=batchit + consumer=seamtest, both from installed libs", {
+test_that("run_and_collect(): runner=batchit + consumer=seamtest, both from installed libs", {
   skip_if_not(seam_ready, "could not build/install the seam packages")
   tgt <- batchit::package_function("seamtest", "seam_echo")
   # the target is the CONSUMER's -- not batchit's
@@ -106,9 +106,9 @@ test_that("batch_run: runner=batchit + consumer=seamtest, both from installed li
   expect_identical(tgt$formal_names, "x")
 
   # named items -> the names are the item ids (used for failure reporting); the
-  # returned value list is in item order and UNNAMED (batch_run's contract --
+  # returned value list is in item order and UNNAMED (run_and_collect()'s contract --
   # only batch_stream names its results by id).
-  r <- batchit::batch_run(
+  r <- batchit::run_and_collect(
     tgt,
     items = list(a = list(x = "hello-seam"), b = list(x = 42L)),
     n_workers = 2L, dev_path = NULL   # <-- both packages come from installed libs
@@ -118,17 +118,17 @@ test_that("batch_run: runner=batchit + consumer=seamtest, both from installed li
 
 # --- (2) shape A: a consumer failure returns a structured error naming the item -
 
-test_that("batch_run: a consumer error comes back structured and names the item", {
+test_that("run_and_collect(): a consumer error comes back structured and names the item", {
   skip_if_not(seam_ready, "could not build/install the seam packages")
   tgt <- batchit::package_function("seamtest", "seam_boom")
   # error names the failing item id ('the_item') AND carries the consumer message
   expect_error(
-    batchit::batch_run(
+    batchit::run_and_collect(
       tgt, items = list(the_item = list(message = "seam-detonate")),
       n_workers = 1L, dev_path = NULL),
     "the_item")
   expect_error(
-    batchit::batch_run(
+    batchit::run_and_collect(
       tgt, items = list(the_item = list(message = "seam-detonate")),
       n_workers = 1L, dev_path = NULL),
     "seam-detonate")

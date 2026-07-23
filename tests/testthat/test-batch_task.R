@@ -1,5 +1,5 @@
-# Declared-output commit (batch_task()) -- Phase 6' Unit 1 (see
-# PHASE6_DESIGN.md). Same real-subprocess discipline as test-batch_run.R: these
+# Declared-output commit (run_and_write_files_atomically()) -- Phase 6' Unit 1 (see
+# PHASE6_DESIGN.md). Same real-subprocess discipline as the shape-A test file: these
 # drive the ACTUAL inst/batch_worker.R through the real processx transport and
 # the real .batch_commit_task() rename sequence -- never a mocked commit path.
 
@@ -18,13 +18,13 @@ named_list <- function(id, value) {
 
 # --- 1: declared outputs + marker committed through the real worker ---------
 
-test_that("batch_task() commits every declared output + a marker, through the real worker", {
+test_that("run_and_write_files_atomically() commits every declared output + a marker, through the real worker", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "a_primary.qs2")
   out2 <- file.path(dir, "a_secondary.qs2")
 
-  r <- batchit::batch_task(
+  r <- batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_ok"),
     items = named_list("only", list(x = 21L)),
     outputs = named_list("only", c(primary = out1, secondary = out2)),
@@ -48,13 +48,13 @@ test_that("batch_task() commits every declared output + a marker, through the re
   expect_true(is.character(r$only$attempt) && nzchar(r$only$attempt))
 })
 
-test_that("batch_task() accepts POSITIONAL outputs (unnamed items, unnamed outputs list)", {
+test_that("run_and_write_files_atomically() accepts POSITIONAL outputs (unnamed items, unnamed outputs list)", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   o1 <- c(primary = file.path(dir, "p1_a.qs2"), secondary = file.path(dir, "p1_b.qs2"))
   o2 <- c(primary = file.path(dir, "p2_a.qs2"), secondary = file.path(dir, "p2_b.qs2"))
 
-  r <- batchit::batch_task(
+  r <- batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_ok"),
     items = list(list(x = 1L), list(x = 2L)),
     outputs = list(o1, o2),
@@ -68,7 +68,7 @@ test_that("batch_task() accepts POSITIONAL outputs (unnamed items, unnamed outpu
 
 # --- 2: wrong-named target return -> error, ZERO outputs/marker, temps clean -
 
-test_that("batch_task(): target return missing a declared name -> error, ZERO outputs/marker, temps cleaned", {
+test_that("run_and_write_files_atomically(): target return missing a declared name -> error, ZERO outputs/marker, temps cleaned", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "b_primary.qs2")
@@ -76,7 +76,7 @@ test_that("batch_task(): target return missing a declared name -> error, ZERO ou
   before <- list.files(dir, all.files = TRUE, no.. = TRUE)
 
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_missing_name"),
       items = list(list(x = 1L)),
       outputs = list(c(primary = out1, secondary = out2)),
@@ -90,7 +90,7 @@ test_that("batch_task(): target return missing a declared name -> error, ZERO ou
   expect_identical(sort(list.files(dir, all.files = TRUE, no.. = TRUE)), sort(before))
 })
 
-test_that("batch_task(): target return with an UNDECLARED extra name -> error, ZERO outputs/marker, temps cleaned", {
+test_that("run_and_write_files_atomically(): target return with an UNDECLARED extra name -> error, ZERO outputs/marker, temps cleaned", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "e_primary.qs2")
@@ -98,7 +98,7 @@ test_that("batch_task(): target return with an UNDECLARED extra name -> error, Z
   before <- list.files(dir, all.files = TRUE, no.. = TRUE)
 
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_extra_name"),
       items = list(list(x = 1L)),
       outputs = list(c(primary = out1, secondary = out2)),
@@ -113,7 +113,7 @@ test_that("batch_task(): target return with an UNDECLARED extra name -> error, Z
 
 # --- 3: a target error leaves no marker, no torn finals, no temps -----------
 
-test_that("batch_task(): a target error leaves no marker, no torn finals, no leftover temps", {
+test_that("run_and_write_files_atomically(): a target error leaves no marker, no torn finals, no leftover temps", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "c_primary.qs2")
@@ -121,7 +121,7 @@ test_that("batch_task(): a target error leaves no marker, no torn finals, no lef
   before <- list.files(dir, all.files = TRUE, no.. = TRUE)
 
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_boom"),
       items = list(list(x = 1L)),
       outputs = list(c(primary = out1, secondary = out2)),
@@ -137,14 +137,14 @@ test_that("batch_task(): a target error leaves no marker, no torn finals, no lef
 
 # --- 4: exit-0-wrote-nothing -> loud failure, no marker ----------------------
 
-test_that("batch_task(): target returns an empty list ('wrote nothing') -> loud failure, no marker", {
+test_that("run_and_write_files_atomically(): target returns an empty list ('wrote nothing') -> loud failure, no marker", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "d_primary.qs2")
   out2 <- file.path(dir, "d_secondary.qs2")
 
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_empty"),
       items = list(list(x = 1L)),
       outputs = list(c(primary = out1, secondary = out2)),
@@ -163,7 +163,7 @@ test_that("batch_task(): target returns an empty list ('wrote nothing') -> loud 
 # SIGKILL/timeout temp sweep (PHASE6_DESIGN.md "Timeout/SIGKILL temp leak"),
 # were untested. These two close that gap.
 
-test_that("batch_task(): commit fails PARTWAY through preparing temps (one already created) -- child's own on.exit cleans it up, no marker, no leak", {
+test_that("run_and_write_files_atomically(): commit fails PARTWAY through preparing temps (one already created) -- child's own on.exit cleans it up, no marker, no leak", {
   skip_if_not(have_tree, "package source tree not available")
   # Two declared outputs in TWO separate directories: primary's stays
   # writable throughout; secondary's is chmod'd READ-ONLY *before* dispatch.
@@ -192,7 +192,7 @@ test_that("batch_task(): commit fails PARTWAY through preparing temps (one alrea
   )
 
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_ok"),
       items = list(list(x = 1L)),
       outputs = list(c(primary = out1, secondary = out2)),
@@ -211,7 +211,7 @@ test_that("batch_task(): commit fails PARTWAY through preparing temps (one alrea
   expect_length(Sys.glob(file.path(dir2, "*.tmp*")), 0L)
 })
 
-test_that("batch_task(): a timeout-killed item's ATTEMPT-SCOPED temps are swept, but an UNRELATED file is not (SIGKILL leak fix + no over-deletion)", {
+test_that("run_and_write_files_atomically(): a timeout-killed item's ATTEMPT-SCOPED temps are swept, but an UNRELATED file is not (SIGKILL leak fix + no over-deletion)", {
   skip_if_not(have_tree, "package source tree not available")
   # A real kill_tree() sends SIGKILL, which R's on.exit cannot intercept, so a
   # worker killed mid-commit can orphan its commit temps. There is no hook to
@@ -244,7 +244,7 @@ test_that("batch_task(): a timeout-killed item's ATTEMPT-SCOPED temps are swept,
   expect_true(all(file.exists(c(scoped_out1, scoped_marker, unrelated))))
 
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_slow"),
       items = named_list("slow", list(x = 1L, seconds = 30)),
       outputs = named_list("slow", c(primary = out1, secondary = out2)),
@@ -264,7 +264,7 @@ test_that("batch_task(): a timeout-killed item's ATTEMPT-SCOPED temps are swept,
 
 # --- 5: S0 LOCKDOWN -- no launch decision may depend on marker state --------
 
-test_that("batch_task(): dispatch behaves IDENTICALLY for the SAME id/paths, with vs without a pre-existing marker (S0 lockdown, behavioural)", {
+test_that("run_and_write_files_atomically(): dispatch behaves IDENTICALLY for the SAME id/paths, with vs without a pre-existing marker (S0 lockdown, behavioural)", {
   skip_if_not(have_tree, "package source tree not available")
   # Same id, same output paths, same derived marker path for BOTH runs
   # (sequentially -- a prior version of this test used DIFFERENT ids/paths
@@ -279,7 +279,7 @@ test_that("batch_task(): dispatch behaves IDENTICALLY for the SAME id/paths, wit
   outs <- named_list(id, c(primary = out1, secondary = out2))
 
   run_once <- function() {
-    r <- batchit::batch_task(
+    r <- batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_ok"),
       items = items, outputs = outs,
       n_workers = 1L, dev_path = dev_tree
@@ -332,7 +332,7 @@ test_that("batch_task(): dispatch behaves IDENTICALLY for the SAME id/paths, wit
 # and flag any call to a marker-READING function whose arguments mention a
 # tainted variable -- wherever in the body it occurs, including inside a
 # NESTED closure (`.fail <- function(...) {...}` is itself a sub-expression
-# of batch_task()'s own body).
+# of run_and_write_files_atomically()'s own body).
 
 # Every call anywhere inside `expr`, recursively -- including inside a nested
 # function literal.
@@ -438,8 +438,8 @@ test_that(".ast_marker_reads() catches a planted marker read, direct AND via an 
   expect_length(.ast_marker_reads(clean, "marker", .MARKER_READ_FNS), 0L)
 })
 
-test_that("batch_task()'s PARENT-side dispatch path has NO marker-state read (S0 lockdown, AST-based)", {
-  # Every parent-side function that handles a marker path: batch_task()
+test_that("run_and_write_files_atomically()'s PARENT-side dispatch path has NO marker-state read (S0 lockdown, AST-based)", {
+  # Every parent-side function that handles a marker path: run_and_write_files_atomically()
   # itself (which includes its nested .launch()/.collect()/.fail() closures,
   # since those are sub-expressions of its own body) plus the two small
   # marker-aware helpers it calls. `.batch_commit_task()`,
@@ -448,14 +448,14 @@ test_that("batch_task()'s PARENT-side dispatch path has NO marker-state read (S0
   # banner, extended for Unit 4's opt-in skip) and are deliberately NOT
   # included.
   # Every PARENT-side (pre-dispatch) function that RECEIVES or DERIVES a marker
-  # path: batch_task() itself, the two marker-aware helpers it calls, AND
+  # path: run_and_write_files_atomically() itself, the two marker-aware helpers it calls, AND
   # .batch_input_envelope() (which takes `marker` and builds the wire envelope)
   # -- so a planted marker read in that callee is caught too. (.batch_execute()
   # and the .batch_commit_task*/.batch_read_prior_marker child helpers are
   # deliberately EXEMPT: they run in the child, as part of committing/verifying
   # an already-dispatched item, never as a launch decision -- design section 0.)
   fns <- list(
-    batch_task = batchit::batch_task,
+    run_and_write_files_atomically = batchit::run_and_write_files_atomically,
     .batch_check_task_collisions = batchit:::.batch_check_task_collisions,
     .batch_task_marker_path = batchit:::.batch_task_marker_path,
     .batch_input_envelope = batchit:::.batch_input_envelope
@@ -466,7 +466,7 @@ test_that("batch_task()'s PARENT-side dispatch path has NO marker-state read (S0
   expect_length(hits, 0L)
 })
 
-test_that("batch_task(): a SYMLINKED output leaf is rejected, not silently followed", {
+test_that("run_and_write_files_atomically(): a SYMLINKED output leaf is rejected, not silently followed", {
   # `normalizePath(whole_path)` would resolve `alias.qs2 -> real.qs2` and commit
   # to the target; parent-only normalization keeps the leaf un-resolved so the
   # symlink is caught. Rejected at dispatch (parent-side), before any worker.
@@ -479,7 +479,7 @@ test_that("batch_task(): a SYMLINKED output leaf is rejected, not silently follo
     isTRUE(ok) && nzchar(suppressWarnings(Sys.readlink(alias))),
     "symlinks unsupported here")
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_ok"),
       items = list(list(x = 1L)),
       outputs = list(c(primary = alias)),
@@ -539,13 +539,13 @@ test_that("the REAL worker rejects an OLD-protocol envelope BEFORE the target ev
 
 # --- 7: commit-record shape -- committed + attempt + skipped, never raw -----
 
-test_that("batch_task()'s result is the commit record (committed + attempt + skipped), never the raw value", {
+test_that("run_and_write_files_atomically()'s result is the commit record (committed + attempt + skipped), never the raw value", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "g_primary.qs2")
   out2 <- file.path(dir, "g_secondary.qs2")
 
-  r <- batchit::batch_task(
+  r <- batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_ok"),
     items = list(list(x = 999999L)),
     outputs = list(c(primary = out1, secondary = out2)),
@@ -615,7 +615,7 @@ test_that(".batch_inspect_result() rejects a commit record with an EXTRA field (
   # A worker returning list(committed = ..., attempt = ..., skipped = ...,
   # raw = <huge>) must be rejected -- allowing extras would let raw data
   # ride along behind a well-formed-looking commit record, defeating the
-  # entire point of batch_task() (only a small commit record ever crosses
+  # entire point of run_and_write_files_atomically() (only a small commit record ever crosses
   # back).
   tgt <- list(package = "batchit", symbol = "s", hash = "H")
   dispatched_outputs <- c(primary = "/tmp/x_primary.qs2", secondary = "/tmp/x_secondary.qs2")
@@ -658,13 +658,13 @@ test_that(".batch_inspect_result() rejects a commit record MISSING a required fi
 # returning it; the return value is unconditionally ignored by the commit
 # engine.
 
-test_that("batch_task() style = \"staged_writer\": commits every declared output written via where_to_write_output() + a marker, through the real worker", {
+test_that("run_and_write_files_atomically() style = \"staged_writer\": commits every declared output written via where_to_write_output() + a marker, through the real worker", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "sw_ok_primary.qs2")
   out2 <- file.path(dir, "sw_ok_secondary.qs2")
 
-  r <- batchit::batch_task(
+  r <- batchit::run_and_write_files_atomically(
     mk(".batch_fixture_task_staged_ok"),
     items = named_list("only", list(x = 21L)),
     outputs = named_list("only", c(primary = out1, secondary = out2)),
@@ -692,7 +692,7 @@ test_that("batch_task() style = \"staged_writer\": commits every declared output
   expect_length(Sys.glob(file.path(dir, "*.stage*")), 0L)
 })
 
-test_that("batch_task() style = \"staged_writer\": target writes only SOME declared outputs -> error, NO marker, staged files cleaned, no torn finals", {
+test_that("run_and_write_files_atomically() style = \"staged_writer\": target writes only SOME declared outputs -> error, NO marker, staged files cleaned, no torn finals", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "sw_missing_primary.qs2")
@@ -700,7 +700,7 @@ test_that("batch_task() style = \"staged_writer\": target writes only SOME decla
   before <- list.files(dir, all.files = TRUE, no.. = TRUE)
 
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_staged_missing"),
       items = list(list(x = 1L)),
       outputs = list(c(primary = out1, secondary = out2)),
@@ -717,7 +717,7 @@ test_that("batch_task() style = \"staged_writer\": target writes only SOME decla
   expect_identical(sort(list.files(dir, all.files = TRUE, no.. = TRUE)), sort(before))
 })
 
-test_that("batch_task() style = \"staged_writer\": target writes one stage then ERRORS mid-run -> .batch_execute()'s own cleanup removes the partial stage (commit never reached)", {
+test_that("run_and_write_files_atomically() style = \"staged_writer\": target writes one stage then ERRORS mid-run -> .batch_execute()'s own cleanup removes the partial stage (commit never reached)", {
   # Distinct from the 'missing' test above, which RETURNS normally and so
   # reaches .batch_commit_task()'s cleanup. Here the target stop()s DURING
   # do.call() -- after writing one stage -- so .batch_commit_task() is never
@@ -740,7 +740,7 @@ test_that("batch_task() style = \"staged_writer\": target writes one stage then 
   )
 
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_staged_partial_boom"),
       items = list(list(x = 1L)),
       outputs = list(c(primary = out1, secondary = out2)),
@@ -764,14 +764,14 @@ test_that("where_to_write_output(): errors when called OUTSIDE a staged_writer r
   )
 })
 
-test_that("batch_task() style = \"staged_writer\": where_to_write_output() with an UNDECLARED name errors, through the real worker", {
+test_that("run_and_write_files_atomically() style = \"staged_writer\": where_to_write_output() with an UNDECLARED name errors, through the real worker", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "sw_badname_primary.qs2")
   out2 <- file.path(dir, "sw_badname_secondary.qs2")
 
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_staged_bad_name"),
       items = list(list(x = 1L)),
       outputs = list(c(primary = out1, secondary = out2)),
@@ -784,7 +784,7 @@ test_that("batch_task() style = \"staged_writer\": where_to_write_output() with 
   expect_false(file.exists(out2))
 })
 
-test_that("batch_task() style = \"staged_writer\": a timeout-killed item's ATTEMPT-SCOPED STAGE leftovers are swept, but an UNRELATED file is not (token-scoping, not just suffix-shape)", {
+test_that("run_and_write_files_atomically() style = \"staged_writer\": a timeout-killed item's ATTEMPT-SCOPED STAGE leftovers are swept, but an UNRELATED file is not (token-scoping, not just suffix-shape)", {
   skip_if_not(have_tree, "package source tree not available")
   # Mirrors the "return"-style SIGKILL-leak test above, but for staged_writer's
   # OWN temp shape: `<basename>.<attempt>.stage<random>`, not `.tmp`. Before
@@ -812,7 +812,7 @@ test_that("batch_task() style = \"staged_writer\": a timeout-killed item's ATTEM
   expect_true(all(file.exists(c(scoped_stage1, scoped_stage2, unrelated))))
 
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_staged_slow"),
       items = named_list("slowstage", list(x = 1L, seconds = 30)),
       outputs = named_list("slowstage", c(primary = out1, secondary = out2)),
@@ -833,18 +833,18 @@ test_that("batch_task() style = \"staged_writer\": a timeout-killed item's ATTEM
 
 # --- supplementary: dispatch-time validation ---------------------------------
 
-test_that("batch_task(): an unknown style is rejected", {
+test_that("run_and_write_files_atomically(): an unknown style is rejected", {
   expect_error(
-    batchit::batch_task(mk(".batch_fixture_task_ok"), items = list(list(x = 1L)),
+    batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"), items = list(list(x = 1L)),
       outputs = list(c(primary = "/tmp/x.qs2", secondary = "/tmp/y.qs2")),
       style = "bogus", n_workers = 1L),
     "unknown style"
   )
 })
 
-test_that("batch_task(): `outputs` length must match `items`", {
+test_that("run_and_write_files_atomically(): `outputs` length must match `items`", {
   expect_error(
-    batchit::batch_task(mk(".batch_fixture_task_ok"),
+    batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"),
       items = list(list(x = 1L), list(x = 2L)),
       outputs = list(c(primary = "/tmp/x.qs2", secondary = "/tmp/y.qs2")),
       n_workers = 1L),
@@ -852,39 +852,39 @@ test_that("batch_task(): `outputs` length must match `items`", {
   )
 })
 
-test_that("batch_task(): a non-absolute output path is rejected", {
+test_that("run_and_write_files_atomically(): a non-absolute output path is rejected", {
   expect_error(
-    batchit::batch_task(mk(".batch_fixture_task_ok"), items = list(list(x = 1L)),
+    batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"), items = list(list(x = 1L)),
       outputs = list(c(primary = "relative/path.qs2", secondary = "/tmp/y.qs2")),
       n_workers = 1L),
     "absolute"
   )
 })
 
-test_that("batch_task(): an output path whose parent directory does not exist is rejected", {
+test_that("run_and_write_files_atomically(): an output path whose parent directory does not exist is rejected", {
   expect_error(
-    batchit::batch_task(mk(".batch_fixture_task_ok"), items = list(list(x = 1L)),
+    batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"), items = list(list(x = 1L)),
       outputs = list(c(primary = "/no/such/dir/x.qs2", secondary = "/tmp/y.qs2")),
       n_workers = 1L),
     "does not exist"
   )
 })
 
-test_that("batch_task(): an output path that is an existing DIRECTORY is rejected", {
+test_that("run_and_write_files_atomically(): an output path that is an existing DIRECTORY is rejected", {
   dir <- withr::local_tempdir()
   expect_error(
-    batchit::batch_task(mk(".batch_fixture_task_ok"), items = list(list(x = 1L)),
+    batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"), items = list(list(x = 1L)),
       outputs = list(c(primary = dir, secondary = file.path(dir, "y.qs2"))),
       n_workers = 1L),
     "directory"
   )
 })
 
-test_that("batch_task(): output paths colliding ACROSS two items in one call are rejected", {
+test_that("run_and_write_files_atomically(): output paths colliding ACROSS two items in one call are rejected", {
   dir <- withr::local_tempdir()
   same_path <- file.path(dir, "shared.qs2")
   expect_error(
-    batchit::batch_task(mk(".batch_fixture_task_ok"),
+    batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"),
       items = list(list(x = 1L), list(x = 2L)),
       outputs = list(
         c(primary = same_path, secondary = file.path(dir, "s1.qs2")),
@@ -895,49 +895,49 @@ test_that("batch_task(): output paths colliding ACROSS two items in one call are
   )
 })
 
-test_that("batch_task(): an item id containing '/' or '\\\\' is rejected (it is interpolated into the marker filename)", {
+test_that("run_and_write_files_atomically(): an item id containing '/' or '\\\\' is rejected (it is interpolated into the marker filename)", {
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "p.qs2")
   out2 <- file.path(dir, "s.qs2")
   bad_items <- named_list("x/y", list(x = 1L))
   bad_outputs <- named_list("x/y", c(primary = out1, secondary = out2))
   expect_error(
-    batchit::batch_task(mk(".batch_fixture_task_ok"), items = bad_items,
+    batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"), items = bad_items,
       outputs = bad_outputs, n_workers = 1L),
     "must not contain"
   )
   bad_items2 <- named_list("a\\b", list(x = 1L))
   bad_outputs2 <- named_list("a\\b", c(primary = out1, secondary = out2))
   expect_error(
-    batchit::batch_task(mk(".batch_fixture_task_ok"), items = bad_items2,
+    batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"), items = bad_items2,
       outputs = bad_outputs2, n_workers = 1L),
     "must not contain"
   )
 })
 
-test_that("batch_task(): an empty item list returns an empty list without dispatching", {
+test_that("run_and_write_files_atomically(): an empty item list returns an empty list without dispatching", {
   expect_identical(
-    batchit::batch_task(mk(".batch_fixture_task_ok"), items = list(), outputs = list(),
+    batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"), items = list(), outputs = list(),
       n_workers = 1L),
     list()
   )
 })
 
-test_that("batch_task(): a given-but-wrong dev_path errors EVEN for an empty workload", {
+test_that("run_and_write_files_atomically(): a given-but-wrong dev_path errors EVEN for an empty workload", {
   expect_error(
-    batchit::batch_task(mk(".batch_fixture_task_ok"), items = list(), outputs = list(),
+    batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"), items = list(), outputs = list(),
       n_workers = 1L, dev_path = "/no/such/tree"),
     "does not exist"
   )
 })
 
-test_that("batch_task(): the deprecated `target = ` alias still works (Unit 1/2 shipped it before the fn rename)", {
+test_that("run_and_write_files_atomically(): the deprecated `target = ` alias still works (Unit 1/2 shipped it before the fn rename)", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "alias_primary.qs2")
   out2 <- file.path(dir, "alias_secondary.qs2")
-  # The OLD spelling: batch_task(target = <descriptor>, ...).
-  batchit::batch_task(
+  # The OLD spelling: run_and_write_files_atomically(target = <descriptor>, ...).
+  batchit::run_and_write_files_atomically(
     target = mk(".batch_fixture_task_ok"),
     items = named_list("only", list(x = 5L)),
     outputs = named_list("only", c(primary = out1, secondary = out2)),
@@ -947,7 +947,7 @@ test_that("batch_task(): the deprecated `target = ` alias still works (Unit 1/2 
 
   # Passing BOTH `fn` and `target` is a clear error, not a silent pick.
   expect_error(
-    batchit::batch_task(
+    batchit::run_and_write_files_atomically(
       mk(".batch_fixture_task_ok"), target = mk(".batch_fixture_task_ok"),
       items = named_list("only", list(x = 1L)),
       outputs = named_list("only",
