@@ -1026,27 +1026,74 @@ package_function <- function(package, symbol, version = NULL) {
                                     outputs = NULL, marker = NULL, style = NULL,
                                     attempt = NULL,
                                     fn = NULL, nonce = NULL) {
-  list(
-    protocol = .BATCH_PROTOCOL,
-    meta = list(
-      fn_kind = fn_kind,
-      package = target$package,
-      symbol = target$symbol,
-      version = target$version,
-      hash = target$hash,
-      fn = fn,
-      nonce = nonce,
-      dev_path = dev_path,
-      runner_package = runner,
-      id = as.character(id),
-      collect = collect,
-      outputs = outputs,
-      marker = marker,
-      style = style,
-      attempt = attempt
+  # class = "batch_envelope" is ONLY an attribute on this plain list -- it adds
+  # a print method for debugging (see print.batch_envelope() below) and nothing
+  # else. The worker reads this with bare qs2::qs_read() and
+  # .batch_worker_check() / .batch_check_envelope() both access fields via
+  # exact `[[`, never S3 dispatch, so the class is inert on the read path: no
+  # package needs to be loaded to deserialize or structurally validate it
+  # (PUBLIC_API.md section 3.5).
+  structure(
+    list(
+      protocol = .BATCH_PROTOCOL,
+      meta = list(
+        fn_kind = fn_kind,
+        package = target$package,
+        symbol = target$symbol,
+        version = target$version,
+        hash = target$hash,
+        fn = fn,
+        nonce = nonce,
+        dev_path = dev_path,
+        runner_package = runner,
+        id = as.character(id),
+        collect = collect,
+        outputs = outputs,
+        marker = marker,
+        style = style,
+        attempt = attempt
+      ),
+      args = args
     ),
-    args = args
+    class = "batch_envelope"
   )
+}
+
+#' Print a `batch_envelope` (debugging only)
+#'
+#' A concise, one-screen summary of the per-item wire envelope -- protocol,
+#' target identity (or ad-hoc closure identity), delivery mode, and dev_path if
+#' set. Purely cosmetic: the class it dispatches on is otherwise internal (see
+#' `.batch_input_envelope()`); this exists so an envelope printed at the
+#' console during debugging is readable instead of dumping the raw nested list.
+#'
+#' @param x A `batch_envelope`.
+#' @param ... Ignored.
+#' @return `x`, invisibly.
+#' @exportS3Method
+#' @noRd
+print.batch_envelope <- function(x, ...) {
+  meta <- x[["meta"]]
+  fn_line <- if (identical(meta[["fn_kind"]], "package")) {
+    sprintf("%s::%s (hash %s)", meta[["package"]], meta[["symbol"]],
+      substr(meta[["hash"]] %||% "", 1L, 8L))
+  } else {
+    sprintf("<adhoc closure> (nonce %s)", meta[["nonce"]])
+  }
+  delivery_line <- if (!is.null(meta[["outputs"]])) {
+    sprintf("commit (style=%s, %d outputs)", meta[["style"]], length(meta[["outputs"]]))
+  } else {
+    sprintf("return (collect=%s)", meta[["collect"]])
+  }
+  cat(sprintf("<batch_envelope> protocol %s\n", format(x[["protocol"]])))
+  cat(sprintf("  fn_kind: %s\n", meta[["fn_kind"]]))
+  cat(sprintf("  id:      %s\n", meta[["id"]]))
+  cat(sprintf("  fn:      %s\n", fn_line))
+  cat(sprintf("  delivery: %s\n", delivery_line))
+  if (!is.null(meta[["dev_path"]])) {
+    cat(sprintf("  dev_path: %s\n", meta[["dev_path"]]))
+  }
+  invisible(x)
 }
 
 #' Derive stable per-item ids for `run()`/`run_and_collect()` (item names, else index)
