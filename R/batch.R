@@ -19,8 +19,11 @@
 #                                        atomically instead of returning a value.
 # `fn` is EITHER a package_function() descriptor OR a bare closure (folded in
 # from the former ad-hoc-closure frontend) -- see .batch_run_impl()'s fn_kind branch.
-# batch_stream(target, ids, ...) is shape B: the parent IS the producer, items
-# are generated lazily under backpressure (mirai bounded queue).
+# stream_from_parent_and_write_files_atomically(fn, ids, producer, outputs, ...)
+# is shape B: the parent IS the producer, items are generated lazily under
+# backpressure (mirai bounded queue), and delivery is via the same atomic
+# declared-output commit engine run_and_write_files_atomically() uses -- fn is
+# package_function()-only (no ad-hoc closure support; PUBLIC_API.md section 3.2).
 # All four share target/fn resolution, both-end validation, the result
 # envelope, and failure semantics. They differ only in internal transport,
 # which is private.
@@ -30,7 +33,7 @@
 # always the runner's (.batch_worker_script() -> system.file(package = batchit));
 # `dev_path`, when given, is the CONSUMER's source tree and supplies only the
 # consumer's code. The worker and the mirai daemon each load BOTH packages (see
-# inst/batch_worker.R and .batch_stream() below).
+# inst/batch_worker.R and stream_from_parent_and_write_files_atomically() below).
 
 # Bumped to 2 for Phase 6' Unit 1 (see PHASE6_DESIGN.md): the envelope gained a
 # REQUIRED meta$fn_kind discriminator ("package" | "adhoc") plus the
@@ -46,8 +49,8 @@
 # multi-hour, ~20 GB analysis panel) hits it, short enough that a deadlocked or
 # infinite-looping worker does not sit forever. Callers with genuinely longer
 # items must raise it explicitly. Referenced as the default for run() /
-# run_and_collect() / batch_stream()'s `timeout` formal (documented there
-# rather than exported).
+# run_and_collect() / stream_from_parent_and_write_files_atomically()'s
+# `timeout` formal (documented there rather than exported).
 .BATCH_DEFAULT_TIMEOUT <- 6 * 3600
 
 # --- target descriptor -------------------------------------------------------
@@ -511,7 +514,8 @@ package_function <- function(package, symbol, version = NULL) {
 #' item re-validation, and the target's own R-level errors -- is caught into ONE
 #' structured error envelope (status "error", value NULL, `error$message`). That
 #' uniformity is the point: every frontend (`run()`/`run_and_collect()`/
-#' `run_and_write_files_atomically()` reading a file, `batch_stream` reading a
+#' `run_and_write_files_atomically()` reading a file,
+#' `stream_from_parent_and_write_files_atomically()` reading a
 #' daemon return) surfaces every failure the same way,
 #' instead of a resolve error crashing the worker while a target error returns an
 #' envelope. `meta$collect == FALSE` drops the value entirely: shape-A
@@ -920,9 +924,9 @@ package_function <- function(package, symbol, version = NULL) {
 #' tree (not an installed package), and name the consumer package. Returns the
 #' normalised path, or `NULL` for the installed-package case. Shared by
 #' [run()]/[run_and_collect()]/[run_and_write_files_atomically()] (processx)
-#' and [batch_stream()] (mirai) so all of them enforce the
-#' same policy. `consumer_package` is the target's `package` -- the dev tree must
-#' be the CONSUMER's source, not the runner's.
+#' and [stream_from_parent_and_write_files_atomically()] (mirai) so all of them
+#' enforce the same policy. `consumer_package` is the target's `package` -- the
+#' dev tree must be the CONSUMER's source, not the runner's.
 #' @noRd
 .batch_validate_dev_path <- function(dev_path, consumer_package) {
   if (is.null(dev_path)) return(NULL)
@@ -992,8 +996,8 @@ package_function <- function(package, symbol, version = NULL) {
 #' Build a dispatch input envelope
 #'
 #' The ONE place EVERY frontend assembles the wire envelope -- `run()`,
-#' `run_and_collect()`, `batch_stream()`, and `run_and_write_files_atomically()`
-#' -- so none of them can drift in the
+#' `run_and_collect()`, `run_and_write_files_atomically()`, and
+#' `stream_from_parent_and_write_files_atomically()` -- so none of them can drift in the
 #' schema the child reads back (`.batch_check_envelope()` / `.batch_execute()`).
 #' `runner` (the runner package name) travels so the worker/daemon knows which
 #' package holds `.batch_execute` -- the field that carries the
@@ -1001,11 +1005,12 @@ package_function <- function(package, symbol, version = NULL) {
 #' index and an explicit character id land identically.
 #'
 #' `fn_kind`/`collect` are the return-value-dispatch fields (unchanged
-#' defaults: `run()`/`run_and_collect()`/`batch_stream()` pass only `collect`).
+#' defaults: `run()`/`run_and_collect()` pass only `collect`).
 #' `outputs`/`marker`/`style`/`attempt` are the declared-output commit fields
-#' `run_and_write_files_atomically()` supplies instead (design PHASE6_DESIGN.md
-#' sections 3/4); `collect` and those four are mutually exclusive, enforced
-#' by `.batch_check_envelope()`.
+#' `run_and_write_files_atomically()` and
+#' `stream_from_parent_and_write_files_atomically()` supply instead (design
+#' PHASE6_DESIGN.md sections 3/4); `collect` and those four are mutually
+#' exclusive, enforced by `.batch_check_envelope()`.
 #'
 #' `fn`/`nonce` are the `fn_kind = "adhoc"` fields (Phase 6' Unit 3, design
 #' sections 1, 4, 9.4): `fn` carries the already-linted, already-baseenv()-
@@ -1066,15 +1071,17 @@ package_function <- function(package, symbol, version = NULL) {
   ids
 }
 
-#' Validate an explicit id vector for `batch_stream` (non-empty, non-NA, unique)
+#' Validate an explicit id vector for `stream_from_parent_and_write_files_atomically()`
+#' (non-empty, non-NA, unique)
 #' @noRd
 .batch_check_ids <- function(ids) {
   ids <- as.character(ids)
   if (any(is.na(ids)) || any(!nzchar(ids))) {
-    stop("batch_stream(): every id must be a non-empty, non-NA string", call. = FALSE)
+    stop("stream_from_parent_and_write_files_atomically(): every id must be a non-empty, non-NA string",
+      call. = FALSE)
   }
   if (anyDuplicated(ids)) {
-    stop("batch_stream(): ids must be unique: ",
+    stop("stream_from_parent_and_write_files_atomically(): ids must be unique: ",
       paste(unique(ids[duplicated(ids)]), collapse = ", "), call. = FALSE)
   }
   ids
@@ -1567,21 +1574,48 @@ run_and_collect <- function(
   }
 })
 
-#' Stream a producer's items through a target under backpressure
+#' Stream a producer's items through a target, committing DECLARED OUTPUT
+#' FILES instead of returning a value
 #'
-#' Shape B of the contract: the parent IS the producer. Each item is generated
-#' lazily by `producer(id)` and is itself the payload (a data slice), so it must
-#' NOT be materialised until there is a worker ready for it -- otherwise the whole
-#' dataset lands in memory (or on disk twice) at once. mirai's persistent daemons
-#' and in-memory transport are exactly this shape; the shape-A
-#' materialise-every-item-to-a-tempfile model is exactly the wrong one for it.
+#' The Shape B analog of [run_and_write_files_atomically()]: the parent IS the
+#' producer. Each item is generated lazily by `producer(id)` and is itself the
+#' payload (a data slice), so it must NOT be materialised until there is a
+#' worker ready for it -- otherwise the whole dataset lands in memory (or on
+#' disk twice) at once. mirai's persistent daemons and in-memory transport are
+#' exactly this shape; the shape-A materialise-every-item-to-a-tempfile model
+#' is exactly the wrong one for it. Delivery, though, is via the SAME atomic
+#' declared-output commit engine [run_and_write_files_atomically()] uses,
+#' instead of a raw return value crossing back: the commit engine
+#' (`.batch_execute()` -> `.batch_commit_task()`, in the CHILD) is
+#' transport-agnostic -- it reads the envelope's `outputs`/`marker`/`style`/
+#' `attempt` fields and commits identically whether the envelope arrived via
+#' `processx` or `mirai` -- so this function changes only the PARENT-side
+#' transport and wiring, never the child.
 #'
-#' Same contract as [run()]/[run_and_collect()] -- target descriptor, both-end validation,
-#' result-envelope inspection, warning surfacing and loud failure -- over a
-#' different transport. At most `2 * n_workers` items are in flight; the producer
-#' for the next id is not called until an in-flight slot frees, which is the
-#' backpressure. Each task carries a `timeout`, so a wedged daemon cannot block
-#' forever.
+#' Two commit styles, exactly as in [run_and_write_files_atomically()]:
+#' `style = "return"` (the target returns `list(<name> = <value>, ...)`, names
+#' matching the declared outputs EXACTLY) and `style = "staged_writer"` (the
+#' target instead WRITES each output to
+#' [where_to_write_output()]`(<name>)` as it goes; its return value is
+#' ignored). A per-item MARKER file is the atomic witness of a complete
+#' commit -- but only a VALID, engine-produced marker (one that decodes and
+#' whose protocol/attempt-token/committed-output-map verify) is that witness;
+#' bare pathname existence is not. There is deliberately no `collect`
+#' argument -- only a small commit record ever crosses back, never a raw
+#' value.
+#'
+#' `fn` is a `package_function()` descriptor ONLY -- unlike
+#' [run_and_write_files_atomically()], this function does not also accept a
+#' bare closure. Shape B's sole consumer (`save_rawbatch`) uses a package
+#' function, so ad-hoc-over-mirai support is deliberately out of scope
+#' (PUBLIC_API.md section 3.2).
+#'
+#' Same both-end validation, result-envelope inspection, warning surfacing and
+#' loud failure as [run()]/[run_and_collect()]/[run_and_write_files_atomically()],
+#' over the mirai transport. At most `2 * n_workers` items are in flight; the
+#' producer for the next id is not called until an in-flight slot frees, which
+#' is the backpressure. Each task carries a `timeout`, so a wedged daemon
+#' cannot block forever.
 #'
 #' Never touches mirai's DEFAULT compute profile: `daemons(n)` there would reset
 #' and destroy any daemon configuration the caller had. Each invocation allocates
@@ -1599,65 +1633,133 @@ run_and_collect <- function(
 #'
 #' Requires the suggested `mirai` package (parallelism is opt-in).
 #'
-#' @param target A `package_function` descriptor from [package_function()].
+#' @param fn A `package_function` descriptor from [package_function()].
 #' @param ids Vector of stable item ids (non-empty, non-NA, unique). Length =
-#'   number of items; order is the order of production and of the results.
+#'   number of items; order is the order of production and dispatch.
 #' @param producer `function(id)` returning that item -- a fully-named list of
-#'   the target's formals. Called once per id, in the parent, under backpressure.
+#'   `fn`'s formals. Called once per id, in the parent, under backpressure;
+#'   only its RESULT crosses to a worker.
+#' @param outputs A list aligned to `ids`: `outputs[[i]]` is item `i`'s output
+#'   map, a named character vector `c(<name> = <final path>)`. May instead be
+#'   NAMED BY ITEM ID (same name set as `ids`, any order). Same validation as
+#'   [run_and_write_files_atomically()]'s `outputs`: every path absolute; each
+#'   destination absent or an existing non-directory, non-symlink file; every
+#'   output AND every derived marker path unique across the whole call.
+#' @param style Commit style: `"return"` (the target returns a named list) or
+#'   `"staged_writer"` (the target writes each output via
+#'   [where_to_write_output()] instead); see [run_and_write_files_atomically()].
+#'   Any other value errors.
 #' @param n_workers Number of mirai daemons (validated).
 #' @param dev_path Consumer-package source tree, loaded once per daemon via
 #'   `devtools::load_all()`, or `NULL` for the installed consumer package. A
 #'   given-but-wrong path errors, even for an empty workload.
-#' @param collect If `TRUE`, return each item's value (named by id, in id order);
-#'   if `FALSE`, the daemon reports status but no value crosses back.
 #' @param p A progress callback such as a `progressr` progressor, or `NULL`.
 #' @param label Optional short stage tag prefixed to the progress message.
 #' @param timeout Per-item wall-clock limit in seconds (generous default, the
 #'   internal `.BATCH_DEFAULT_TIMEOUT` of 6 hours; `Inf` disables). A task
 #'   exceeding it resolves to an error and is reported.
-#' @return If `collect`, a named list of values in id order; else
-#'   `invisible(NULL)`.
+#' @return A list, named by id, in id order: each element is that item's
+#'   commit record, `list(committed = <named char: name -> final path>,
+#'   attempt = <token>)`. Never the target's raw return value.
 #' @examples
 #' \dontrun{
 #' t <- package_function("mypkg", "write_one_slice")
-#' batch_stream(
+#' stream_from_parent_and_write_files_atomically(
 #'   t,
 #'   ids = c("2019", "2020", "2021"),
 #'   producer = function(id) list(slice = load_year(id)),
+#'   outputs = list(
+#'     `2019` = c(main = "/data/2019.qs2"),
+#'     `2020` = c(main = "/data/2020.qs2"),
+#'     `2021` = c(main = "/data/2021.qs2")
+#'   ),
 #'   n_workers = 4
 #' )
 #' }
 #' @export
-batch_stream <- function(
-  target,
+stream_from_parent_and_write_files_atomically <- function(
+  fn,
   ids,
   producer,
+  outputs,
+  style = "return",
   n_workers,
   dev_path = NULL,
-  collect = TRUE,
   p = NULL,
   label = NULL,
   timeout = .BATCH_DEFAULT_TIMEOUT
 ) {
-  if (!inherits(target, "package_function")) {
-    stop("batch_stream(): `target` must come from package_function()", call. = FALSE)
+  if (!inherits(fn, "package_function")) {
+    stop("stream_from_parent_and_write_files_atomically(): `fn` must come from package_function()",
+      call. = FALSE)
   }
+  target <- fn
   if (!is.function(producer)) {
-    stop("batch_stream(): `producer` must be a function of one id", call. = FALSE)
+    stop("stream_from_parent_and_write_files_atomically(): `producer` must be a function of one id",
+      call. = FALSE)
   }
-  n_workers <- .batch_validate_n_workers(n_workers, "batch_stream()")
+  if (!is.character(style) || length(style) != 1L || is.na(style) || !nzchar(style)) {
+    stop("stream_from_parent_and_write_files_atomically(): `style` must be a single non-empty string",
+      call. = FALSE)
+  }
+  if (!(style %in% c("return", "staged_writer"))) {
+    stop(sprintf(paste0(
+      "stream_from_parent_and_write_files_atomically(): unknown style '%s' ",
+      "(must be \"return\" or \"staged_writer\")"), style), call. = FALSE)
+  }
+  n_workers <- .batch_validate_n_workers(n_workers, "stream_from_parent_and_write_files_atomically()")
   # Validate ALL config BEFORE the empty-workload early return.
   ids <- .batch_check_ids(ids)
-  collect <- .batch_validate_collect(collect, "batch_stream()")
-  timeout <- .batch_validate_timeout(timeout, "batch_stream()")
+  timeout <- .batch_validate_timeout(timeout, "stream_from_parent_and_write_files_atomically()")
   dev_path <- .batch_validate_dev_path(dev_path, target$package)
   runner_pkg <- .batch_runner_package()
+  if (!is.list(outputs)) {
+    stop(sprintf(
+      "stream_from_parent_and_write_files_atomically(): `outputs` must be a list, got %s",
+      class(outputs)[1L]), call. = FALSE)
+  }
+  if (length(outputs) != length(ids)) {
+    stop(sprintf(paste0(
+      "stream_from_parent_and_write_files_atomically(): `outputs` must have the same length as ",
+      "`ids` (%d), got %d"), length(ids), length(outputs)), call. = FALSE)
+  }
 
   n <- length(ids)
-  if (n == 0L) return(if (collect) list() else invisible(NULL))
+  if (n == 0L) return(list())
   if (!requireNamespace("mirai", quietly = TRUE)) {
-    stop("batch_stream() requires the 'mirai' package", call. = FALSE)
+    stop("stream_from_parent_and_write_files_atomically() requires the 'mirai' package", call. = FALSE)
   }
+
+  # `.batch_task_marker_path()` interpolates the id straight into a filename
+  # (`.batchit__<id>`); a `/` or `\` in an id would place that marker in a
+  # different (possibly nonexistent) subdirectory than the one just
+  # validated -- reject it loudly rather than let it silently derive a broken
+  # marker path.
+  bad_ids <- ids[grepl("[/\\\\]", ids, perl = TRUE)]
+  if (length(bad_ids) > 0L) {
+    stop(sprintf(paste0(
+      "stream_from_parent_and_write_files_atomically(): item id(s) must not contain '/' or '\\\\' ",
+      "(interpolated into the per-item marker filename .batchit__<id>): %s"),
+      paste(unique(bad_ids), collapse = ", ")), call. = FALSE)
+  }
+  outputs <- .batch_align_outputs_to_ids(outputs, ids,
+    "stream_from_parent_and_write_files_atomically()")
+
+  # Validate EVERY item's output map up front (not just the first): item
+  # schemas are legitimately heterogeneous, so a bad one hides behind a good
+  # first one.
+  for (i in seq_len(n)) {
+    .batch_validate_output_map(outputs[[i]], where = "parent", id = ids[i])
+  }
+  outputs <- lapply(seq_len(n), function(i)
+    .batch_validate_output_paths(outputs[[i]], ids[i]))
+  markers <- vapply(seq_len(n), function(i)
+    .batch_task_marker_path(outputs[[i]], ids[i]), character(1))
+  # Invocation-wide collision check: every output AND every marker, across all
+  # items.
+  .batch_check_task_collisions(outputs, markers, ids)
+
+  attempts <- vapply(seq_len(n), function(i) .batch_new_attempt_token(), character(1))
 
   # A fresh PRIVATE profile per invocation (see [.batch_stream_profile()]).
   # Because the generated name carries the reserved `.batch_stream_<nonce>_`
@@ -1667,7 +1769,23 @@ batch_stream <- function(
   # construction -- no ownership predicate or collision policy to maintain.
   compute <- .batch_stream_profile()
   mirai::daemons(n_workers, .compute = compute)
-  on.exit(mirai::daemons(0L, .compute = compute), add = TRUE)
+  # Tear the daemons down on exit, THEN sweep every item's attempt-scoped commit
+  # temps. mirai cannot guarantee a daemon runs its own on.exit cleanup when it
+  # is force-terminated -- a per-item timeout or a sibling-item abort can kill a
+  # daemon mid-commit -- so the parent removes any orphaned `.<attempt>.tmp` /
+  # `.<attempt>.stage` files here, exactly as the Shape-A processx path does
+  # after a kill_tree() (see .batch_sweep_task_temps() + run_and_write_files_
+  # atomically()'s on.exit). A successfully-committed item has no temps left (its
+  # were renamed to finals), so this is a no-op on the happy path; the unique
+  # per-item attempt token scopes each sweep to that item's own leftovers.
+  on.exit({
+    mirai::daemons(0L, .compute = compute)
+    for (i in seq_len(n)) {
+      tryCatch(
+        .batch_sweep_task_temps(outputs[[i]], markers[i], attempts[i]),
+        error = function(e) NULL)
+    }
+  }, add = TRUE)
 
   # Load the consumer AND (when it differs) the runner package ONCE per
   # persistent daemon -- not per task. The daemon needs .batch_execute resolvable
@@ -1705,30 +1823,36 @@ batch_stream <- function(
   } else {
     NULL
   }
-  results <- if (collect) vector("list", n) else NULL
+  results <- vector("list", n)
   inflight <- list()
   n_done <- 0L
 
   .stream_fail <- function(item, reason) {
-    stop(sprintf("batch_stream(): id '%s' %s", item$id, reason), call. = FALSE)
+    stop(sprintf("stream_from_parent_and_write_files_atomically(): id '%s' %s", item$id, reason),
+      call. = FALSE)
   }
 
   # Drain the OLDEST in-flight task (FIFO). Two failure channels, identical in
-  # spirit to run()/run_and_collect(): a daemon-level error value (the task expression itself
-  # blew up, the package would not load, or the per-task timeout fired) and a
-  # target-level error envelope, both routed through the shared inspector.
+  # spirit to run()/run_and_collect()/run_and_write_files_atomically(): a
+  # daemon-level error value (the task expression itself blew up, the package
+  # would not load, or the per-task timeout fired) and a commit-level error
+  # envelope, inspected via .batch_inspect_result() against THIS item's
+  # dispatched outputs/attempt -- so a stale or substituted commit result can
+  # never be accepted.
   drain_one <- function() {
     item <- inflight[[1L]]
     v <- mirai::call_mirai(item$h)$data
     if (mirai::is_error_value(v)) {
       .stream_fail(item, sprintf("daemon/timeout error: %s", as.character(v)))
     }
-    insp <- .batch_inspect_result(v, item$id, target)
+    insp <- .batch_inspect_result(v, item$id, target,
+      expected_outputs = outputs[[item$pos]], expected_attempt = attempts[item$pos])
     if (!insp$ok) .stream_fail(item, insp$reason)
     .batch_surface_warnings(insp$warnings, item$id)
     # results[pos] <- list(value), not [[<-: the same NULL-deletion trap as
-    # run()/run_and_collect() -- a target returning NULL must keep its slot, not vanish.
-    if (collect) results[item$pos] <<- list(insp$value)
+    # run()/run_and_collect() -- moot here in practice (a commit record is
+    # never NULL), kept for consistency/robustness.
+    results[item$pos] <<- list(insp$value)
     inflight[[1L]] <<- NULL
     n_done <<- n_done + 1L
     if (!is.null(p)) {
@@ -1746,7 +1870,9 @@ batch_stream <- function(
     args <- producer(id)
     .batch_validate_item(target, args, where = "parent", id = id)
     envelope <- .batch_input_envelope(
-      target, dev_path, runner_pkg, id, args, collect = collect)
+      target, dev_path, runner_pkg, id, args,
+      outputs = outputs[[i]], marker = markers[i], style = style,
+      attempt = attempts[i])
     h <- mirai::mirai(
       {
         get(".batch_execute", envir = asNamespace(.runner))(.env)
@@ -1759,10 +1885,6 @@ batch_stream <- function(
 
   while (length(inflight) > 0L) drain_one()
 
-  if (collect) {
-    names(results) <- as.character(ids)
-    results
-  } else {
-    invisible(NULL)
-  }
+  names(results) <- as.character(ids)
+  results
 }

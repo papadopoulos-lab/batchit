@@ -38,17 +38,27 @@ same transport, but instead of a value crossing back, each item commits its
 declared output files atomically (a 7-step rename sequence, witnessed by a
 per-item marker file) — see `PUBLIC_API.md` section 3.1.
 
-**Shape B — `batch_stream()`**: the parent *is* the producer and each item is
-itself the payload (a data slice), generated lazily under bounded backpressure so
-the whole dataset never lands in memory (or on disk twice) at once. Transport:
-`mirai` daemons, at most `2 * n_workers` items in flight.
+**Shape B — `stream_from_parent_and_write_files_atomically()`**: the parent
+*is* the producer and each item is itself the payload (a data slice),
+generated lazily under bounded backpressure so the whole dataset never lands
+in memory (or on disk twice) at once. Transport: `mirai` daemons, at most
+`2 * n_workers` items in flight. Delivery is via the same atomic
+declared-output commit engine as `run_and_write_files_atomically()` — a
+commit record crosses back, never a raw value. `fn` is a `package_function()`
+descriptor only (no ad-hoc closure support — the sole consumer,
+`save_rawbatch`, uses a package function).
 
 ```r
 t <- batchit::package_function("mypkg", "write_one_slice")
-batchit::batch_stream(
+batchit::stream_from_parent_and_write_files_atomically(
   t,
   ids = c("2019", "2020", "2021"),
   producer = function(id) list(slice = load_year(id)),
+  outputs = list(
+    `2019` = c(main = "/data/2019.qs2"),
+    `2020` = c(main = "/data/2020.qs2"),
+    `2021` = c(main = "/data/2021.qs2")
+  ),
   n_workers = 4
 )
 ```

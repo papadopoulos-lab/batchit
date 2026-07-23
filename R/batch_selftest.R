@@ -158,6 +158,16 @@
   invisible(NULL)
 }
 
+# Writes NEITHER declared output -- the "wrote nothing at all" case, distinct
+# from .batch_fixture_task_staged_missing() above (which writes one of two).
+# Used to prove the commit engine really engages over EVERY transport (both
+# processx and mirai): a staged_writer target that does nothing must still
+# fail loud, with zero renames and no marker.
+#' @noRd
+.batch_fixture_task_staged_writes_nothing <- function(x) {
+  invisible(NULL)
+}
+
 # Calls where_to_write_output() with a name that is NOT one of this item's
 # declared outputs -- exercises the accessor's own undeclared-name error,
 # through the real worker.

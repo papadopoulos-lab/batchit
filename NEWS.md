@@ -1,5 +1,28 @@
 # batchit (development)
 
+Public API migration, Stage 4 (see `PUBLIC_API.md` sections 3.2, 4, 5): the
+former `batch_stream()` (Shape B, mirai transport, return-value delivery) is
+REMOVED and replaced by a new export, `stream_from_parent_and_write_files_atomically()`
+-- the Shape B analog of `run_and_write_files_atomically()`. It keeps
+`batch_stream()`'s transport verbatim (the private, nonce-namespaced mirai
+compute profile, the `everywhere()` package-load, the lazy-producer loop with
+`2 * n_workers` backpressure) but delivers via the SAME atomic declared-output
+commit engine (`.batch_execute()` -> `.batch_commit_task()`) that
+`run_and_write_files_atomically()` uses, instead of returning a raw value --
+the commit engine is transport-agnostic and required NO changes on the
+child/worker side. `fn` is a `package_function()` descriptor ONLY (unlike
+`run_and_write_files_atomically()`, no bare-closure support: Shape B's sole
+consumer, `save_rawbatch`, uses a package function, so ad-hoc-over-mirai stays
+out of scope). Both commit styles (`"return"`, `"staged_writer"`) are
+supported, reusing `run_and_write_files_atomically()`'s outputs/marker/
+collision/attempt-token machinery (`.batch_align_outputs_to_ids()`,
+`.batch_validate_output_map()`/`.batch_validate_output_paths()`,
+`.batch_task_marker_path()`, `.batch_check_task_collisions()`,
+`.batch_new_attempt_token()`) verbatim. There is no `collect` argument -- only
+a small commit record crosses back, never a raw value. Shape B's return-value
+modes had no consumer (`PUBLIC_API.md` section 5) and are gone entirely; the
+retired `batch_stream()` name has no replacement alias.
+
 Public API migration, Stage 2 (see `PUBLIC_API.md`): the naming-v2 rename
 sweep. `batch_run(target, items, ..., collect = TRUE/FALSE)` is now TWO
 functions with `collect` folded into the name — `run(fn, items, ...)`

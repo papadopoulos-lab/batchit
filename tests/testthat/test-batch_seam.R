@@ -49,11 +49,12 @@ running_from_source <- file.exists(file.path(dev_tree, "DESCRIPTION")) &&
   ), file.path(dir, "DESCRIPTION"))
   writeLines(c("YEAR: 2026", "COPYRIGHT HOLDER: Richard Aubrey White"),
     file.path(dir, "LICENSE"))
-  writeLines(c("export(seam_echo)", "export(seam_boom)"),
+  writeLines(c("export(seam_echo)", "export(seam_boom)", "export(seam_task_ok)"),
     file.path(dir, "NAMESPACE"))
   writeLines(c(
     "seam_echo <- function(x) x",
-    "seam_boom <- function(message) stop(message, call. = FALSE)"
+    "seam_boom <- function(message) stop(message, call. = FALSE)",
+    "seam_task_ok <- function(x) list(primary = x)"
   ), file.path(dir, "R", "seam.R"))
   invisible(dir)
 }
@@ -107,7 +108,7 @@ test_that("run_and_collect(): runner=batchit + consumer=seamtest, both from inst
 
   # named items -> the names are the item ids (used for failure reporting); the
   # returned value list is in item order and UNNAMED (run_and_collect()'s contract --
-  # only batch_stream names its results by id).
+  # only stream_from_parent_and_write_files_atomically() names its results by id).
   r <- batchit::run_and_collect(
     tgt,
     items = list(a = list(x = "hello-seam"), b = list(x = 42L)),
@@ -134,17 +135,27 @@ test_that("run_and_collect(): a consumer error comes back structured and names t
     "seam-detonate")
 })
 
-# --- (3) shape B: batch_stream through a REAL mirai daemon ---------------------
+# --- (3) shape B: stream_from_parent_and_write_files_atomically() through a REAL mirai daemon ---
 
-test_that("batch_stream: runner=batchit + consumer=seamtest through a real daemon", {
+test_that("stream_from_parent_and_write_files_atomically(): runner=batchit + consumer=seamtest through a real daemon", {
   skip_if_not_installed("mirai")
   skip_if_not(seam_ready, "could not build/install the seam packages")
-  tgt <- batchit::package_function("seamtest", "seam_echo")
-  r <- batchit::batch_stream(
+  tgt <- batchit::package_function("seamtest", "seam_task_ok")
+  dir <- withr::local_tempdir()
+  outs <- list(
+    p = c(primary = file.path(dir, "p.qs2")),
+    q = c(primary = file.path(dir, "q.qs2")),
+    r = c(primary = file.path(dir, "r.qs2"))
+  )
+  res <- batchit::stream_from_parent_and_write_files_atomically(
     tgt,
     ids = c("p", "q", "r"),
     producer = function(id) list(x = paste0("slice-", id)),
+    outputs = outs,
     n_workers = 2L, dev_path = NULL   # <-- daemon loads both from installed libs
   )
-  expect_identical(r, list(p = "slice-p", q = "slice-q", r = "slice-r"))
+  expect_identical(names(res), c("p", "q", "r"))
+  expect_identical(qs2::qs_read(outs[["p"]][["primary"]]), "slice-p")
+  expect_identical(qs2::qs_read(outs[["q"]][["primary"]]), "slice-q")
+  expect_identical(qs2::qs_read(outs[["r"]][["primary"]]), "slice-r")
 })
