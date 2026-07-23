@@ -100,7 +100,7 @@ if (seam_ready) {
 
 test_that("batch_run: runner=batchit + consumer=seamtest, both from installed libs", {
   skip_if_not(seam_ready, "could not build/install the seam packages")
-  tgt <- batchit::batch_target("seamtest", "seam_echo")
+  tgt <- batchit::package_function("seamtest", "seam_echo")
   # the target is the CONSUMER's -- not batchit's
   expect_identical(tgt$package, "seamtest")
   expect_identical(tgt$formal_names, "x")
@@ -120,7 +120,7 @@ test_that("batch_run: runner=batchit + consumer=seamtest, both from installed li
 
 test_that("batch_run: a consumer error comes back structured and names the item", {
   skip_if_not(seam_ready, "could not build/install the seam packages")
-  tgt <- batchit::batch_target("seamtest", "seam_boom")
+  tgt <- batchit::package_function("seamtest", "seam_boom")
   # error names the failing item id ('the_item') AND carries the consumer message
   expect_error(
     batchit::batch_run(
@@ -139,7 +139,7 @@ test_that("batch_run: a consumer error comes back structured and names the item"
 test_that("batch_stream: runner=batchit + consumer=seamtest through a real daemon", {
   skip_if_not_installed("mirai")
   skip_if_not(seam_ready, "could not build/install the seam packages")
-  tgt <- batchit::batch_target("seamtest", "seam_echo")
+  tgt <- batchit::package_function("seamtest", "seam_echo")
   r <- batchit::batch_stream(
     tgt,
     ids = c("p", "q", "r"),

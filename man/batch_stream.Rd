@@ -17,7 +17,7 @@ batch_stream(
 )
 }
 \arguments{
-\item{target}{A \code{batch_target} descriptor from \code{\link[=batch_target]{batch_target()}}.}
+\item{target}{A \code{package_function} descriptor from \code{\link[=package_function]{package_function()}}.}
 
 \item{ids}{Vector of stable item ids (non-empty, non-NA, unique). Length =
 number of items; order is the order of production and of the results.}
@@ -80,7 +80,7 @@ Requires the suggested \code{mirai} package (parallelism is opt-in).
 }
 \examples{
 \dontrun{
-t <- batch_target("mypkg", "write_one_slice")
+t <- package_function("mypkg", "write_one_slice")
 batch_stream(
   t,
   ids = c("2019", "2020", "2021"),

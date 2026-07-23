@@ -57,7 +57,7 @@ The \code{adhoc} sibling of \code{\link[=batch_run]{batch_run()}} (design PHASE6
 4-5, 9.4): the SAME transport (a fresh \code{processx} subprocess per item, the
 same \code{inst/batch_worker.R}, the same both-ends item validation and
 result-envelope inspection), but \code{fn} is a bare closure VALUE -- serialized
-straight into the envelope -- instead of a \code{\link[=batch_target]{batch_target()}} descriptor
+straight into the envelope -- instead of a \code{\link[=package_function]{package_function()}} descriptor
 resolved by package+symbol.
 }
 \details{
@@ -66,7 +66,7 @@ The closure is gated by a best-effort static self-containedness LINT (see
 operators/constants), its own declared formals, and explicit
 \code{pkg::fun()}/\code{pkg:::fun()} calls -- any other free variable is rejected,
 NAMING it, before any subprocess is launched. \code{...} in \code{fn}'s formals is
-prohibited, exactly like a package \code{\link[=batch_target]{batch_target()}}. Once accepted, the
+prohibited, exactly like a package \code{\link[=package_function]{package_function()}}. Once accepted, the
 closure is unconditionally rebased onto \code{baseenv()} before it is ever
 serialized (see \code{.batch_rebase_adhoc_closure()}) -- there is no
 env-preservation mode, so anything the closure needs beyond base R + its
@@ -78,7 +78,7 @@ checked) PLUS a fresh, high-entropy per-item nonce issued here and echoed
 back by the child -- see \code{.batch_inspect_result()}'s \code{expected_nonce}.
 
 Production/auditable stages should prefer \code{\link[=batch_run]{batch_run()}} with a
-\code{\link[=batch_target]{batch_target()}} descriptor (hash-verified, resolvable by package+symbol,
+\code{\link[=package_function]{package_function()}} descriptor (hash-verified, resolvable by package+symbol,
 so a stale/wrong code version is caught); \code{adhoc} dispatch is for
 throwaway/exploratory work where that overhead is not the point. The lint
 is a best-effort static check, not a proof -- see \code{.batch_lint_adhoc_fn()}

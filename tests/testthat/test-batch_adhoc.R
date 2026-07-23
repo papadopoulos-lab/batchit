@@ -248,7 +248,7 @@ test_that("batch_task() with a bare closure (adhoc) commits every declared outpu
   expect_true(is.character(r$only$attempt) && nzchar(r$only$attempt))
 })
 
-test_that("batch_task() with a bare closure (adhoc) + style = \"staged_writer\" commits via batch_stage_path()", {
+test_that("batch_task() with a bare closure (adhoc) + style = \"staged_writer\" commits via where_to_write_output()", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "sw_primary.qs2")
@@ -256,8 +256,8 @@ test_that("batch_task() with a bare closure (adhoc) + style = \"staged_writer\" 
 
   r <- batchit::batch_task(
     function(x) {
-      qs2::qs_save(x, batchit::batch_stage_path("primary"))
-      qs2::qs_save(x * 10, batchit::batch_stage_path("secondary"))
+      qs2::qs_save(x, batchit::where_to_write_output("primary"))
+      qs2::qs_save(x * 10, batchit::where_to_write_output("secondary"))
       invisible(NULL)
     },
     items = list(only = list(x = 5L)),
@@ -283,12 +283,12 @@ test_that("batch_task() with a bare closure (adhoc): a bad closure is rejected a
   )
 })
 
-test_that("batch_task(): `fn` that is neither a batch_target() nor a function is rejected", {
+test_that("batch_task(): `fn` that is neither a package_function() nor a function is rejected", {
   expect_error(
     batchit::batch_task("not a target or a function",
       items = list(list(x = 1L)), outputs = list(c(primary = "/tmp/x.qs2")),
       n_workers = 1L),
-    "batch_target\\(\\)|bare closure"
+    "package_function\\(\\)|bare closure"
   )
 })
 

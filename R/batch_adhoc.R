@@ -1,5 +1,5 @@
 # Phase 6' Unit 3 (see PHASE6_DESIGN.md sections 1, 2, 4, 5, 9.4): the `adhoc`
-# fn_kind -- dispatch a bare closure VALUE instead of a batch_target()
+# fn_kind -- dispatch a bare closure VALUE instead of a package_function()
 # descriptor. Gated by a best-effort static self-containedness LINT
 # (codetools::findGlobals()) applied at BOTH ends (parent: early UX at
 # dispatch time -- batch_fn() / batch_task() with a bare closure; child:
@@ -34,7 +34,7 @@
 #' * a non-function;
 #' * a primitive (no real formals/body/environment to lint or rebase);
 #' * a closure whose formals include `...` (same prohibition as a package
-#'   [batch_target()]);
+#'   [package_function()]);
 #' * a closure referencing any global -- inspecting BOTH
 #'   `codetools::findGlobals()`'s `$functions` and `$variables` -- that is
 #'   neither (a) bound in `baseenv()` (covers every base function, base
@@ -67,7 +67,7 @@
   if ("..." %in% fmls) {
     stop(sprintf(paste0(
       "%s: adhoc `fn` takes `...`, which is prohibited -- same as a package ",
-      "batch_target(): a dispatch target must have a fixed formal list so a ",
+      "package_function(): a dispatch target must have a fixed formal list so a ",
       "mistyped or missing argument can be caught."), lead), call. = FALSE)
   }
 
@@ -120,7 +120,7 @@
 #' Validate one adhoc item's args against the closure's OWN formals
 #'
 #' The `adhoc` sibling of [.batch_validate_item()] (which is keyed to a
-#' `batch_target` descriptor's package+symbol for its error-message lead):
+#' `package_function` descriptor's package+symbol for its error-message lead):
 #' identical rules (every formal named explicitly, no positional/duplicate/
 #' unknown argument -- see [.batch_validate_item_against_formals()]), applied
 #' against a bare formal-name vector instead, since an adhoc closure carries
@@ -140,7 +140,7 @@
 #' 4-5, 9.4): the SAME transport (a fresh `processx` subprocess per item, the
 #' same `inst/batch_worker.R`, the same both-ends item validation and
 #' result-envelope inspection), but `fn` is a bare closure VALUE -- serialized
-#' straight into the envelope -- instead of a [batch_target()] descriptor
+#' straight into the envelope -- instead of a [package_function()] descriptor
 #' resolved by package+symbol.
 #'
 #' The closure is gated by a best-effort static self-containedness LINT (see
@@ -148,7 +148,7 @@
 #' operators/constants), its own declared formals, and explicit
 #' `pkg::fun()`/`pkg:::fun()` calls -- any other free variable is rejected,
 #' NAMING it, before any subprocess is launched. `...` in `fn`'s formals is
-#' prohibited, exactly like a package [batch_target()]. Once accepted, the
+#' prohibited, exactly like a package [package_function()]. Once accepted, the
 #' closure is unconditionally rebased onto `baseenv()` before it is ever
 #' serialized (see `.batch_rebase_adhoc_closure()`) -- there is no
 #' env-preservation mode, so anything the closure needs beyond base R + its
@@ -160,7 +160,7 @@
 #' back by the child -- see `.batch_inspect_result()`'s `expected_nonce`.
 #'
 #' Production/auditable stages should prefer [batch_run()] with a
-#' [batch_target()] descriptor (hash-verified, resolvable by package+symbol,
+#' [package_function()] descriptor (hash-verified, resolvable by package+symbol,
 #' so a stale/wrong code version is caught); `adhoc` dispatch is for
 #' throwaway/exploratory work where that overhead is not the point. The lint
 #' is a best-effort static check, not a proof -- see `.batch_lint_adhoc_fn()`

@@ -74,27 +74,27 @@
 #'   namespace.
 #' @param version Optional recorded version; defaults to the package's installed
 #'   version. Advisory only -- the hash is what the child actually checks.
-#' @return A `batch_target` descriptor: a list with class `"batch_target"` and
+#' @return A `package_function` descriptor: a list with class `"package_function"` and
 #'   elements `package`, `symbol`, `version`, `hash`, `formal_names`.
 #' @examples
 #' \dontrun{
 #' # target an exported or internal function of any installed package
-#' t <- batch_target("mypkg", "process_one_slice")
+#' t <- package_function("mypkg", "process_one_slice")
 #' t$formal_names
 #' }
 #' @export
-batch_target <- function(package, symbol, version = NULL) {
+package_function <- function(package, symbol, version = NULL) {
   if (!is.character(package) || length(package) != 1L || !nzchar(package)) {
-    stop("batch_target(): `package` must be a non-empty string", call. = FALSE)
+    stop("package_function(): `package` must be a non-empty string", call. = FALSE)
   }
   if (!is.character(symbol) || length(symbol) != 1L || !nzchar(symbol)) {
-    stop("batch_target(): `symbol` must be a non-empty string", call. = FALSE)
+    stop("package_function(): `symbol` must be a non-empty string", call. = FALSE)
   }
   ns <- tryCatch(
     asNamespace(package),
     error = function(e) {
       stop(
-        sprintf("batch_target(): package '%s' is not available: %s",
+        sprintf("package_function(): package '%s' is not available: %s",
           package, conditionMessage(e)),
         call. = FALSE
       )
@@ -102,7 +102,7 @@ batch_target <- function(package, symbol, version = NULL) {
   )
   if (!exists(symbol, envir = ns, inherits = FALSE)) {
     stop(
-      sprintf("batch_target(): '%s' is not defined in package '%s'",
+      sprintf("package_function(): '%s' is not defined in package '%s'",
         symbol, package),
       call. = FALSE
     )
@@ -110,7 +110,7 @@ batch_target <- function(package, symbol, version = NULL) {
   fn <- get(symbol, envir = ns, inherits = FALSE)
   if (!is.function(fn)) {
     stop(
-      sprintf("batch_target(): %s::%s is not a function", package, symbol),
+      sprintf("package_function(): %s::%s is not a function", package, symbol),
       call. = FALSE
     )
   }
@@ -122,7 +122,7 @@ batch_target <- function(package, symbol, version = NULL) {
   if ("..." %in% fmls) {
     stop(
       sprintf(
-        paste0("batch_target(): %s::%s takes `...`, which is incompatible ",
+        paste0("package_function(): %s::%s takes `...`, which is incompatible ",
           "with reliable argument validation. A dispatch target must have a ",
           "fixed formal list so a mistyped or missing argument can be caught."),
         package, symbol),
@@ -143,7 +143,7 @@ batch_target <- function(package, symbol, version = NULL) {
       hash = .batch_hash_function(utils::removeSource(fn)),
       formal_names = fmls
     ),
-    class = "batch_target"
+    class = "package_function"
   )
 }
 
@@ -163,7 +163,7 @@ batch_target <- function(package, symbol, version = NULL) {
 #' * **No positional, duplicate, or blank names**, and **no argument that is not
 #'   a formal** -- a typo'd field name must be rejected, not silently ignored.
 #'
-#' @param target A `batch_target` descriptor (its `formal_names` is the schema).
+#' @param target A `package_function` descriptor (its `formal_names` is the schema).
 #' @param args The item: a fully-named list of arguments.
 #' @param where "parent" or "child", for the error message.
 #' @param id Optional item id, for the error message.
@@ -177,7 +177,7 @@ batch_target <- function(package, symbol, version = NULL) {
 }
 
 #' The formal-name-schema core of item validation, shared by [.batch_validate_item()]
-#' (a `batch_target` descriptor's `formal_names`) and the `adhoc` sibling
+#' (a `package_function` descriptor's `formal_names`) and the `adhoc` sibling
 #' `.batch_validate_adhoc_item()` (a bare closure's own `formal_names`, no
 #' package/symbol identity to build a lead from) -- see `R/batch_adhoc.R`
 #' (Phase 6' Unit 3, PHASE6_DESIGN.md sections 1, 4). Takes an already-built
@@ -494,7 +494,7 @@ batch_target <- function(package, symbol, version = NULL) {
 #' @noRd
 .batch_resolve_target <- function(meta) {
   # Exact `[[` on the untrusted meta (never `$`, which partial-matches).
-  target <- batch_target(meta[["package"]], meta[["symbol"]],
+  target <- package_function(meta[["package"]], meta[["symbol"]],
     version = meta[["version"]])
   if (!identical(target$hash, meta[["hash"]])) {
     stop(
@@ -566,7 +566,7 @@ batch_target <- function(package, symbol, version = NULL) {
       task_dispatch <- !is.null(outputs)
 
       # Step 0 (design PHASE6_DESIGN.md section 9.2, normative) -- done FIRST,
-      # before ANY scope is entered, so batch_stage_path()/batch_record()/
+      # before ANY scope is entered, so where_to_write_output()/batch_record()/
       # batch_prior() are answerable ONLY during do.call() and NEVER during this
       # marker read. ONLY for a declared-output commit dispatch: read the final
       # marker EXACTLY ONCE and accept it as `prior` only if it decodes and its
@@ -593,7 +593,7 @@ batch_target <- function(package, symbol, version = NULL) {
         # first (design section 9.3: skip is a successful early exit and must
         # remove its own current-attempt stage/temp files -- the stage is
         # never renamed on that path, so this same unconditional unlink
-        # removes it). Then enter scope so batch_stage_path() can answer.
+        # removes it). Then enter scope so where_to_write_output() can answer.
         stage_map <- .batch_stage_paths_for(outputs, meta[["attempt"]])
         on.exit(unlink(stage_map, force = TRUE), add = TRUE)
         stage_prior <- .batch_stage_scope_enter(stage_map)
@@ -620,7 +620,7 @@ batch_target <- function(package, symbol, version = NULL) {
           }
         ),
         # Exit EVERY scope the INSTANT the target returns or errors -- NOT
-        # during the commit/skip handling below. batch_stage_path()/
+        # during the commit/skip handling below. where_to_write_output()/
         # batch_record()/batch_prior() must be answerable ONLY while the
         # target itself runs (design sections 3.4, 9.3); leaving them active
         # through the commit would let e.g. a classed `outputs` map's `[[`
@@ -1071,7 +1071,7 @@ batch_target <- function(package, symbol, version = NULL) {
 #' `fn`/`nonce` are the `fn_kind = "adhoc"` fields (Phase 6' Unit 3, design
 #' sections 1, 4, 9.4): `fn` carries the already-linted, already-baseenv()-
 #' rebased closure itself, and `nonce` is its per-dispatch identity token,
-#' used in place of the package/symbol/hash identity a `batch_target` would
+#' used in place of the package/symbol/hash identity a `package_function` would
 #' otherwise supply -- `batch_fn()` and `batch_task()` (with a bare closure)
 #' pass `target = NULL` and these two instead. Forbidden (must stay `NULL`)
 #' for `fn_kind = "package"`, enforced by `.batch_check_envelope()`.
@@ -1195,7 +1195,7 @@ batch_target <- function(package, symbol, version = NULL) {
 #' loads both (the consumer via `dev_path`/`requireNamespace`, the runner via
 #' `requireNamespace`).
 #'
-#' @param target A `batch_target` descriptor from [batch_target()].
+#' @param target A `package_function` descriptor from [package_function()].
 #' @param items List of items; each a fully-named list of the target's formals.
 #'   Named items keep their name as the item id; unnamed items get their index.
 #' @param n_workers Concurrent subprocesses (validated: finite, whole, >= 1).
@@ -1214,7 +1214,7 @@ batch_target <- function(package, symbol, version = NULL) {
 #' @return If `collect`, a list of values in item order; else `invisible(NULL)`.
 #' @examples
 #' \dontrun{
-#' t <- batch_target("mypkg", "process_one_slice")
+#' t <- package_function("mypkg", "process_one_slice")
 #' out <- batch_run(t, items = list(list(x = 1), list(x = 2)), n_workers = 2)
 #' }
 #' @export
@@ -1228,8 +1228,8 @@ batch_run <- function(
   label = NULL,
   timeout = .BATCH_DEFAULT_TIMEOUT
 ) {
-  if (!inherits(target, "batch_target")) {
-    stop("batch_run(): `target` must come from batch_target()", call. = FALSE)
+  if (!inherits(target, "package_function")) {
+    stop("batch_run(): `target` must come from package_function()", call. = FALSE)
   }
   n_workers <- .batch_validate_n_workers(n_workers, "batch_run()")
   # Validate ALL config BEFORE the empty-workload early return -- otherwise a bad
@@ -1474,7 +1474,7 @@ batch_run <- function(
 #'
 #' Requires the suggested `mirai` package (parallelism is opt-in).
 #'
-#' @param target A `batch_target` descriptor from [batch_target()].
+#' @param target A `package_function` descriptor from [package_function()].
 #' @param ids Vector of stable item ids (non-empty, non-NA, unique). Length =
 #'   number of items; order is the order of production and of the results.
 #' @param producer `function(id)` returning that item -- a fully-named list of
@@ -1494,7 +1494,7 @@ batch_run <- function(
 #'   `invisible(NULL)`.
 #' @examples
 #' \dontrun{
-#' t <- batch_target("mypkg", "write_one_slice")
+#' t <- package_function("mypkg", "write_one_slice")
 #' batch_stream(
 #'   t,
 #'   ids = c("2019", "2020", "2021"),
@@ -1514,8 +1514,8 @@ batch_stream <- function(
   label = NULL,
   timeout = .BATCH_DEFAULT_TIMEOUT
 ) {
-  if (!inherits(target, "batch_target")) {
-    stop("batch_stream(): `target` must come from batch_target()", call. = FALSE)
+  if (!inherits(target, "package_function")) {
+    stop("batch_stream(): `target` must come from package_function()", call. = FALSE)
   }
   if (!is.function(producer)) {
     stop("batch_stream(): `producer` must be a function of one id", call. = FALSE)

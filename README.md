@@ -20,7 +20,7 @@ peaks at tens of GB does not hand that memory back to the OS, so reuse would be
 the wrong thing). Transport: `processx`, one child per item.
 
 ```r
-t <- batchit::batch_target("mypkg", "process_one_slice")
+t <- batchit::package_function("mypkg", "process_one_slice")
 out <- batchit::batch_run(
   t,
   items = list(list(x = 1), list(x = 2), list(x = 3)),
@@ -34,7 +34,7 @@ the whole dataset never lands in memory (or on disk twice) at once. Transport:
 `mirai` daemons, at most `2 * n_workers` items in flight.
 
 ```r
-t <- batchit::batch_target("mypkg", "write_one_slice")
+t <- batchit::package_function("mypkg", "write_one_slice")
 batchit::batch_stream(
   t,
   ids = c("2019", "2020", "2021"),

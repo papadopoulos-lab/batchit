@@ -16,7 +16,7 @@ batch_run(
 )
 }
 \arguments{
-\item{target}{A \code{batch_target} descriptor from \code{\link[=batch_target]{batch_target()}}.}
+\item{target}{A \code{package_function} descriptor from \code{\link[=package_function]{package_function()}}.}
 
 \item{items}{List of items; each a fully-named list of the target's formals.
 Named items keep their name as the item id; unnamed items get their index.}
@@ -70,7 +70,7 @@ loads both (the consumer via \code{dev_path}/\code{requireNamespace}, the runner
 }
 \examples{
 \dontrun{
-t <- batch_target("mypkg", "process_one_slice")
+t <- package_function("mypkg", "process_one_slice")
 out <- batch_run(t, items = list(list(x = 1), list(x = 2)), n_workers = 2)
 }
 }

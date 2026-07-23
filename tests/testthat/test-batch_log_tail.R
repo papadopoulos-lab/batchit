@@ -117,7 +117,7 @@ test_that("a chatty worker does not deadlock batch_run", {
 
   expect_no_error(
     batchit::batch_run(
-      target = batchit::batch_target("batchit", ".batch_fixture_chatty"),
+      target = batchit::package_function("batchit", ".batch_fixture_chatty"),
       items = list(list(n_kb = 512L)),
       n_workers = 1L,
       dev_path = .log_tail_dev_tree,
@@ -140,7 +140,7 @@ test_that("a successful worker's log is reclaimed as it completes, not at pool e
   }
 
   batchit::batch_run(
-    target = batchit::batch_target("batchit", ".batch_fixture_echo"),
+    target = batchit::package_function("batchit", ".batch_fixture_echo"),
     items = lapply(1:8, function(i) list(x = i)),
     n_workers = 1L,
     dev_path = .log_tail_dev_tree,

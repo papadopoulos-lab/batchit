@@ -14,7 +14,7 @@ dev_tree <- normalizePath(testthat::test_path("..", ".."), mustWork = FALSE)
 have_tree <- file.exists(file.path(dev_tree, "DESCRIPTION")) &&
   file.exists(file.path(dev_tree, "inst", "batch_worker.R"))
 
-mk <- function(sym) batchit::batch_target("batchit", sym)
+mk <- function(sym) batchit::package_function("batchit", sym)
 
 test_that("batch_stream() runs a lazy producer through daemons, results in id order", {
   skip_on_cran()

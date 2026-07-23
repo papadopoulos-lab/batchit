@@ -7,7 +7,7 @@ dev_tree <- normalizePath(testthat::test_path("..", ".."), mustWork = FALSE)
 have_tree <- file.exists(file.path(dev_tree, "DESCRIPTION")) &&
   file.exists(file.path(dev_tree, "inst", "batch_worker.R"))
 
-mk <- function(sym) batchit::batch_target("batchit", sym)
+mk <- function(sym) batchit::package_function("batchit", sym)
 PROTO <- batchit:::.BATCH_PROTOCOL
 
 named_list <- function(id, value) {
@@ -654,11 +654,11 @@ test_that(".batch_inspect_result() rejects a commit record MISSING a required fi
 
 # --- 8: style = "staged_writer" (Phase 6' Unit 2) ----------------------------
 # Same real-subprocess discipline as the "return"-style tests above: the
-# target STREAMS each declared output to batch_stage_path(<name>) instead of
+# target STREAMS each declared output to where_to_write_output(<name>) instead of
 # returning it; the return value is unconditionally ignored by the commit
 # engine.
 
-test_that("batch_task() style = \"staged_writer\": commits every declared output written via batch_stage_path() + a marker, through the real worker", {
+test_that("batch_task() style = \"staged_writer\": commits every declared output written via where_to_write_output() + a marker, through the real worker", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "sw_ok_primary.qs2")
@@ -757,14 +757,14 @@ test_that("batch_task() style = \"staged_writer\": target writes one stage then 
   expect_identical(sort(list.files(dir, all.files = TRUE, no.. = TRUE)), sort(before))
 })
 
-test_that("batch_stage_path(): errors when called OUTSIDE a staged_writer run", {
+test_that("where_to_write_output(): errors when called OUTSIDE a staged_writer run", {
   expect_error(
-    batchit::batch_stage_path("primary"),
+    batchit::where_to_write_output("primary"),
     "no staged_writer.*run is active"
   )
 })
 
-test_that("batch_task() style = \"staged_writer\": batch_stage_path() with an UNDECLARED name errors, through the real worker", {
+test_that("batch_task() style = \"staged_writer\": where_to_write_output() with an UNDECLARED name errors, through the real worker", {
   skip_if_not(have_tree, "package source tree not available")
   dir <- withr::local_tempdir()
   out1 <- file.path(dir, "sw_badname_primary.qs2")

@@ -1,7 +1,7 @@
 # Declared-output commit engine (batch_task()) -- Phase 6' Units 1-4. Package
 # targets, both commit styles: `return` (Unit 1, the target returns a named
 # list) and `staged_writer` (Unit 2, the target streams each output to
-# `batch_stage_path(<name>)` instead); see PHASE6_DESIGN.md sections 2-4, 9.1,
+# `where_to_write_output(<name>)` instead); see PHASE6_DESIGN.md sections 2-4, 9.1,
 # 9.5.
 # batch_task() reuses batch_run()'s transport (a fresh subprocess per item via
 # processx, the SAME inst/batch_worker.R) but replaces the raw return-value
@@ -313,7 +313,7 @@
 #' later commit rename in `.batch_commit_task()` is same-filesystem):
 #' `<basename(final)>.<attempt>.stage<random>`. Called ONCE, in
 #' `.batch_execute()` BEFORE `do.call()` runs the target -- the returned map
-#' is both what `batch_stage_path()` hands the target during the call AND,
+#' is both what `where_to_write_output()` hands the target during the call AND,
 #' unchanged, what `.batch_commit_task()` later verifies/renames; it is never
 #' recomputed (a second `tempfile()` call would mint a DIFFERENT random path).
 #' @noRd
@@ -330,7 +330,7 @@
 }
 
 # One package-level environment holding the CURRENT staged_writer run's
-# per-output staging paths, if any. `batch_stage_path()` is called from
+# per-output staging paths, if any. `where_to_write_output()` is called from
 # INSIDE the target's own call stack (arbitrarily deep -- a helper the target
 # itself calls), with no direct handle back into `.batch_execute()`'s frame,
 # so this state has to live somewhere both sides can reach. A dedicated
@@ -343,7 +343,7 @@
 .batch_stage_env$active <- FALSE
 .batch_stage_env$paths <- NULL
 
-#' Enter staged_writer scope: `batch_stage_path()` becomes answerable.
+#' Enter staged_writer scope: `where_to_write_output()` becomes answerable.
 #' Returns the PRIOR `{active, paths}` so the caller can restore it on exit
 #' (save/restore, not an unconditional reset -- defensive against any nested or
 #' in-process reuse, even though one item runs at a time per worker).
@@ -358,7 +358,7 @@
 #' Exit staged_writer scope, restoring the PRIOR `{active, paths}` state.
 #'
 #' Called from a `finally` wrapped TIGHTLY around `do.call()` in
-#' `.batch_execute()` -- so `batch_stage_path()` is answerable ONLY while the
+#' `.batch_execute()` -- so `where_to_write_output()` is answerable ONLY while the
 #' target itself runs, NOT during the subsequent commit or result construction.
 #' It runs on both the target returning normally and the target erroring. Only
 #' an OS-level kill (no R-level unwind at all) can skip it, the same limit every
@@ -374,7 +374,7 @@
 #' The staging path batchit pre-computed for one declared output
 #'
 #' Inside a `style = "staged_writer"` [batch_task()] target, WRITE each
-#' declared output to `batch_stage_path(<name>)` -- an attempt-scoped temp
+#' declared output to `where_to_write_output(<name>)` -- an attempt-scoped temp
 #' path in the SAME directory as that output's final destination (so the
 #' later commit rename is same-filesystem) -- instead of returning it. The
 #' target's own return value is ignored by the commit engine; batchit finds
@@ -398,25 +398,25 @@
 #' \dontrun{
 #' # inside a style = "staged_writer" target:
 #' my_writer <- function(x) {
-#'   saveRDS(x, batch_stage_path("primary"))
+#'   saveRDS(x, where_to_write_output("primary"))
 #'   invisible(NULL)
 #' }
 #' }
 #' @export
-batch_stage_path <- function(name) {
+where_to_write_output <- function(name) {
   if (!isTRUE(.batch_stage_env$active)) {
     stop(paste0(
-      "batch_stage_path(): no staged_writer batch_task() run is active -- only ",
+      "where_to_write_output(): no staged_writer batch_task() run is active -- only ",
       "callable from inside the target of a style = \"staged_writer\" batch_task() item"),
       call. = FALSE)
   }
   if (!is.character(name) || length(name) != 1L || is.na(name) || !nzchar(name)) {
-    stop("batch_stage_path(): `name` must be a single non-empty string", call. = FALSE)
+    stop("where_to_write_output(): `name` must be a single non-empty string", call. = FALSE)
   }
   paths <- .batch_stage_env$paths
   if (!(name %in% names(paths))) {
     stop(sprintf(
-      "batch_stage_path(): '%s' is not one of this item's declared outputs: %s",
+      "where_to_write_output(): '%s' is not one of this item's declared outputs: %s",
       name, paste(names(paths), collapse = ", ")), call. = FALSE)
   }
   paths[[name]]
@@ -674,7 +674,7 @@ batch_skip <- function() {
 #' PREPARE every output temp -- `return`: validate the target's return names
 #' match the declared outputs EXACTLY, then qs2-serialize each value
 #' (declaration order); `staged_writer`: the target's return value is
-#' IGNORED (it streamed each output to `batch_stage_path(<name>)` instead,
+#' IGNORED (it streamed each output to `where_to_write_output(<name>)` instead,
 #' BEFORE this function is even called -- see `.batch_execute()`), so step 1
 #' here is a pure ASSERTION that every declared output now exists at its
 #' pre-computed staging path as a regular, non-symlink file (an
@@ -728,7 +728,7 @@ batch_skip <- function() {
 #' @param stage_map For `style = "staged_writer"` only: the SAME declared
 #'   name -> staging-temp-path map [.batch_stage_paths_for()] computed, and
 #'   [.batch_stage_scope_enter()]'d, BEFORE `do.call()` ran the target (so
-#'   `batch_stage_path()` and this function agree on the exact paths).
+#'   `where_to_write_output()` and this function agree on the exact paths).
 #'   Ignored for `style = "return"`.
 #' @return `list(committed = outputs, attempt = attempt, skipped = FALSE)` --
 #'   the commit record. `skipped` is always `FALSE` here (a real commit just
@@ -775,7 +775,7 @@ batch_skip <- function() {
     # style == "staged_writer": the target's return VALUE is unconditionally
     # ignored -- there is no return-name-match check for this style (that
     # check is `return`-only). `stage_map` names the EXACT paths
-    # batch_stage_path() handed the target (pre-computed in .batch_execute()
+    # where_to_write_output() handed the target (pre-computed in .batch_execute()
     # before do.call()), so step 1 here does no writing of its own: it only
     # ASSERTS every declared name now exists at its staging path as a
     # regular, non-symlink file. Register every stage path for cleanup up
@@ -788,7 +788,7 @@ batch_skip <- function() {
       if (!file.exists(p) || dir.exists(p) || .batch_is_symlink(p)) {
         stop(sprintf(paste0(
           "batch commit: staged_writer target never wrote declared output '%s' ",
-          "(expected a non-directory, non-symlink file at batch_stage_path('%s') = %s; ",
+          "(expected a non-directory, non-symlink file at where_to_write_output('%s') = %s; ",
           "as at any output destination, base R cannot portably reject a ",
           "FIFO/socket/device special file the target may have created there)"),
           nm, nm, p), call. = FALSE)
@@ -943,12 +943,12 @@ batch_skip <- function() {
 #' target returns `list(<name> = <value>, ...)`, names matching the declared
 #' outputs EXACTLY; each value is qs2-serialized to its declared path) and
 #' `style = "staged_writer"` (Unit 2 -- the target instead WRITES each output
-#' to [batch_stage_path()]`(<name>)` as it goes; its return value is ignored).
+#' to [where_to_write_output()]`(<name>)` as it goes; its return value is ignored).
 #' There is deliberately no `collect` argument -- the point of `batch_task()`
 #' is that raw values never cross back to the parent; only a small commit
 #' record does.
 #'
-#' `fn` is EITHER a `batch_target()` descriptor (`fn_kind = "package"`) OR a
+#' `fn` is EITHER a `package_function()` descriptor (`fn_kind = "package"`) OR a
 #' bare closure (`fn_kind = "adhoc"`, Phase 6' Unit 3, design PHASE6_DESIGN.md
 #' sections 1-2) -- both drive the SAME commit engine (`.batch_commit_task()`,
 #' both styles, the same marker/§0 doctrine). A closure is gated by the same
@@ -964,7 +964,7 @@ batch_skip <- function() {
 #' identically whether a target's marker already exists, is stale, or is
 #' malformed; only the CHILD, while committing, ever reads one.
 #'
-#' @param fn EITHER a `batch_target` descriptor from [batch_target()]
+#' @param fn EITHER a `package_function` descriptor from [package_function()]
 #'   (`fn_kind = "package"`) OR a bare closure (`fn_kind = "adhoc"`):
 #'   self-contained (base R, `pkg::`-qualified calls, and its own formals only
 #'   -- see `.batch_lint_adhoc_fn()`), not a primitive, and not taking `...`.
@@ -980,7 +980,7 @@ batch_skip <- function() {
 #'   output AND every derived marker path must be unique across the WHOLE call.
 #' @param style Commit style: `"return"` (the target returns a named list --
 #'   Unit 1) or `"staged_writer"` (the target writes each output via
-#'   [batch_stage_path()] instead -- Unit 2). Any other value errors.
+#'   [where_to_write_output()] instead -- Unit 2). Any other value errors.
 #' @param n_workers Concurrent subprocesses (validated: finite, whole, >= 1).
 #' @param dev_path For `fn_kind = "package"`, the CONSUMER package's source
 #'   tree for `devtools::load_all()` in the worker (or `NULL` for the
@@ -1002,7 +1002,7 @@ batch_skip <- function() {
 #'   the target's raw return value.
 #' @examples
 #' \dontrun{
-#' t <- batch_target("mypkg", "process_one_slice")
+#' t <- package_function("mypkg", "process_one_slice")
 #' batch_task(
 #'   t,
 #'   items = list(list(x = 1), list(x = 2)),
@@ -1033,11 +1033,11 @@ batch_task <- function(
     }
     fn <- target
   }
-  # `fn` is EITHER a batch_target() descriptor (fn_kind = "package") OR a bare
+  # `fn` is EITHER a package_function() descriptor (fn_kind = "package") OR a bare
   # closure (fn_kind = "adhoc", Phase 6' Unit 3) -- resolved here, ONCE, into
   # the two variables (`fn_kind`, and either `target` or a lint-passed,
   # baseenv()-rebased `fn`) every step below branches on.
-  if (inherits(fn, "batch_target")) {
+  if (inherits(fn, "package_function")) {
     fn_kind <- "package"
     target <- fn
     formal_names <- target$formal_names
@@ -1049,7 +1049,7 @@ batch_task <- function(
     if (is.null(formal_names)) formal_names <- character(0)
     target <- NULL
   } else {
-    stop(paste0("batch_task(): `fn` must come from batch_target() (fn_kind = ",
+    stop(paste0("batch_task(): `fn` must come from package_function() (fn_kind = ",
       "\"package\") or be a bare closure (fn_kind = \"adhoc\")"), call. = FALSE)
   }
   if (!is.character(style) || length(style) != 1L || is.na(style) || !nzchar(style)) {
@@ -1136,7 +1136,7 @@ batch_task <- function(
   # fn_kind == "adhoc" (Phase 6' Unit 3, design section 9.4): a fresh
   # per-dispatch identity nonce, echoed back by the child and checked by
   # .batch_inspect_result() in place of the package/symbol/hash identity a
-  # batch_target descriptor would otherwise supply. Unused (stays NULL) for
+  # package_function descriptor would otherwise supply. Unused (stays NULL) for
   # "package" -- the commit-record attempt-token check already binds identity
   # there.
   nonces <- if (identical(fn_kind, "adhoc")) {

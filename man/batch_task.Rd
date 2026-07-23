@@ -19,7 +19,7 @@ batch_task(
 )
 }
 \arguments{
-\item{fn}{EITHER a \code{batch_target} descriptor from \code{\link[=batch_target]{batch_target()}}
+\item{fn}{EITHER a \code{package_function} descriptor from \code{\link[=package_function]{package_function()}}
 (\code{fn_kind = "package"}) OR a bare closure (\code{fn_kind = "adhoc"}):
 self-contained (base R, \verb{pkg::}-qualified calls, and its own formals only
 -- see \code{.batch_lint_adhoc_fn()}), not a primitive, and not taking \code{...}.}
@@ -38,7 +38,7 @@ output AND every derived marker path must be unique across the WHOLE call.}
 
 \item{style}{Commit style: \code{"return"} (the target returns a named list --
 Unit 1) or \code{"staged_writer"} (the target writes each output via
-\code{\link[=batch_stage_path]{batch_stage_path()}} instead -- Unit 2). Any other value errors.}
+\code{\link[=where_to_write_output]{where_to_write_output()}} instead -- Unit 2). Any other value errors.}
 
 \item{n_workers}{Concurrent subprocesses (validated: finite, whole, >= 1).}
 
@@ -86,12 +86,12 @@ Two commit styles, for EITHER fn_kind: \code{style = "return"} (Unit 1 -- the
 target returns \verb{list(<name> = <value>, ...)}, names matching the declared
 outputs EXACTLY; each value is qs2-serialized to its declared path) and
 \code{style = "staged_writer"} (Unit 2 -- the target instead WRITES each output
-to \code{\link[=batch_stage_path]{batch_stage_path()}}\verb{(<name>)} as it goes; its return value is ignored).
+to \code{\link[=where_to_write_output]{where_to_write_output()}}\verb{(<name>)} as it goes; its return value is ignored).
 There is deliberately no \code{collect} argument -- the point of \code{batch_task()}
 is that raw values never cross back to the parent; only a small commit
 record does.
 
-\code{fn} is EITHER a \code{batch_target()} descriptor (\code{fn_kind = "package"}) OR a
+\code{fn} is EITHER a \code{package_function()} descriptor (\code{fn_kind = "package"}) OR a
 bare closure (\code{fn_kind = "adhoc"}, Phase 6' Unit 3, design PHASE6_DESIGN.md
 sections 1-2) -- both drive the SAME commit engine (\code{.batch_commit_task()},
 both styles, the same marker/§0 doctrine). A closure is gated by the same
@@ -109,7 +109,7 @@ malformed; only the CHILD, while committing, ever reads one.
 }
 \examples{
 \dontrun{
-t <- batch_target("mypkg", "process_one_slice")
+t <- package_function("mypkg", "process_one_slice")
 batch_task(
   t,
   items = list(list(x = 1), list(x = 2)),

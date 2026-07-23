@@ -55,12 +55,12 @@ Production TTE stages (s1/s2/s3) pass NO skip logic and continue to always
 recompute — this is a purely opt-in mechanism for a consumer that wants it.
 
 Phase 6' Unit 3 (see `PHASE6_DESIGN.md`): a new `fn_kind = "adhoc"` dispatch
-kind, alongside the existing `fn_kind = "package"` (a `batch_target()`
+kind, alongside the existing `fn_kind = "package"` (a `package_function()`
 descriptor). `adhoc` dispatches a bare closure VALUE, serialized straight into
 the envelope, instead of resolving a package+symbol. New exported frontend
 `batch_fn(fn, items, n_workers, dev_path = NULL, collect = FALSE, ...)` is the
 adhoc, return-value sibling of `batch_run()`; `batch_task(fn, ...)` now also
-accepts a bare closure (`fn` is EITHER a `batch_target()` descriptor OR a bare
+accepts a bare closure (`fn` is EITHER a `package_function()` descriptor OR a bare
 closure) — the same declared-output commit engine, both styles, and the same
 §0 marker doctrine hold for adhoc too.
 
@@ -72,7 +72,7 @@ reaching it went through a frontend's own check). The closure may reference
 only base R (functions, operators, and constants — anything bound in
 `baseenv()`), its own declared formals, and explicit `pkg::fun()`/`pkg:::fun()`
 calls; any other free variable is rejected, NAMING it. `...` in the closure's
-formals is prohibited, exactly like a package `batch_target()`; a primitive or
+formals is prohibited, exactly like a package `package_function()`; a primitive or
 non-function is rejected too. This is a best-effort static lint, not a proof —
 it does not detect `get()`/`mget()`/`assign()`/a string-argument `do.call()`,
 `eval(parse(...))`, `substitute()`, `.GlobalEnv`, a formula's/attribute's own
@@ -109,7 +109,7 @@ namespace loading in the worker.
 Phase 6' Unit 2 (see `PHASE6_DESIGN.md`): `batch_task()` now supports `style =
 "staged_writer"` alongside `style = "return"` (Unit 1). Instead of returning a
 named list, a `staged_writer` target WRITES each declared output to
-`batch_stage_path(<name>)` — a new exported accessor that returns the exact
+`where_to_write_output(<name>)` — a new exported accessor that returns the exact
 attempt-scoped staging path batchit pre-computed for that output, in the same
 directory as its final destination. The target's return value is
 unconditionally ignored (no return-name-match check for this style). Commit
@@ -118,7 +118,7 @@ exist at its staging path as a regular, non-symlink file once the target
 returns, or the item fails loudly with zero renames — steps 2-7 (marker
 prepare, temp verification, old-marker removal, output renames, marker rename
 LAST, read-back verification) are identical between the two styles.
-`batch_stage_path()` errors clearly when called outside an active
+`where_to_write_output()` errors clearly when called outside an active
 `staged_writer` run, or for a name that is not one of the item's declared
 outputs. The parent-side failure sweep (`.batch_sweep_task_temps()`, used on a
 timeout/SIGKILL) now matches BOTH `.<attempt>.tmp` (marker + `return`-style
@@ -207,7 +207,7 @@ single dispatcher, all done inside swereg first.
 
 Public API:
 
-- `batch_target(package, symbol, version = NULL)` — a dispatch *descriptor*:
+- `package_function(package, symbol, version = NULL)` — a dispatch *descriptor*:
   package + symbol + a srcref-independent `digest(list(body, formals))` identity
   hash. Rejects `...`-taking targets. The child re-verifies the hash and refuses
   a different code version than dispatched.

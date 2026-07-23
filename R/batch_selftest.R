@@ -133,37 +133,37 @@
 }
 
 # --- Phase 6' Unit 2 fixtures: declared-output commit, staged_writer style --
-# A staged_writer target WRITES each declared output via batch_stage_path()
+# A staged_writer target WRITES each declared output via where_to_write_output()
 # instead of returning it -- its return value is unconditionally IGNORED by
 # the commit engine (see .batch_commit_task(), style == "staged_writer"
 # branch). These mirror the "return"-style fixtures above (well-formed,
-# missing an output, and the batch_stage_path() undeclared-name error).
+# missing an output, and the where_to_write_output() undeclared-name error).
 
 # Streams both declared outputs ("primary"/"secondary") via
-# batch_stage_path(); the return value is deliberately something that would
+# where_to_write_output(); the return value is deliberately something that would
 # FAIL the return-style name-match check (neither "primary" nor "secondary")
 # -- proving staged_writer really does ignore it rather than happening to
 # pass by coincidence.
 #' @noRd
 .batch_fixture_task_staged_ok <- function(x) {
-  qs2::qs_save(x, batch_stage_path("primary"))
-  qs2::qs_save(x * 10, batch_stage_path("secondary"))
+  qs2::qs_save(x, where_to_write_output("primary"))
+  qs2::qs_save(x * 10, where_to_write_output("secondary"))
   list(this_return_value_is_ignored_by_staged_writer = TRUE)
 }
 
 # Writes only ONE of the two declared outputs -- "forgets" secondary.
 #' @noRd
 .batch_fixture_task_staged_missing <- function(x) {
-  qs2::qs_save(x, batch_stage_path("primary"))
+  qs2::qs_save(x, where_to_write_output("primary"))
   invisible(NULL)
 }
 
-# Calls batch_stage_path() with a name that is NOT one of this item's
+# Calls where_to_write_output() with a name that is NOT one of this item's
 # declared outputs -- exercises the accessor's own undeclared-name error,
 # through the real worker.
 #' @noRd
 .batch_fixture_task_staged_bad_name <- function(x) {
-  batch_stage_path("no_such_declared_output")
+  where_to_write_output("no_such_declared_output")
   invisible(NULL)
 }
 
@@ -175,8 +175,8 @@
 #' @noRd
 .batch_fixture_task_staged_slow <- function(x, seconds) {
   Sys.sleep(seconds)
-  qs2::qs_save(x, batch_stage_path("primary"))
-  qs2::qs_save(x * 10, batch_stage_path("secondary"))
+  qs2::qs_save(x, where_to_write_output("primary"))
+  qs2::qs_save(x * 10, where_to_write_output("secondary"))
   invisible(NULL)
 }
 
@@ -185,7 +185,7 @@
 # of a worker-created partial stage (the child never reaches the commit).
 #' @noRd
 .batch_fixture_task_staged_partial_boom <- function(x) {
-  qs2::qs_save(x, batch_stage_path("primary"))
+  qs2::qs_save(x, where_to_write_output("primary"))
   stop("staged target detonated after writing one stage")
 }
 
@@ -246,7 +246,7 @@
 }
 
 # staged_writer sibling of .batch_fixture_task_skip_if_prior(): on the first
-# run (no valid prior) streams BOTH declared outputs via batch_stage_path()
+# run (no valid prior) streams BOTH declared outputs via where_to_write_output()
 # and batch_record()s; on a LATER run (valid prior) writes ONE stage file
 # (proving a staged_writer target CAN write before deciding to skip) and
 # THEN returns batch_skip() -- exercises that the written stage is still
@@ -256,12 +256,12 @@
 .batch_fixture_task_staged_skip_if_prior <- function(x) {
   prior <- batch_prior()
   if (is.null(prior)) {
-    qs2::qs_save(x, batch_stage_path("primary"))
-    qs2::qs_save(x * 10, batch_stage_path("secondary"))
+    qs2::qs_save(x, where_to_write_output("primary"))
+    qs2::qs_save(x * 10, where_to_write_output("secondary"))
     batch_record(list(computed_from = x))
     invisible(NULL)
   } else {
-    qs2::qs_save(x, batch_stage_path("primary"))
+    qs2::qs_save(x, where_to_write_output("primary"))
     batch_skip()
   }
 }

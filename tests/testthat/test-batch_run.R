@@ -13,7 +13,7 @@ dev_tree <- normalizePath(testthat::test_path("..", ".."), mustWork = FALSE)
 have_tree <- file.exists(file.path(dev_tree, "DESCRIPTION")) &&
   file.exists(file.path(dev_tree, "inst", "batch_worker.R"))
 
-mk <- function(sym) batchit::batch_target("batchit", sym)
+mk <- function(sym) batchit::package_function("batchit", sym)
 
 # The CURRENT protocol number, read dynamically rather than hardcoded: every
 # raw envelope literal below must carry a protocol that actually matches
@@ -24,22 +24,22 @@ PROTO <- batchit:::.BATCH_PROTOCOL
 
 # --- target descriptor -------------------------------------------------------
 
-test_that("batch_target() records the srcref-stripped identity hash", {
+test_that("package_function() records the srcref-stripped identity hash", {
   tgt <- mk(".batch_fixture_echo")
   fn <- batchit:::.batch_fixture_echo
   # the hash is .batch_hash_function() of the SOURCE-STRIPPED function (see below)
   expect_identical(tgt$hash, batchit:::.batch_hash_function(utils::removeSource(fn)))
   expect_identical(tgt$formal_names, "x")
-  expect_s3_class(tgt, "batch_target")
+  expect_s3_class(tgt, "package_function")
 })
 
-test_that("batch_target()'s identity hash is srcref-independent (the R CMD check keep.source bug)", {
+test_that("package_function()'s identity hash is srcref-independent (the R CMD check keep.source bug)", {
   # CI caught this where local tests could not: under R CMD check the PARENT runs
   # the installed package (srcref stripped) while the worker devtools::load_all()s
   # the source (srcref attached), so `.batch_hash_function(fn)` -- which serialises
   # the body INCLUDING its srcref -- produced two different hashes for identical
   # code, and every dispatched item "resolved to a DIFFERENT code version".
-  # Identity must depend only on body + formals, so batch_target hashes
+  # Identity must depend only on body + formals, so package_function hashes
   # removeSource(fn).
   code <- "function(a, b = 2) { # a comment\n  a + b\n}"
   f_src   <- eval(parse(text = code, keep.source = TRUE))
@@ -56,24 +56,24 @@ test_that("batch_target()'s identity hash is srcref-independent (the R CMD check
     batchit:::.batch_hash_function(f_nosrc)))
 })
 
-test_that("batch_target() normalises a zero-argument target to character(0)", {
+test_that("package_function() normalises a zero-argument target to character(0)", {
   # names(formals(fn)) is NULL for a no-arg function; if that NULL reaches the
   # descriptor a legitimate target looks malformed and batch_run() rejects it.
   tgt <- mk(".batch_fixture_pid")
   expect_identical(tgt$formal_names, character(0))
 })
 
-test_that("batch_target() rejects a `...` target, a non-function, and a missing symbol", {
+test_that("package_function() rejects a `...` target, a non-function, and a missing symbol", {
   # `...` defeats reliable typo detection -- the whole point of the contract.
   expect_error(mk("paste"), "`\\.\\.\\.`|not defined")  # paste is base, not batchit
-  expect_error(batchit::batch_target("batchit", ".BATCH_PROTOCOL"), "not a function")
+  expect_error(batchit::package_function("batchit", ".BATCH_PROTOCOL"), "not a function")
   expect_error(mk(".no_such_symbol_here"), "not defined in package")
-  expect_error(batchit::batch_target("no.such.pkg", "x"), "not available")
+  expect_error(batchit::package_function("no.such.pkg", "x"), "not available")
 })
 
 test_that("a real `...`-taking target is rejected by name", {
   # message() takes `...`; wrap it as a base symbol to hit the dots branch.
-  expect_error(batchit::batch_target("base", "message"), "`\\.\\.\\.`")
+  expect_error(batchit::package_function("base", "message"), "`\\.\\.\\.`")
 })
 
 # --- parent-side validation (every item, every formal) -----------------------

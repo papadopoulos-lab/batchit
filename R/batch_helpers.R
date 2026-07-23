@@ -17,9 +17,9 @@
 #' Hashes exactly `list(body(fn), formals(fn))` -- deliberately NOT the whole
 #' function object, whose enclosing environment varies across R sessions and
 #' would make the hash non-deterministic. This is the identity used by
-#' [batch_target()]: an edit to a target's body or formals moves the hash, while
+#' [package_function()]: an edit to a target's body or formals moves the hash, while
 #' a comment or whitespace change does not (provided the caller has stripped
-#' srcref first via `utils::removeSource()`; see [batch_target()]).
+#' srcref first via `utils::removeSource()`; see [package_function()]).
 #'
 #' @param fn A function.
 #' @return A single xxhash64 digest string.
