@@ -27,7 +27,9 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::pkgdown, local::.
+          # stringfish?source: see the comment in R-CMD-check.yaml -- pkgdown
+          # loads the batchit namespace (and so qs2) to build the reference.
+          extra-packages: any::pkgdown, local::., stringfish?source
           needs: website
 
       - name: Build site

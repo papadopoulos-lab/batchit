@@ -27,7 +27,14 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck
+          # stringfish?source: qs2 -> stringfish -> RcppParallel (bundled TBB).
+          # P3M's prebuilt stringfish binary references a legacy TBB symbol
+          # (tbb::internal::concurrent_vector_base_v3) that the RcppParallel
+          # binary currently served no longer exports, so loading stringfish.so
+          # fails at dyn.load and every qs2 call dies. Building stringfish from
+          # source links it against whatever RcppParallel is actually installed.
+          # Drop this once upstream P3M binaries agree again.
+          extra-packages: any::rcmdcheck, stringfish?source
           needs: check
 
       - uses: r-lib/actions/check-r-package@v2
