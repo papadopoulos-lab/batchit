@@ -2,8 +2,7 @@
 % Please edit documentation in R/batch.R
 \name{stream_from_parent_and_write_files_atomically}
 \alias{stream_from_parent_and_write_files_atomically}
-\title{Stream a producer's items through a target, committing DECLARED OUTPUT
-FILES instead of returning a value}
+\title{Like \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}, but build each item lazily instead of all at once}
 \usage{
 stream_from_parent_and_write_files_atomically(
   fn,
@@ -19,116 +18,117 @@ stream_from_parent_and_write_files_atomically(
 )
 }
 \arguments{
-\item{fn}{A \code{package_function} descriptor from \code{\link[=package_function]{package_function()}}.}
+\item{fn}{An object from \code{\link[=package_function]{package_function()}}, naming a function in an
+installed package. An inline function is not accepted here.}
 
-\item{ids}{Vector of stable item ids (non-empty, non-NA, unique). Length =
-number of items; order is the order of production and dispatch.}
+\item{ids}{One id per item, in the order you want items produced and run.
+Must be unique, non-missing values (coerced to character).}
 
-\item{producer}{\verb{function(id)} returning that item -- a fully-named list of
-\code{fn}'s formals. Called once per id, in the parent, under backpressure;
-only its RESULT crosses to a worker.}
+\item{producer}{A function of one argument -- an item's id -- that builds
+and returns that one item: a named list holding all of \code{fn}'s
+arguments, exactly as one element of \code{items} would be for
+\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}. Called once per id, in your R
+session (never on a worker), only when a worker is free to take the
+result -- so load or build each item's data inside this function,
+rather than before calling \code{stream_from_parent_and_write_files_atomically()}.}
 
-\item{outputs}{A list aligned to \code{ids}: \code{outputs[[i]]} is item \code{i}'s output
-map, a named character vector \verb{c(<name> = <final path>)}. May instead be
-NAMED BY ITEM ID (same name set as \code{ids}, any order). Same validation as
-\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}'s \code{outputs}: every path absolute; each
-destination absent or an existing non-directory, non-symlink file; every
-output AND every derived marker path unique across the whole call.}
+\item{outputs}{A list aligned to \code{ids}: \code{outputs[[i]]} is item \code{i}'s
+output map, a named character vector \verb{c(<name> = <final path>)}. May
+instead be named by item id (same name set as \code{ids}, any order). Same
+rules as \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}'s \code{outputs}: every path
+absolute; every destination absent or an existing plain file (not a
+directory or a symlink); every output path, across every item in this
+one call, unique.}
 
-\item{style}{Commit style: \code{"return"} (the target returns a named list) or
+\item{style}{\code{"return"} (the target returns a named list) or
 \code{"staged_writer"} (the target writes each output via
-\code{\link[=where_to_write_output]{where_to_write_output()}} instead); see \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}.
-Any other value errors.}
+\code{\link[=where_to_write_output]{where_to_write_output()}} instead) -- see
+\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} for what each means. Any other
+value errors.}
 
-\item{n_workers}{Number of mirai daemons (validated).}
+\item{n_workers}{Number of persistent background workers (\code{mirai}
+daemons) to run at once.}
 
-\item{dev_path}{Consumer-package source tree, loaded once per daemon via
-\code{devtools::load_all()}, or \code{NULL} for the installed consumer package. A
-given-but-wrong path errors, even for an empty workload.}
+\item{dev_path}{The source tree of the package named in \code{fn}, loaded once
+per worker with \code{devtools::load_all()}, instead of using the installed
+package. Leave as \code{NULL} (the default) to use the installed package. A
+path that doesn't exist, or doesn't match that package, is an error --
+even when there turn out to be no items to run.}
 
-\item{p}{A progress callback such as a \code{progressr} progressor, or \code{NULL}.}
+\item{p}{A progress callback, such as a \code{progressr} progressor.}
 
-\item{label}{Optional short stage tag prefixed to the progress message.}
+\item{label}{An optional short label added to each progress message.}
 
-\item{timeout}{Per-item wall-clock limit in seconds (generous default, the
-internal \code{.BATCH_DEFAULT_TIMEOUT} of 6 hours; \code{Inf} disables). A task
-exceeding it resolves to an error and is reported.}
+\item{timeout}{Maximum time, in seconds, to let one item run before it is
+treated as failed (6 hours by default; \code{Inf} disables the limit).}
 }
 \value{
-A list, named by id, in id order: each element is that item's
-commit record, \verb{list(committed = <named char: name -> final path>, attempt = <token>)}. Never the target's raw return value.
+A list, named by id, \strong{in the same order as \code{ids}}: each element
+describes what that item wrote -- \verb{list(committed = <named character vector: output name -> final path written>, attempt = <an internal per-run identifier; you can ignore this>)}. Never \code{fn}'s raw return
+value.
 }
 \description{
-The Shape B analog of \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}: the parent IS the
-producer. Each item is generated lazily by \code{producer(id)} and is itself the
-payload (a data slice), so it must NOT be materialised until there is a
-worker ready for it -- otherwise the whole dataset lands in memory (or on
-disk twice) at once. mirai's persistent daemons and in-memory transport are
-exactly this shape; the shape-A materialise-every-item-to-a-tempfile model
-is exactly the wrong one for it. Delivery, though, is via the SAME atomic
-declared-output commit engine \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} uses,
-instead of a raw return value crossing back: the commit engine
-(\code{.batch_execute()} -> \code{.batch_commit_task()}, in the CHILD) is
-transport-agnostic -- it reads the envelope's \code{outputs}/\code{marker}/\code{style}/
-\code{attempt} fields and commits identically whether the envelope arrived via
-\code{processx} or \code{mirai} -- so this function changes only the PARENT-side
-transport and wiring, never the child.
+Use this when building the full \code{items} list up front (the way \code{\link[=run]{run()}},
+\code{\link[=run_and_collect]{run_and_collect()}}, and \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} all require)
+would itself use too much memory -- for example, when each item is a
+large data slice, or there are far too many items to hold as a list at
+once. Instead of an \code{items} list, you give an \code{ids} vector and a
+\code{producer(id)} function that builds one item's arguments at a time.
+batchit calls \code{producer()} only when a worker is free to take the
+result, so at most a bounded number of items -- about \code{2 * n_workers} --
+exist in memory at once. Everything else works like
+\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}: each item's function runs on a
+background worker, and its declared output files are written safely --
+see that function's help page for the atomic-write guarantee and the two
+\code{style}s.
 }
 \details{
-Two commit styles, exactly as in \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}:
-\code{style = "return"} (the target returns \verb{list(<name> = <value>, ...)}, names
-matching the declared outputs EXACTLY) and \code{style = "staged_writer"} (the
-target instead WRITES each output to
-\code{\link[=where_to_write_output]{where_to_write_output()}}\verb{(<name>)} as it goes; its return value is
-ignored). A per-item MARKER file is the atomic witness of a complete
-commit -- but only a VALID, engine-produced marker (one that decodes and
-whose protocol/attempt-token/committed-output-map verify) is that witness;
-bare pathname existence is not. There is deliberately no \code{collect}
-argument -- only a small commit record ever crosses back, never a raw
-value.
-
-\code{fn} is a \code{package_function()} descriptor ONLY -- unlike
-\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}, this function does not also accept a
-bare closure. Shape B's sole consumer (\code{save_rawbatch}) uses a package
-function, so ad-hoc-over-mirai support is deliberately out of scope
-(PUBLIC_API.md section 3.2).
-
-Same both-end validation, result-envelope inspection, warning surfacing and
-loud failure as \code{\link[=run]{run()}}/\code{\link[=run_and_collect]{run_and_collect()}}/\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}},
-over the mirai transport. At most \code{2 * n_workers} items are in flight; the
-producer for the next id is not called until an in-flight slot frees, which
-is the backpressure. Each task carries a \code{timeout}, so a wedged daemon
-cannot block forever.
-
-Never touches mirai's DEFAULT compute profile: \code{daemons(n)} there would reset
-and destroy any daemon configuration the caller had. Each invocation allocates
-a fresh PRIVATE profile under the runner's reserved \verb{.batch_stream_<nonce>_}
-prefix, where \verb{<nonce>} is a high-entropy, session-specific string -- so the
-name can never be "default" (that guarantee holds by construction), and a
-registry collision would require another party to have claimed a name under
-that same nonce-namespaced prefix in this session. It tears only its own
-profile down. As with \code{\link[=run]{run()}}/\code{\link[=run_and_collect]{run_and_collect()}}, batchit is thread-agnostic: any within-
-item thread policy is the consumer's.
-
-The daemon loads the CONSUMER package (via \code{dev_path}/\code{requireNamespace}) and,
-when the runner differs from the consumer, the RUNNER too -- the daemon needs
-\code{.batch_execute} resolvable in the runner's namespace.
-
-Requires the suggested \code{mirai} package (parallelism is opt-in).
+Two restrictions specific to this function: \code{fn} must be an object from
+\code{\link[=package_function]{package_function()}} -- an inline function is not accepted here, unlike
+\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} -- and it requires the \code{mirai}
+package to be installed. There is also no way to get a raw return value
+back; only the output-file record described below, exactly as in
+\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}.
 }
+\section{Advanced}{
+
+This function runs its workers as persistent \code{mirai} daemons, in a
+private compute profile it creates and tears down for this call only --
+it never touches or resets any daemon configuration you already had
+outside this call. A background worker loads the package named in \code{fn}
+once, when it starts (not once per item).
+
+At most \code{2 * n_workers} items are in flight at once, each carrying its
+own \code{timeout}: \code{producer()} is not called again until an in-flight slot
+frees up, which is what keeps memory bounded -- an item that hangs past
+its timeout resolves as an error instead of blocking the others forever.
+
+As with \code{\link[=run]{run()}}/\code{\link[=run_and_collect]{run_and_collect()}}, batchit does not set BLAS or
+\code{data.table} thread counts; divide your CPU cores across \code{n_workers}
+yourself if \code{fn} is itself multi-threaded.
+}
+
 \examples{
 \dontrun{
-t <- package_function("mypkg", "write_one_slice")
+# `write_one_slice()` must live in an INSTALLED package -- this function
+# loads it by package name + function name (never by value, unlike the
+# other three dispatch functions), so it cannot be an inline function
+# defined at the console. Put it in your own package's R/ directory,
+# install the package, then replace "yourpkg" below with its name:
+#
+#   write_one_slice <- function(slice) list(main = slice)
+
+out_dir <- tempdir()
+ids <- c("a", "b", "c")
 stream_from_parent_and_write_files_atomically(
-  t,
-  ids = c("2019", "2020", "2021"),
-  producer = function(id) list(slice = load_year(id)),
-  outputs = list(
-    `2019` = c(main = "/data/2019.qs2"),
-    `2020` = c(main = "/data/2020.qs2"),
-    `2021` = c(main = "/data/2021.qs2")
+  fn = package_function("yourpkg", "write_one_slice"),
+  ids = ids,
+  producer = function(id) list(slice = toupper(id)),
+  outputs = setNames(
+    lapply(ids, function(id) c(main = file.path(out_dir, paste0(id, ".qs2")))),
+    ids
   ),
-  n_workers = 4
+  n_workers = 2
 )
 }
 }

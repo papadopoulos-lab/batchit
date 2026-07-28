@@ -55,45 +55,63 @@
 
 # --- target descriptor -------------------------------------------------------
 
-#' Describe a dispatch target
+#' Identify a function in an installed package, so a worker can run it
 #'
-#' A target is a *descriptor*, never a function object, name, or closure:
-#' package + symbol + a hash of the function's body and formals. Package name
-#' plus symbol alone is insufficient -- development code, installed code and
-#' cache identity can differ -- so the descriptor also records a
-#' `digest(list(body, formals))` identity hash. The child re-computes that hash
-#' after loading the target and refuses to run if it differs, which closes the
-#' stale-code / wrong-version hole a bare package+symbol reference would leave.
+#' Builds a small object that names a function in an installed package, for
+#' passing as the `fn` argument to [run()], [run_and_collect()],
+#' [run_and_write_files_atomically()], or
+#' [stream_from_parent_and_write_files_atomically()]. This is the
+#' alternative to writing an inline function directly in one of those calls
+#' (see their help pages) -- `package_function()` is required for
+#' `stream_from_parent_and_write_files_atomically()`, and recommended for the
+#' others whenever you want a production run to verify that every worker
+#' really is running the code you tested, not just whatever happens to be
+#' installed. For a quick one-off run, an inline function is simpler and
+#' needs no setup.
 #'
-#' The hash is deliberately narrow: it covers the target's OWN body and formals
-#' only. A changed helper the target calls, a namespace constant it closes over,
-#' an S4/R6 method table, or a dependency's version are outside it -- so this
-#' proves "same target definition", not "provably identical behaviour", and the
-#' latter is not claimed. `utils::removeSource()` is applied before hashing so
-#' the identity is independent of srcref (comments / whitespace): otherwise an
-#' installed package (no srcref) and a `devtools::load_all()` tree (srcref)
-#' disagree on identical code, which is exactly what happens when the parent runs
-#' the installed package while a worker dev-loads the source.
+#' The object this function returns always identifies a function by package
+#' name + function name + a hash of its code -- it is never the function
+#' itself, a bare function name, or a closure. This is different from
+#' passing your function directly as `fn`, which `run()`, `run_and_collect()`,
+#' and `run_and_write_files_atomically()` also accept (see their `fn`
+#' argument); only `stream_from_parent_and_write_files_atomically()`
+#' requires the form built by this function.
 #'
-#' A target that takes `...` is rejected: arbitrary dots are incompatible with
-#' the reliable detection of a mistyped or missing argument that the contract
-#' depends on.
+#' A function that takes `...` is rejected: batchit checks every item's
+#' argument names against the function's own fixed argument list, and `...`
+#' would make a mistyped or missing argument impossible to catch reliably.
 #'
-#' @param package Package holding the target (character scalar). This is the
-#'   CONSUMER package; it need not be `batchit`.
-#' @param symbol Name of the target function in that package (character scalar).
-#'   May be an internal (unexported) symbol -- it is resolved in the package's
-#'   namespace.
-#' @param version Optional recorded version; defaults to the package's installed
-#'   version. Advisory only -- the hash is what the child actually checks.
-#' @return A `package_function` descriptor: a list with class `"package_function"` and
-#'   elements `package`, `symbol`, `version`, `hash`, `formal_names`.
+#' @param package Name of the installed package holding your function (a
+#'   single string). It does not need to be `batchit` itself.
+#' @param symbol Name of your function inside that package (a single
+#'   string). It can be an exported OR an internal (unexported) function
+#'   name.
+#' @param version A version label to record for your own reference. Defaults
+#'   to the package's currently installed version. This is informational
+#'   only: what a worker actually checks before running is the code hash
+#'   below, not this version string.
+#' @return An object of class `"package_function"`: a list with elements
+#'   `package`, `symbol`, `version`, `hash` (a hash of the function's code,
+#'   used to verify the worker loaded the same definition), and
+#'   `formal_names` (the function's argument names). Pass the whole object
+#'   as `fn`.
 #' @examples
 #' \dontrun{
-#' # target an exported or internal function of any installed package
-#' t <- package_function("mypkg", "process_one_slice")
+#' # `stats` ships with R, so this always works. In your own project, name
+#' # your own package and function here instead.
+#' t <- package_function("stats", "sd")
 #' t$formal_names
 #' }
+#' @section Advanced:
+#' The code hash is deliberately narrow: it covers only the function's own
+#' body and its own argument list. A changed helper function it calls, a
+#' constant it refers to elsewhere, an S4/R6 method table, or a dependency's
+#' version are all outside it -- so a matching hash proves "the same
+#' function definition", not "provably identical behaviour". The hash is
+#' also computed after stripping comments and whitespace (`utils::removeSource()`),
+#' so it agrees whether the function was loaded from an installed package
+#' or from a `devtools::load_all()` source tree -- which otherwise disagree
+#' on identical code.
 #' @export
 package_function <- function(package, symbol, version = NULL) {
   if (!is.character(package) || length(package) != 1L || !nzchar(package)) {
@@ -1472,43 +1490,100 @@ print.batch_envelope <- function(x, ...) {
   if (collect) results else invisible(NULL)
 }
 
-#' Run `fn` on each of a fixed list of items, one subprocess per item, returning nothing
+#' Run a function once per item, in a fresh worker process, discarding the results
 #'
-#' The `collect = FALSE` sibling of [run_and_collect()] -- same shape-A
-#' transport (see [run_and_collect()] and `.batch_run_impl()` for the shared
-#' contract details: hash-verified target/adhoc dispatch, both-end
-#' validation, per-item logs, bounded log tail, loud failure). Use this when
-#' `fn` writes its own output (or is called purely for a side effect) and no
-#' value needs to cross back to the parent.
+#' Use this as a parallel `for` loop: `fn` runs once per item, each call in
+#' its own, brand-new R process (a worker), with up to `n_workers` running at
+#' the same time. Use this specifically when you don't need anything back in
+#' your R session -- for example, `fn` writes its own files, or is called
+#' purely for a side effect. If you want each call's return value back, use
+#' [run_and_collect()] instead; it works identically otherwise. If you want
+#' batchit itself to manage output files safely (so a failed item never
+#' leaves a half-written file), use [run_and_write_files_atomically()]
+#' instead -- files that `fn` writes on its own here get none of that
+#' protection: if `fn` is interrupted partway through writing one, whatever
+#' it already wrote is left exactly as it is.
 #'
-#' `fn` is EITHER a `package_function()` descriptor (hash-verified,
-#' auditable; use in production) OR a bare closure (ad-hoc, gated by a static
-#' self-containedness lint and a mandatory `baseenv()` rebase; for tests and
-#' one-offs only -- this folds in the former ad-hoc-closure frontend).
+#' If any item's worker errors, exits unexpectedly, or exceeds `timeout`, the
+#' whole call stops immediately with an R error (printing that worker's
+#' captured output first) -- it does not continue past the failure.
 #'
-#' @param fn EITHER a `package_function` descriptor from [package_function()]
-#'   OR a bare closure -- see the details above.
-#' @param items List of items; each a fully-named list of `fn`'s formals.
-#'   Named items keep their name as the item id; unnamed items get their index.
-#' @param n_workers Concurrent subprocesses (validated: finite, whole, >= 1).
-#' @param dev_path Source tree for `devtools::load_all()` in the worker, or
-#'   `NULL` for the installed package. For a `package_function()` `fn` this is
-#'   the CONSUMER's source tree; for a bare-closure `fn` it is batchit's own
-#'   (an adhoc closure has no separate consumer identity to load). A
-#'   given-but-wrong path errors rather than silently falling back to
-#'   installed code.
-#' @param p A progress callback such as a `progressr` progressor, or `NULL`. It
-#'   is called once per completed item with `message = <id and time>`.
-#' @param label Optional short stage tag prefixed to the progress message.
-#' @param timeout Per-item wall-clock limit in seconds; a worker that exceeds it
-#'   is killed and reported as a failure. Defaults to a generous hang-catcher
-#'   (the internal `.BATCH_DEFAULT_TIMEOUT`, 6 hours); pass `Inf` to disable.
-#' @return `invisible(NULL)`.
+#' @param fn The function to run once per item. Either an inline function
+#'   written directly in this call, or an object from [package_function()]
+#'   naming a function in an installed package. An inline function must be
+#'   self-contained: it may only use its own arguments, base R
+#'   functions/operators, and `pkg::fun()`-qualified calls to other
+#'   packages -- see the Advanced section below for accepted and rejected
+#'   examples.
+#' @param items One entry per call. Each entry is a named list holding the
+#'   arguments for that one call to `fn` -- every argument `fn` takes must be
+#'   named, including ones with a default value (an omitted optional
+#'   argument is treated as a mistake, not "use the default", so a silently
+#'   dropped argument is caught rather than passed through unnoticed). A
+#'   named entry keeps its name as that item's id (used in progress messages
+#'   and error messages); an unnamed entry is identified by its position
+#'   instead (1, 2, 3, ...).
+#' @param n_workers How many items to run at the same time (a whole number,
+#'   1 or more).
+#' @param dev_path Advanced; see the Advanced section below. Leave as `NULL`
+#'   (the default) to run the installed version of your package.
+#' @param p A progress callback, such as a `progressr` progressor. Leave as
+#'   `NULL` (the default) to print simple progress messages instead.
+#' @param label An optional short label added to each progress message (for
+#'   example, a stage name).
+#' @param timeout Maximum time, in seconds, to let one item's worker run
+#'   before killing it and reporting it as failed. Defaults to 6 hours; pass
+#'   `Inf` to disable the limit.
+#' @return Nothing useful (`invisible(NULL)`). Use [run_and_collect()] if you
+#'   need each item's return value.
 #' @examples
 #' \dontrun{
-#' t <- package_function("mypkg", "process_one_slice")
-#' run(t, items = list(list(x = 1), list(x = 2)), n_workers = 2)
+#' out_dir <- tempdir()
+#' run(
+#'   fn = function(x, dir) saveRDS(x^2, file.path(dir, paste0(x, ".rds"))),
+#'   items = list(
+#'     list(x = 1, dir = out_dir),
+#'     list(x = 2, dir = out_dir),
+#'     list(x = 3, dir = out_dir)
+#'   ),
+#'   n_workers = 2
+#' )
+#' list.files(out_dir)
+#' readRDS(file.path(out_dir, "2.rds")) # 4
 #' }
+#' @section Advanced:
+#' Accepted and rejected inline functions:
+#' ```r
+#' # Allowed -- uses only its own argument and base R:
+#' function(x) x^2
+#'
+#' # Allowed -- calls another package's function, package-qualified:
+#' function(x) data.table::data.table(x = x, y = x^2)
+#'
+#' # NOT allowed -- `threshold` is not an argument of this function:
+#' threshold <- 10
+#' function(x) x > threshold
+#'
+#' # NOT allowed -- `my_helper` is a plain call to a function defined
+#' # outside this one:
+#' my_helper <- function(x) x * 2
+#' function(x) my_helper(x)
+#' ```
+#' When `fn` is a [package_function()] reference, each worker re-checks a
+#' hash of its code before running it, and refuses to run if that code has
+#' changed since you called `package_function()` -- see that function's help
+#' page for what the hash does and does not cover.
+#'
+#' `dev_path` names a package source tree to load in the worker with
+#' `devtools::load_all()`, instead of using the installed package -- the
+#' package named in your `package_function()` reference, or (for an inline
+#' `fn`) batchit's own source tree. A path that doesn't exist, or doesn't
+#' match the expected package, is an error rather than a silent fall-back to
+#' the installed version.
+#'
+#' batchit does not set BLAS or `data.table` thread counts. If `fn` is
+#' itself multi-threaded, reduce its thread count yourself when running
+#' several workers at once, to avoid oversubscribing your CPU cores.
 #' @export
 run <- function(
   fn,
@@ -1523,60 +1598,83 @@ run <- function(
     p = p, label = label, timeout = timeout, .caller = "run")
 }
 
-#' Run `fn` on each of a fixed list of items, one subprocess per item, collecting values
+#' Run a function once per item, in a fresh worker process, and collect the results
 #'
-#' Shape A of the contract: the items already exist (each a small named list of
-#' `fn`'s formals; the worker opens its own data), so a fresh R process per
-#' item is not a cost to amortise but the memory strategy itself -- a large
-#' analysis item can peak at tens of GB and R does not return that memory to the
-#' OS, so process exit is how it is reclaimed. This is why batchit does NOT reuse
-#' workers: worker reuse would defeat exactly this.
+#' Use this as a parallel version of `lapply()`: `fn` runs once per item,
+#' each call in its own, brand-new R process (a worker), with up to
+#' `n_workers` running at the same time, and you get back a list of each
+#' call's return value. If you don't need the return values -- `fn` writes
+#' its own output, or is called for a side effect -- use [run()] instead; it
+#' works identically but discards them.
 #'
-#' `fn` is EITHER a `package_function()` descriptor (hash-verified,
-#' auditable; use in production) OR a bare closure (ad-hoc, gated by a static
-#' self-containedness lint and a mandatory `baseenv()` rebase; for tests and
-#' one-offs only -- this folds in the former ad-hoc-closure frontend).
+#' A small object can be included directly in an item's arguments (it
+#' travels to the worker with the rest of that item), but for a large
+#' object it is usually better to have `fn` load it itself inside the
+#' worker (for example, read it from disk) rather than pass it through
+#' `items`.
 #'
-#' Both-end validation, a hash-verified target descriptor (or, for a bare
-#' closure, a per-dispatch identity nonce), per-item logs written to files
-#' (never pipes -- a chatty worker filling the OS pipe buffer is what
-#' deadlocks a pipe transport), a bounded log tail on failure, and a loud stop
-#' on the first failure. Warnings a target captures are surfaced in the
-#' parent, tagged by item id.
+#' If any item's worker errors, exits unexpectedly, or exceeds `timeout`,
+#' the whole call stops immediately with an R error (printing that worker's
+#' captured output first) -- it never returns a partial list, and it never
+#' puts an error object in a failed item's slot.
 #'
-#' batchit is thread-agnostic: it sets no BLAS / data.table thread counts and
-#' passes none to the worker. If `fn` is itself multi-threaded, dividing
-#' cores across `n_workers` (to avoid oversubscription) is the CONSUMER's
-#' responsibility, not the runner's.
-#'
-#' The worker script is always the runner's (batchit's); `dev_path`, when given,
-#' is the CONSUMER's source tree. When runner and consumer differ, the worker
-#' loads both (the consumer via `dev_path`/`requireNamespace`, the runner via
-#' `requireNamespace`).
-#'
-#' @param fn EITHER a `package_function` descriptor from [package_function()]
-#'   OR a bare closure -- see the details above.
-#' @param items List of items; each a fully-named list of `fn`'s formals.
-#'   Named items keep their name as the item id; unnamed items get their index.
-#' @param n_workers Concurrent subprocesses (validated: finite, whole, >= 1).
-#' @param dev_path Source tree for `devtools::load_all()` in the worker, or
-#'   `NULL` for the installed package. For a `package_function()` `fn` this is
-#'   the CONSUMER's source tree; for a bare-closure `fn` it is batchit's own
-#'   (an adhoc closure has no separate consumer identity to load). A
-#'   given-but-wrong path errors rather than silently falling back to
-#'   installed code.
-#' @param p A progress callback such as a `progressr` progressor, or `NULL`. It
-#'   is called once per completed item with `message = <id and time>`.
-#' @param label Optional short stage tag prefixed to the progress message.
-#' @param timeout Per-item wall-clock limit in seconds; a worker that exceeds it
-#'   is killed and reported as a failure. Defaults to a generous hang-catcher
-#'   (the internal `.BATCH_DEFAULT_TIMEOUT`, 6 hours); pass `Inf` to disable.
-#' @return A list of values in item order.
+#' @param fn The function to run once per item. Either an inline function
+#'   written directly in this call, or an object from [package_function()]
+#'   naming a function in an installed package. An inline function must be
+#'   self-contained: it may only use its own arguments, base R
+#'   functions/operators, and `pkg::fun()`-qualified calls to other
+#'   packages -- see [run()]'s Advanced section for accepted and rejected
+#'   examples.
+#' @param items One entry per call. Each entry is a named list holding the
+#'   arguments for that one call to `fn` -- every argument `fn` takes must be
+#'   named, including ones with a default value (an omitted optional
+#'   argument is treated as a mistake, not "use the default", so a silently
+#'   dropped argument is caught rather than passed through unnoticed). A
+#'   named entry keeps its name as that item's id (used in progress messages
+#'   and error messages); an unnamed entry is identified by its position
+#'   instead (1, 2, 3, ...).
+#' @param n_workers How many items to run at the same time (a whole number,
+#'   1 or more).
+#' @param dev_path Advanced; see [run()]'s Advanced section. Leave as `NULL`
+#'   (the default) to run the installed version of your package.
+#' @param p A progress callback, such as a `progressr` progressor. Leave as
+#'   `NULL` (the default) to print simple progress messages instead.
+#' @param label An optional short label added to each progress message (for
+#'   example, a stage name).
+#' @param timeout Maximum time, in seconds, to let one item's worker run
+#'   before killing it and reporting it as failed. Defaults to 6 hours; pass
+#'   `Inf` to disable the limit.
+#' @return A list of each item's return value, one element per item, **in
+#'   the same order as `items`** (not the order workers happened to
+#'   finish). The list itself is never named by item id -- even if `items`
+#'   was named -- unlike [run_and_write_files_atomically()] and
+#'   [stream_from_parent_and_write_files_atomically()], whose results are.
 #' @examples
 #' \dontrun{
-#' t <- package_function("mypkg", "process_one_slice")
-#' out <- run_and_collect(t, items = list(list(x = 1), list(x = 2)), n_workers = 2)
+#' squares <- run_and_collect(
+#'   fn = function(x) x^2,
+#'   items = list(list(x = 2), list(x = 3), list(x = 4)),
+#'   n_workers = 2
+#' )
+#' squares
 #' }
+#' @section Advanced:
+#' Fresh worker processes are not just a convenience here -- they're the
+#' memory strategy for memory-heavy work. When one item's analysis peaks at,
+#' say, tens of gigabytes, R does not hand that memory back to the operating
+#' system on its own; exiting the worker process is what reclaims it. This
+#' is why batchit starts a new worker per item instead of reusing one across
+#' items.
+#'
+#' When `fn` is a [package_function()] reference, each worker re-checks a
+#' hash of its code before running it, and refuses to run if that code has
+#' changed since you called `package_function()`. Any warning `fn` raises is
+#' captured and re-raised in your R session once that item finishes,
+#' labelled with its item id.
+#'
+#' batchit does not set BLAS or `data.table` thread counts. If `fn` is
+#' itself multi-threaded, reduce its thread count yourself when running
+#' several workers at once, to avoid oversubscribing your CPU cores.
 #' @export
 run_and_collect <- function(
   fn,
@@ -1621,108 +1719,106 @@ run_and_collect <- function(
   }
 })
 
-#' Stream a producer's items through a target, committing DECLARED OUTPUT
-#' FILES instead of returning a value
+#' Like [run_and_write_files_atomically()], but build each item lazily instead of all at once
 #'
-#' The Shape B analog of [run_and_write_files_atomically()]: the parent IS the
-#' producer. Each item is generated lazily by `producer(id)` and is itself the
-#' payload (a data slice), so it must NOT be materialised until there is a
-#' worker ready for it -- otherwise the whole dataset lands in memory (or on
-#' disk twice) at once. mirai's persistent daemons and in-memory transport are
-#' exactly this shape; the shape-A materialise-every-item-to-a-tempfile model
-#' is exactly the wrong one for it. Delivery, though, is via the SAME atomic
-#' declared-output commit engine [run_and_write_files_atomically()] uses,
-#' instead of a raw return value crossing back: the commit engine
-#' (`.batch_execute()` -> `.batch_commit_task()`, in the CHILD) is
-#' transport-agnostic -- it reads the envelope's `outputs`/`marker`/`style`/
-#' `attempt` fields and commits identically whether the envelope arrived via
-#' `processx` or `mirai` -- so this function changes only the PARENT-side
-#' transport and wiring, never the child.
+#' Use this when building the full `items` list up front (the way [run()],
+#' [run_and_collect()], and [run_and_write_files_atomically()] all require)
+#' would itself use too much memory -- for example, when each item is a
+#' large data slice, or there are far too many items to hold as a list at
+#' once. Instead of an `items` list, you give an `ids` vector and a
+#' `producer(id)` function that builds one item's arguments at a time.
+#' batchit calls `producer()` only when a worker is free to take the
+#' result, so at most a bounded number of items -- about `2 * n_workers` --
+#' exist in memory at once. Everything else works like
+#' [run_and_write_files_atomically()]: each item's function runs on a
+#' background worker, and its declared output files are written safely --
+#' see that function's help page for the atomic-write guarantee and the two
+#' `style`s.
 #'
-#' Two commit styles, exactly as in [run_and_write_files_atomically()]:
-#' `style = "return"` (the target returns `list(<name> = <value>, ...)`, names
-#' matching the declared outputs EXACTLY) and `style = "staged_writer"` (the
-#' target instead WRITES each output to
-#' [where_to_write_output()]`(<name>)` as it goes; its return value is
-#' ignored). A per-item MARKER file is the atomic witness of a complete
-#' commit -- but only a VALID, engine-produced marker (one that decodes and
-#' whose protocol/attempt-token/committed-output-map verify) is that witness;
-#' bare pathname existence is not. There is deliberately no `collect`
-#' argument -- only a small commit record ever crosses back, never a raw
-#' value.
+#' Two restrictions specific to this function: `fn` must be an object from
+#' [package_function()] -- an inline function is not accepted here, unlike
+#' [run_and_write_files_atomically()] -- and it requires the `mirai`
+#' package to be installed. There is also no way to get a raw return value
+#' back; only the output-file record described below, exactly as in
+#' [run_and_write_files_atomically()].
 #'
-#' `fn` is a `package_function()` descriptor ONLY -- unlike
-#' [run_and_write_files_atomically()], this function does not also accept a
-#' bare closure. Shape B's sole consumer (`save_rawbatch`) uses a package
-#' function, so ad-hoc-over-mirai support is deliberately out of scope
-#' (PUBLIC_API.md section 3.2).
-#'
-#' Same both-end validation, result-envelope inspection, warning surfacing and
-#' loud failure as [run()]/[run_and_collect()]/[run_and_write_files_atomically()],
-#' over the mirai transport. At most `2 * n_workers` items are in flight; the
-#' producer for the next id is not called until an in-flight slot frees, which
-#' is the backpressure. Each task carries a `timeout`, so a wedged daemon
-#' cannot block forever.
-#'
-#' Never touches mirai's DEFAULT compute profile: `daemons(n)` there would reset
-#' and destroy any daemon configuration the caller had. Each invocation allocates
-#' a fresh PRIVATE profile under the runner's reserved `.batch_stream_<nonce>_`
-#' prefix, where `<nonce>` is a high-entropy, session-specific string -- so the
-#' name can never be "default" (that guarantee holds by construction), and a
-#' registry collision would require another party to have claimed a name under
-#' that same nonce-namespaced prefix in this session. It tears only its own
-#' profile down. As with [run()]/[run_and_collect()], batchit is thread-agnostic: any within-
-#' item thread policy is the consumer's.
-#'
-#' The daemon loads the CONSUMER package (via `dev_path`/`requireNamespace`) and,
-#' when the runner differs from the consumer, the RUNNER too -- the daemon needs
-#' `.batch_execute` resolvable in the runner's namespace.
-#'
-#' Requires the suggested `mirai` package (parallelism is opt-in).
-#'
-#' @param fn A `package_function` descriptor from [package_function()].
-#' @param ids Vector of stable item ids (non-empty, non-NA, unique). Length =
-#'   number of items; order is the order of production and dispatch.
-#' @param producer `function(id)` returning that item -- a fully-named list of
-#'   `fn`'s formals. Called once per id, in the parent, under backpressure;
-#'   only its RESULT crosses to a worker.
-#' @param outputs A list aligned to `ids`: `outputs[[i]]` is item `i`'s output
-#'   map, a named character vector `c(<name> = <final path>)`. May instead be
-#'   NAMED BY ITEM ID (same name set as `ids`, any order). Same validation as
-#'   [run_and_write_files_atomically()]'s `outputs`: every path absolute; each
-#'   destination absent or an existing non-directory, non-symlink file; every
-#'   output AND every derived marker path unique across the whole call.
-#' @param style Commit style: `"return"` (the target returns a named list) or
+#' @param fn An object from [package_function()], naming a function in an
+#'   installed package. An inline function is not accepted here.
+#' @param ids One id per item, in the order you want items produced and run.
+#'   Must be unique, non-missing values (coerced to character).
+#' @param producer A function of one argument -- an item's id -- that builds
+#'   and returns that one item: a named list holding all of `fn`'s
+#'   arguments, exactly as one element of `items` would be for
+#'   [run_and_write_files_atomically()]. Called once per id, in your R
+#'   session (never on a worker), only when a worker is free to take the
+#'   result -- so load or build each item's data inside this function,
+#'   rather than before calling `stream_from_parent_and_write_files_atomically()`.
+#' @param outputs A list aligned to `ids`: `outputs[[i]]` is item `i`'s
+#'   output map, a named character vector `c(<name> = <final path>)`. May
+#'   instead be named by item id (same name set as `ids`, any order). Same
+#'   rules as [run_and_write_files_atomically()]'s `outputs`: every path
+#'   absolute; every destination absent or an existing plain file (not a
+#'   directory or a symlink); every output path, across every item in this
+#'   one call, unique.
+#' @param style `"return"` (the target returns a named list) or
 #'   `"staged_writer"` (the target writes each output via
-#'   [where_to_write_output()] instead); see [run_and_write_files_atomically()].
-#'   Any other value errors.
-#' @param n_workers Number of mirai daemons (validated).
-#' @param dev_path Consumer-package source tree, loaded once per daemon via
-#'   `devtools::load_all()`, or `NULL` for the installed consumer package. A
-#'   given-but-wrong path errors, even for an empty workload.
-#' @param p A progress callback such as a `progressr` progressor, or `NULL`.
-#' @param label Optional short stage tag prefixed to the progress message.
-#' @param timeout Per-item wall-clock limit in seconds (generous default, the
-#'   internal `.BATCH_DEFAULT_TIMEOUT` of 6 hours; `Inf` disables). A task
-#'   exceeding it resolves to an error and is reported.
-#' @return A list, named by id, in id order: each element is that item's
-#'   commit record, `list(committed = <named char: name -> final path>,
-#'   attempt = <token>)`. Never the target's raw return value.
+#'   [where_to_write_output()] instead) -- see
+#'   [run_and_write_files_atomically()] for what each means. Any other
+#'   value errors.
+#' @param n_workers Number of persistent background workers (`mirai`
+#'   daemons) to run at once.
+#' @param dev_path The source tree of the package named in `fn`, loaded once
+#'   per worker with `devtools::load_all()`, instead of using the installed
+#'   package. Leave as `NULL` (the default) to use the installed package. A
+#'   path that doesn't exist, or doesn't match that package, is an error --
+#'   even when there turn out to be no items to run.
+#' @param p A progress callback, such as a `progressr` progressor.
+#' @param label An optional short label added to each progress message.
+#' @param timeout Maximum time, in seconds, to let one item run before it is
+#'   treated as failed (6 hours by default; `Inf` disables the limit).
+#' @return A list, named by id, **in the same order as `ids`**: each element
+#'   describes what that item wrote -- `list(committed = <named character
+#'   vector: output name -> final path written>, attempt = <an internal
+#'   per-run identifier; you can ignore this>)`. Never `fn`'s raw return
+#'   value.
 #' @examples
 #' \dontrun{
-#' t <- package_function("mypkg", "write_one_slice")
+#' # `write_one_slice()` must live in an INSTALLED package -- this function
+#' # loads it by package name + function name (never by value, unlike the
+#' # other three dispatch functions), so it cannot be an inline function
+#' # defined at the console. Put it in your own package's R/ directory,
+#' # install the package, then replace "yourpkg" below with its name:
+#' #
+#' #   write_one_slice <- function(slice) list(main = slice)
+#'
+#' out_dir <- tempdir()
+#' ids <- c("a", "b", "c")
 #' stream_from_parent_and_write_files_atomically(
-#'   t,
-#'   ids = c("2019", "2020", "2021"),
-#'   producer = function(id) list(slice = load_year(id)),
-#'   outputs = list(
-#'     `2019` = c(main = "/data/2019.qs2"),
-#'     `2020` = c(main = "/data/2020.qs2"),
-#'     `2021` = c(main = "/data/2021.qs2")
+#'   fn = package_function("yourpkg", "write_one_slice"),
+#'   ids = ids,
+#'   producer = function(id) list(slice = toupper(id)),
+#'   outputs = setNames(
+#'     lapply(ids, function(id) c(main = file.path(out_dir, paste0(id, ".qs2")))),
+#'     ids
 #'   ),
-#'   n_workers = 4
+#'   n_workers = 2
 #' )
 #' }
+#' @section Advanced:
+#' This function runs its workers as persistent `mirai` daemons, in a
+#' private compute profile it creates and tears down for this call only --
+#' it never touches or resets any daemon configuration you already had
+#' outside this call. A background worker loads the package named in `fn`
+#' once, when it starts (not once per item).
+#'
+#' At most `2 * n_workers` items are in flight at once, each carrying its
+#' own `timeout`: `producer()` is not called again until an in-flight slot
+#' frees up, which is what keeps memory bounded -- an item that hangs past
+#' its timeout resolves as an error instead of blocking the others forever.
+#'
+#' As with [run()]/[run_and_collect()], batchit does not set BLAS or
+#' `data.table` thread counts; divide your CPU cores across `n_workers`
+#' yourself if `fn` is itself multi-threaded.
 #' @export
 stream_from_parent_and_write_files_atomically <- function(
   fn,

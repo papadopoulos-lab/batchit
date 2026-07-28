@@ -4,13 +4,56 @@
 \name{batchit-package}
 \alias{batchit}
 \alias{batchit-package}
-\title{batchit: One Subprocess Dispatcher with a Both-Ends-Validated Contract}
+\title{batchit: run one R function across many parallel worker processes}
 \description{
-A generic parent/child dispatch contract for running one R function across many subprocesses. A package target is a descriptor -- package plus symbol plus a body/formals identity hash, never a closure -- so the child can refuse code that differs from what the parent dispatched; an ad-hoc target dispatches a self-contained closure by value instead. Work items are validated at both ends against the target's formals, and every result comes back in a structured envelope (protocol, id, status, value-or-error, target identity, captured warnings). Two transports share the one contract: a fresh process per item via 'processx' for memory-bound work where process exit is the memory strategy, and a lazy producer with bounded backpressure via 'mirai' daemons for work whose items are generated on demand.
+\code{batchit} runs one R function once per item in a list of inputs, each
+call in its own worker process, and either collects the return values or
+has the worker write output files for you. Pick one of four functions,
+depending on what you need:
 }
+\details{
+\tabular{ll}{
+   Your situation \tab Use \cr
+   Items already exist; run for side effects, ignore the return values \tab \code{\link[=run]{run()}} \cr
+   Items already exist; collect the return values \tab \code{\link[=run_and_collect]{run_and_collect()}} \cr
+   Items already exist; let batchit write output files atomically \tab \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} \cr
+   Too many/too-large items to build up front; build them lazily and write files \tab \code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}} \cr
+}
+
+
+Each item is a named list holding the arguments for one call to your
+function (every argument must be named, including ones with a default
+value). Your function can be either an inline function you write directly
+in the call, or a reference to a function in an installed package built
+by \code{\link[=package_function]{package_function()}} -- see that function's help page for when to
+prefer one over the other.
+
+For a runnable quick-start example and a fuller explanation of each
+function, see the README at
+\url{https://github.com/papadopoulos-lab/batchit}.
+}
+\section{Advanced}{
+
+\code{run()}, \code{run_and_collect()}, and \code{run_and_write_files_atomically()} each
+run their items in a fresh \code{processx} subprocess, one per item.
+\code{stream_from_parent_and_write_files_atomically()} instead runs its items
+on persistent \code{mirai} background workers, so items can be produced
+lazily, under a bounded amount of in-flight memory, instead of being
+built into a list up front.
+
+When \code{fn} is a \code{\link[=package_function]{package_function()}} reference, batchit checks that each
+worker loaded the exact same function definition your R session did
+(via a hash of the function's body and arguments), and validates every
+item's argument names against the function's own arguments -- in both
+your R session and the worker, before anything runs. batchit does not
+change BLAS or \code{data.table} thread settings; if your function is itself
+multi-threaded, divide your CPU cores across \code{n_workers} yourself.
+}
+
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://papadopoulos-lab.github.io/batchit}
   \item \url{https://github.com/papadopoulos-lab/batchit}
   \item Report bugs at \url{https://github.com/papadopoulos-lab/batchit/issues}
 }

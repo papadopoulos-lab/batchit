@@ -2,8 +2,7 @@
 % Please edit documentation in R/batch_task.R
 \name{run_and_write_files_atomically}
 \alias{run_and_write_files_atomically}
-\title{Run a target on each of a fixed list of items, committing DECLARED OUTPUT
-FILES instead of returning a value}
+\title{Run a function once per item, in a fresh worker process, and have batchit write its output files safely}
 \usage{
 run_and_write_files_atomically(
   fn,
@@ -19,101 +18,134 @@ run_and_write_files_atomically(
 )
 }
 \arguments{
-\item{fn}{EITHER a \code{package_function} descriptor from \code{\link[=package_function]{package_function()}}
-(\code{fn_kind = "package"}) OR a bare closure (\code{fn_kind = "adhoc"}):
-self-contained (base R, \verb{pkg::}-qualified calls, and its own formals only
--- see \code{.batch_lint_adhoc_fn()}), not a primitive, and not taking \code{...}.}
+\item{fn}{The function to run once per item. Either an inline function
+written directly in this call, or an object from \code{\link[=package_function]{package_function()}}
+naming a function in an installed package. An inline function must be
+self-contained: it may only use its own arguments, base R
+functions/operators, and \code{pkg::fun()}-qualified calls to other
+packages (including a call to \code{\link[=where_to_write_output]{where_to_write_output()}}, which must be
+written as \code{batchit::where_to_write_output()}) -- see \code{\link[=run]{run()}}'s
+Advanced section for accepted and rejected examples.}
 
-\item{items}{List of items; each a fully-named list of \code{fn}'s formals.
-Named items keep their name as the item id; unnamed items get their index.}
+\item{items}{One entry per call. Each entry is a named list holding the
+arguments for that one call to \code{fn} -- every argument \code{fn} takes must be
+named, including ones with a default value (an omitted optional
+argument is treated as a mistake, not "use the default"). A named entry
+keeps its name as that item's id; an unnamed entry is identified by its
+position instead (1, 2, 3, ...). Item ids must not contain \code{/} or \verb{\\}
+(they're used to build an internal bookkeeping filename -- see the
+Advanced section of the package README).}
 
-\item{outputs}{A list aligned to \code{items}: \code{outputs[[i]]} is item \code{i}'s output
-map, a named character vector \verb{c(<name> = <final path>)}. May instead be
-NAMED BY ITEM ID (same name set as the derived item ids, any order) when
-\code{items} itself is named. Every path must be absolute; each destination must
-be absent or an existing non-directory, non-symlink file (base R cannot
-portably distinguish a FIFO/socket/device special file, so such a file is
-not rejected here and MAY be replaced by the commit rename); every
-output AND every derived marker path must be unique across the WHOLE call.}
+\item{outputs}{The files \code{fn} must produce for each item. One element per
+item, in the same order as \code{items} (or, when \code{items} is named, you may
+instead name \code{outputs} the same way -- same names, any order). Each
+element is a named character vector giving the FINAL path for each
+declared output, e.g. \code{c(main = "/path/to/result.qs2")}. Every path
+must be absolute; every destination must either not exist yet, or
+already be an ordinary file (not a directory or a symlink); and every
+path, across every item in this one call, must be unique.}
 
-\item{style}{Commit style: \code{"return"} (the target returns a named list --
-Unit 1) or \code{"staged_writer"} (the target writes each output via
-\code{\link[=where_to_write_output]{where_to_write_output()}} instead -- Unit 2). Any other value errors.}
+\item{style}{\code{"return"} (the default) or \code{"staged_writer"} -- see the
+description above for what each means for \code{fn}. Any other value
+errors.}
 
-\item{n_workers}{Concurrent subprocesses (validated: finite, whole, >= 1).}
+\item{n_workers}{How many items to run at the same time (a whole number,
+1 or more).}
 
-\item{dev_path}{For \code{fn_kind = "package"}, the CONSUMER package's source
-tree for \code{devtools::load_all()} in the worker (or \code{NULL} for the
-installed consumer package). For \code{fn_kind = "adhoc"} there is no
-consumer identity, so this instead names BATCHIT'S OWN source tree (see
-\code{\link[=run]{run()}}'s \code{dev_path} doc) -- \code{NULL} (the default) uses the installed
-\code{batchit}.}
+\item{dev_path}{Advanced; see \code{\link[=run]{run()}}'s Advanced section. Leave as \code{NULL}
+(the default) to run the installed version of your package.}
 
-\item{p}{A progress callback such as a \code{progressr} progressor, or \code{NULL}.}
+\item{p}{A progress callback, such as a \code{progressr} progressor.}
 
-\item{label}{Optional short stage tag prefixed to the progress message.}
+\item{label}{An optional short label added to each progress message.}
 
-\item{timeout}{Per-item wall-clock limit in seconds; see \code{\link[=run]{run()}}.}
+\item{timeout}{Maximum time, in seconds, to let one item's worker run
+before killing it and reporting it as failed; see \code{\link[=run]{run()}}.}
 
-\item{target}{Deprecated former name of \code{fn} (Unit 1/2 originally shipped
-this parameter as \code{target = ...}). Pass \code{fn} instead; supplying both errors.}
+\item{target}{Deprecated former name of \code{fn}, kept for old callers. Pass
+\code{fn} instead; supplying both is an error.}
 }
 \value{
-A list, named by item id, in item order: each element is that item's
-commit record, \verb{list(committed = <named char: name -> final path>, attempt = <token>)}. Never the target's raw return value.
+A list, one element per item, \strong{in the same order as \code{items}},
+named by item id. Each element describes what was written --
+\verb{list(committed = <named character vector: output name -> final path actually written>, attempt = <an internal per-run identifier; you can ignore this>)}. Never \code{fn}'s raw return value.
 }
 \description{
-The declared-output sibling of \code{\link[=run]{run()}}/\code{\link[=run_and_collect]{run_and_collect()}} (design
-PHASE6_DESIGN.md sections 2-3): same transport (a fresh subprocess per item
-via \code{processx}, the same worker script, the same both-ends item validation
-and hash-verified target), but instead of a raw return value crossing
-back, the target's return is committed to \code{outputs[[i]]} -- a named map of
-final file paths -- by the CHILD, via an all-or-nothing 7-step rename
-sequence (\code{.batch_commit_task()}). A per-item MARKER file is the atomic
-witness of a complete commit -- but only a VALID, engine-produced marker
-(one that decodes and whose protocol/attempt-token/committed-output-map
-verify) is that witness; bare pathname EXISTENCE is not. A target that
-errors before the old marker is removed (commit step 4) leaves an
-unrelated pre-existing marker at that path completely untouched, so a file
-sitting at the marker path does not by itself mean this attempt committed.
+Use this when each item's job is to produce one or more files, and you
+want a guarantee that a failed or interrupted item never leaves a
+half-written file at its final path. Each item runs \code{fn} in its own,
+brand-new R process (a worker), with up to \code{n_workers} running at the
+same time -- like \code{\link[=run]{run()}} and \code{\link[=run_and_collect]{run_and_collect()}} -- but instead of \code{fn}'s
+return value crossing back to you, batchit writes the files you declared
+in \code{outputs} and hands back a small record of what it wrote.
 }
 \details{
-Two commit styles, for EITHER fn_kind: \code{style = "return"} (Unit 1 -- the
-target returns \verb{list(<name> = <value>, ...)}, names matching the declared
-outputs EXACTLY; each value is qs2-serialized to its declared path) and
-\code{style = "staged_writer"} (Unit 2 -- the target instead WRITES each output
-to \code{\link[=where_to_write_output]{where_to_write_output()}}\verb{(<name>)} as it goes; its return value is ignored).
-There is deliberately no \code{collect} argument -- the point of
-\code{run_and_write_files_atomically()}
-is that raw values never cross back to the parent; only a small commit
-record does.
+\strong{The guarantee:} batchit writes every declared output to a temporary
+file next to its final destination, and only renames the temporary files
+into place after ALL of that item's outputs have finished writing
+successfully. If anything goes wrong partway through an item -- an error
+in \code{fn}, a timeout, a rename failure -- none of that item's declared
+files are replaced; whatever was already at those paths (or nothing, if
+they didn't exist) is left untouched. Every item is always run: batchit
+never checks whether an output already exists and skips the item because
+of it.
 
-\code{fn} is EITHER a \code{package_function()} descriptor (\code{fn_kind = "package"}) OR a
-bare closure (\code{fn_kind = "adhoc"}, Phase 6' Unit 3, design PHASE6_DESIGN.md
-sections 1-2) -- both drive the SAME commit engine (\code{.batch_commit_task()},
-both styles, the same marker/§0 doctrine). A closure is gated by the same
-self-containedness lint and mandatory \code{baseenv()} rebase \code{\link[=run]{run()}}/
-\code{\link[=run_and_collect]{run_and_collect()}} use
-(see \code{.batch_lint_adhoc_fn()}); commit-record identity is unaffected either
-way (it is bound to the marker's own attempt token, never to fn_kind).
-
-No batchit-computed "should this item re-run?" logic exists here or anywhere
-in these Units: every item is dispatched and every target is always run
-(PUBLIC_API.md section 5: the former opt-in consumer-skip mechanism,
-design section 7, was removed -- no consumer ever needed it). Nor does the
-parent ever inspect a marker's existence or contents before dispatch
-(design section 0) -- dispatch behaves identically whether a target's
-marker already exists, is stale, or is malformed; only the CHILD, while
-committing, ever reads one.
+There are two ways for \code{fn} to produce its declared outputs, chosen with
+\code{style}:
+\itemize{
+\item \code{style = "return"} (the default): \code{fn} returns a named list, one
+element per declared output, with names matching \code{outputs} exactly;
+batchit saves each value to its file (in the \code{qs2} format -- read it
+back with \code{qs2::qs_read()}).
+\item \code{style = "staged_writer"}: \code{fn} writes each output itself, to the path
+given by \code{\link[=where_to_write_output]{where_to_write_output()}}\verb{(<name>)}; its return value is
+ignored. Use this when \code{fn} already writes files on its own (for
+example, in a format other than \code{qs2}, or via another package's own
+writer), so it doesn't have to build the whole object in memory just
+to hand it back for batchit to save again.
 }
+
+Use \code{\link[=run]{run()}} or \code{\link[=run_and_collect]{run_and_collect()}} instead if you're happy managing your
+own output files without this guarantee, or want a value back in R
+rather than files on disk. Use
+\code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}} instead if building
+every item up front (as a plain list, the way \code{items} works here) would
+use too much memory.
+}
+\section{Advanced}{
+
+Uses the same fresh-worker-per-item transport as \code{\link[=run]{run()}} and
+\code{\link[=run_and_collect]{run_and_collect()}} (one \code{processx} subprocess per item), and the same
+code-identity check when \code{fn} is a \code{\link[=package_function]{package_function()}} reference -- see
+\code{\link[=run]{run()}}'s Advanced section for both.
+
+After an item commits successfully, batchit leaves a small bookkeeping
+file named \verb{.batchit__<item id>} next to its outputs, as its own record
+that this run finished writing every declared file. Don't create, read,
+or rely on a file with that name yourself; batchit manages it entirely,
+and overwrites it cleanly the next time that item id is committed.
+}
+
 \examples{
 \dontrun{
-t <- package_function("mypkg", "process_one_slice")
-run_and_write_files_atomically(
-  t,
-  items = list(list(x = 1), list(x = 2)),
-  outputs = list(c(main = "/data/out_1.qs2"), c(main = "/data/out_2.qs2")),
+# style = "return": fn returns a named list, and batchit saves each
+# value to its declared path (as qs2 files).
+make_two_values <- function(x) list(squared = x^2, doubled = x * 2)
+
+out_dir <- tempdir()
+result <- run_and_write_files_atomically(
+  fn = make_two_values,
+  items = list(list(x = 2), list(x = 3)),
+  outputs = list(
+    c(squared = file.path(out_dir, "sq_1.qs2"), doubled = file.path(out_dir, "db_1.qs2")),
+    c(squared = file.path(out_dir, "sq_2.qs2"), doubled = file.path(out_dir, "db_2.qs2"))
+  ),
   n_workers = 2
 )
+result
+qs2::qs_read(file.path(out_dir, "sq_1.qs2")) # 4
+
+# style = "staged_writer": fn writes each output itself -- see
+# ?where_to_write_output for a complete example.
 }
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/batch.R
 \name{run}
 \alias{run}
-\title{Run \code{fn} on each of a fixed list of items, one subprocess per item, returning nothing}
+\title{Run a function once per item, in a fresh worker process, discarding the results}
 \usage{
 run(
   fn,
@@ -15,50 +15,111 @@ run(
 )
 }
 \arguments{
-\item{fn}{EITHER a \code{package_function} descriptor from \code{\link[=package_function]{package_function()}}
-OR a bare closure -- see the details above.}
+\item{fn}{The function to run once per item. Either an inline function
+written directly in this call, or an object from \code{\link[=package_function]{package_function()}}
+naming a function in an installed package. An inline function must be
+self-contained: it may only use its own arguments, base R
+functions/operators, and \code{pkg::fun()}-qualified calls to other
+packages -- see the Advanced section below for accepted and rejected
+examples.}
 
-\item{items}{List of items; each a fully-named list of \code{fn}'s formals.
-Named items keep their name as the item id; unnamed items get their index.}
+\item{items}{One entry per call. Each entry is a named list holding the
+arguments for that one call to \code{fn} -- every argument \code{fn} takes must be
+named, including ones with a default value (an omitted optional
+argument is treated as a mistake, not "use the default", so a silently
+dropped argument is caught rather than passed through unnoticed). A
+named entry keeps its name as that item's id (used in progress messages
+and error messages); an unnamed entry is identified by its position
+instead (1, 2, 3, ...).}
 
-\item{n_workers}{Concurrent subprocesses (validated: finite, whole, >= 1).}
+\item{n_workers}{How many items to run at the same time (a whole number,
+1 or more).}
 
-\item{dev_path}{Source tree for \code{devtools::load_all()} in the worker, or
-\code{NULL} for the installed package. For a \code{package_function()} \code{fn} this is
-the CONSUMER's source tree; for a bare-closure \code{fn} it is batchit's own
-(an adhoc closure has no separate consumer identity to load). A
-given-but-wrong path errors rather than silently falling back to
-installed code.}
+\item{dev_path}{Advanced; see the Advanced section below. Leave as \code{NULL}
+(the default) to run the installed version of your package.}
 
-\item{p}{A progress callback such as a \code{progressr} progressor, or \code{NULL}. It
-is called once per completed item with \verb{message = <id and time>}.}
+\item{p}{A progress callback, such as a \code{progressr} progressor. Leave as
+\code{NULL} (the default) to print simple progress messages instead.}
 
-\item{label}{Optional short stage tag prefixed to the progress message.}
+\item{label}{An optional short label added to each progress message (for
+example, a stage name).}
 
-\item{timeout}{Per-item wall-clock limit in seconds; a worker that exceeds it
-is killed and reported as a failure. Defaults to a generous hang-catcher
-(the internal \code{.BATCH_DEFAULT_TIMEOUT}, 6 hours); pass \code{Inf} to disable.}
+\item{timeout}{Maximum time, in seconds, to let one item's worker run
+before killing it and reporting it as failed. Defaults to 6 hours; pass
+\code{Inf} to disable the limit.}
 }
 \value{
-\code{invisible(NULL)}.
+Nothing useful (\code{invisible(NULL)}). Use \code{\link[=run_and_collect]{run_and_collect()}} if you
+need each item's return value.
 }
 \description{
-The \code{collect = FALSE} sibling of \code{\link[=run_and_collect]{run_and_collect()}} -- same shape-A
-transport (see \code{\link[=run_and_collect]{run_and_collect()}} and \code{.batch_run_impl()} for the shared
-contract details: hash-verified target/adhoc dispatch, both-end
-validation, per-item logs, bounded log tail, loud failure). Use this when
-\code{fn} writes its own output (or is called purely for a side effect) and no
-value needs to cross back to the parent.
+Use this as a parallel \code{for} loop: \code{fn} runs once per item, each call in
+its own, brand-new R process (a worker), with up to \code{n_workers} running at
+the same time. Use this specifically when you don't need anything back in
+your R session -- for example, \code{fn} writes its own files, or is called
+purely for a side effect. If you want each call's return value back, use
+\code{\link[=run_and_collect]{run_and_collect()}} instead; it works identically otherwise. If you want
+batchit itself to manage output files safely (so a failed item never
+leaves a half-written file), use \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}
+instead -- files that \code{fn} writes on its own here get none of that
+protection: if \code{fn} is interrupted partway through writing one, whatever
+it already wrote is left exactly as it is.
 }
 \details{
-\code{fn} is EITHER a \code{package_function()} descriptor (hash-verified,
-auditable; use in production) OR a bare closure (ad-hoc, gated by a static
-self-containedness lint and a mandatory \code{baseenv()} rebase; for tests and
-one-offs only -- this folds in the former ad-hoc-closure frontend).
+If any item's worker errors, exits unexpectedly, or exceeds \code{timeout}, the
+whole call stops immediately with an R error (printing that worker's
+captured output first) -- it does not continue past the failure.
 }
+\section{Advanced}{
+
+Accepted and rejected inline functions:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{# Allowed -- uses only its own argument and base R:
+function(x) x^2
+
+# Allowed -- calls another package's function, package-qualified:
+function(x) data.table::data.table(x = x, y = x^2)
+
+# NOT allowed -- `threshold` is not an argument of this function:
+threshold <- 10
+function(x) x > threshold
+
+# NOT allowed -- `my_helper` is a plain call to a function defined
+# outside this one:
+my_helper <- function(x) x * 2
+function(x) my_helper(x)
+}\if{html}{\out{</div>}}
+
+When \code{fn} is a \code{\link[=package_function]{package_function()}} reference, each worker re-checks a
+hash of its code before running it, and refuses to run if that code has
+changed since you called \code{package_function()} -- see that function's help
+page for what the hash does and does not cover.
+
+\code{dev_path} names a package source tree to load in the worker with
+\code{devtools::load_all()}, instead of using the installed package -- the
+package named in your \code{package_function()} reference, or (for an inline
+\code{fn}) batchit's own source tree. A path that doesn't exist, or doesn't
+match the expected package, is an error rather than a silent fall-back to
+the installed version.
+
+batchit does not set BLAS or \code{data.table} thread counts. If \code{fn} is
+itself multi-threaded, reduce its thread count yourself when running
+several workers at once, to avoid oversubscribing your CPU cores.
+}
+
 \examples{
 \dontrun{
-t <- package_function("mypkg", "process_one_slice")
-run(t, items = list(list(x = 1), list(x = 2)), n_workers = 2)
+out_dir <- tempdir()
+run(
+  fn = function(x, dir) saveRDS(x^2, file.path(dir, paste0(x, ".rds"))),
+  items = list(
+    list(x = 1, dir = out_dir),
+    list(x = 2, dir = out_dir),
+    list(x = 3, dir = out_dir)
+  ),
+  n_workers = 2
+)
+list.files(out_dir)
+readRDS(file.path(out_dir, "2.rds")) # 4
 }
 }

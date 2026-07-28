@@ -2,7 +2,7 @@
 % Please edit documentation in R/batch.R
 \name{run_and_collect}
 \alias{run_and_collect}
-\title{Run \code{fn} on each of a fixed list of items, one subprocess per item, collecting values}
+\title{Run a function once per item, in a fresh worker process, and collect the results}
 \usage{
 run_and_collect(
   fn,
@@ -15,67 +15,93 @@ run_and_collect(
 )
 }
 \arguments{
-\item{fn}{EITHER a \code{package_function} descriptor from \code{\link[=package_function]{package_function()}}
-OR a bare closure -- see the details above.}
+\item{fn}{The function to run once per item. Either an inline function
+written directly in this call, or an object from \code{\link[=package_function]{package_function()}}
+naming a function in an installed package. An inline function must be
+self-contained: it may only use its own arguments, base R
+functions/operators, and \code{pkg::fun()}-qualified calls to other
+packages -- see \code{\link[=run]{run()}}'s Advanced section for accepted and rejected
+examples.}
 
-\item{items}{List of items; each a fully-named list of \code{fn}'s formals.
-Named items keep their name as the item id; unnamed items get their index.}
+\item{items}{One entry per call. Each entry is a named list holding the
+arguments for that one call to \code{fn} -- every argument \code{fn} takes must be
+named, including ones with a default value (an omitted optional
+argument is treated as a mistake, not "use the default", so a silently
+dropped argument is caught rather than passed through unnoticed). A
+named entry keeps its name as that item's id (used in progress messages
+and error messages); an unnamed entry is identified by its position
+instead (1, 2, 3, ...).}
 
-\item{n_workers}{Concurrent subprocesses (validated: finite, whole, >= 1).}
+\item{n_workers}{How many items to run at the same time (a whole number,
+1 or more).}
 
-\item{dev_path}{Source tree for \code{devtools::load_all()} in the worker, or
-\code{NULL} for the installed package. For a \code{package_function()} \code{fn} this is
-the CONSUMER's source tree; for a bare-closure \code{fn} it is batchit's own
-(an adhoc closure has no separate consumer identity to load). A
-given-but-wrong path errors rather than silently falling back to
-installed code.}
+\item{dev_path}{Advanced; see \code{\link[=run]{run()}}'s Advanced section. Leave as \code{NULL}
+(the default) to run the installed version of your package.}
 
-\item{p}{A progress callback such as a \code{progressr} progressor, or \code{NULL}. It
-is called once per completed item with \verb{message = <id and time>}.}
+\item{p}{A progress callback, such as a \code{progressr} progressor. Leave as
+\code{NULL} (the default) to print simple progress messages instead.}
 
-\item{label}{Optional short stage tag prefixed to the progress message.}
+\item{label}{An optional short label added to each progress message (for
+example, a stage name).}
 
-\item{timeout}{Per-item wall-clock limit in seconds; a worker that exceeds it
-is killed and reported as a failure. Defaults to a generous hang-catcher
-(the internal \code{.BATCH_DEFAULT_TIMEOUT}, 6 hours); pass \code{Inf} to disable.}
+\item{timeout}{Maximum time, in seconds, to let one item's worker run
+before killing it and reporting it as failed. Defaults to 6 hours; pass
+\code{Inf} to disable the limit.}
 }
 \value{
-A list of values in item order.
+A list of each item's return value, one element per item, \strong{in
+the same order as \code{items}} (not the order workers happened to
+finish). The list itself is never named by item id -- even if \code{items}
+was named -- unlike \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} and
+\code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}, whose results are.
 }
 \description{
-Shape A of the contract: the items already exist (each a small named list of
-\code{fn}'s formals; the worker opens its own data), so a fresh R process per
-item is not a cost to amortise but the memory strategy itself -- a large
-analysis item can peak at tens of GB and R does not return that memory to the
-OS, so process exit is how it is reclaimed. This is why batchit does NOT reuse
-workers: worker reuse would defeat exactly this.
+Use this as a parallel version of \code{lapply()}: \code{fn} runs once per item,
+each call in its own, brand-new R process (a worker), with up to
+\code{n_workers} running at the same time, and you get back a list of each
+call's return value. If you don't need the return values -- \code{fn} writes
+its own output, or is called for a side effect -- use \code{\link[=run]{run()}} instead; it
+works identically but discards them.
 }
 \details{
-\code{fn} is EITHER a \code{package_function()} descriptor (hash-verified,
-auditable; use in production) OR a bare closure (ad-hoc, gated by a static
-self-containedness lint and a mandatory \code{baseenv()} rebase; for tests and
-one-offs only -- this folds in the former ad-hoc-closure frontend).
+A small object can be included directly in an item's arguments (it
+travels to the worker with the rest of that item), but for a large
+object it is usually better to have \code{fn} load it itself inside the
+worker (for example, read it from disk) rather than pass it through
+\code{items}.
 
-Both-end validation, a hash-verified target descriptor (or, for a bare
-closure, a per-dispatch identity nonce), per-item logs written to files
-(never pipes -- a chatty worker filling the OS pipe buffer is what
-deadlocks a pipe transport), a bounded log tail on failure, and a loud stop
-on the first failure. Warnings a target captures are surfaced in the
-parent, tagged by item id.
-
-batchit is thread-agnostic: it sets no BLAS / data.table thread counts and
-passes none to the worker. If \code{fn} is itself multi-threaded, dividing
-cores across \code{n_workers} (to avoid oversubscription) is the CONSUMER's
-responsibility, not the runner's.
-
-The worker script is always the runner's (batchit's); \code{dev_path}, when given,
-is the CONSUMER's source tree. When runner and consumer differ, the worker
-loads both (the consumer via \code{dev_path}/\code{requireNamespace}, the runner via
-\code{requireNamespace}).
+If any item's worker errors, exits unexpectedly, or exceeds \code{timeout},
+the whole call stops immediately with an R error (printing that worker's
+captured output first) -- it never returns a partial list, and it never
+puts an error object in a failed item's slot.
 }
+\section{Advanced}{
+
+Fresh worker processes are not just a convenience here -- they're the
+memory strategy for memory-heavy work. When one item's analysis peaks at,
+say, tens of gigabytes, R does not hand that memory back to the operating
+system on its own; exiting the worker process is what reclaims it. This
+is why batchit starts a new worker per item instead of reusing one across
+items.
+
+When \code{fn} is a \code{\link[=package_function]{package_function()}} reference, each worker re-checks a
+hash of its code before running it, and refuses to run if that code has
+changed since you called \code{package_function()}. Any warning \code{fn} raises is
+captured and re-raised in your R session once that item finishes,
+labelled with its item id.
+
+batchit does not set BLAS or \code{data.table} thread counts. If \code{fn} is
+itself multi-threaded, reduce its thread count yourself when running
+several workers at once, to avoid oversubscribing your CPU cores.
+}
+
 \examples{
 \dontrun{
-t <- package_function("mypkg", "process_one_slice")
-out <- run_and_collect(t, items = list(list(x = 1), list(x = 2)), n_workers = 2)
+squares <- run_and_collect(
+  fn = function(x) x^2,
+  items = list(list(x = 2), list(x = 3), list(x = 4)),
+  n_workers = 2
+)
+squares
 }
 }

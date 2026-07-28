@@ -2,13 +2,13 @@
 % Please edit documentation in R/batch_task.R
 \name{where_to_write_output}
 \alias{where_to_write_output}
-\title{The staging path batchit pre-computed for one declared output}
+\title{Get the path to write one declared output to, inside a "staged_writer" function}
 \usage{
 where_to_write_output(name)
 }
 \arguments{
-\item{name}{The declared output name -- must be one of this item's
-\code{outputs} names.}
+\item{name}{The declared output name to write -- must be one of this
+item's \code{outputs} names.}
 }
 \value{
 A single absolute path string. WRITE to this path; do not read it
@@ -16,29 +16,56 @@ back or move/rename it yourself -- batchit renames it to the final
 destination once every declared output has been staged.
 }
 \description{
-Inside a \code{style = "staged_writer"} \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} target, WRITE each
-declared output to \verb{where_to_write_output(<name>)} -- an attempt-scoped temp
-path in the SAME directory as that output's final destination (so the
-later commit rename is same-filesystem) -- instead of returning it. The
-target's own return value is ignored by the commit engine; batchit finds
-out what was written by checking, once the target returns, that this
-exact path exists as a regular, non-symlink file (design
-PHASE6_DESIGN.md section 3.4) -- a declared name the target never wrote
-fails the whole item, with zero renames.
+When you use \code{style = "staged_writer"} with \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}
+or \code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}, your function does
+not return its output -- it writes each declared output itself, to the
+path this function gives you. Call \code{where_to_write_output(name)} once for
+each output name you declared in \code{outputs}, and write to exactly that
+path. Do not read it back, move it, or rename it yourself -- batchit
+renames it into place, next to the other declared outputs, once your
+function returns successfully.
 }
 \details{
-Only callable from inside the \code{do.call()} of a \code{style = "staged_writer"}
-\code{run_and_write_files_atomically()} item -- i.e. only in a batchit worker subprocess, while
-that one target call is running. Calling it any other time (outside a
-staged_writer run entirely, or for a \code{name} this item never declared) is
-an error.
+Use \code{style = "return"} instead when it's simpler for your function to
+just build R objects and return them in a named list; batchit then
+serializes each one to its final path for you. Use \code{"staged_writer"} when
+your function already writes files itself -- for example, in a format
+other than \code{qs2}, or via another package's own writer -- so it doesn't
+have to build the whole object in memory just to hand it to batchit to
+save again.
+
+This only works while your function is actually running inside a batchit
+worker, during a \code{style = "staged_writer"} item. Calling it at any other
+time, or asking for a \code{name} this item didn't declare in \code{outputs}, is an
+error.
+
+If your function is an inline function (see \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}'s
+\code{fn} argument), call it as \code{batchit::where_to_write_output()} -- an
+inline function may only call other packages' functions in
+package-qualified form, and \code{batchit} is not automatically attached. If
+your function instead lives in your own installed package, either import
+\code{where_to_write_output} or call it the same package-qualified way.
 }
 \examples{
 \dontrun{
-# inside a style = "staged_writer" target:
-my_writer <- function(x) {
-  saveRDS(x, where_to_write_output("primary"))
-  invisible(NULL)
+write_two_files <- function(x) {
+  saveRDS(x^2, batchit::where_to_write_output("squared"))
+  writeLines(as.character(x * 2), batchit::where_to_write_output("doubled"))
+  invisible(NULL) # ignored by batchit for style = "staged_writer"
 }
+
+out_dir <- tempdir()
+run_and_write_files_atomically(
+  fn = write_two_files,
+  items = list(list(x = 2), list(x = 3)),
+  outputs = list(
+    c(squared = file.path(out_dir, "sq_1.rds"), doubled = file.path(out_dir, "db_1.txt")),
+    c(squared = file.path(out_dir, "sq_2.rds"), doubled = file.path(out_dir, "db_2.txt"))
+  ),
+  style = "staged_writer",
+  n_workers = 2
+)
+readRDS(file.path(out_dir, "sq_1.rds")) # 4
+readLines(file.path(out_dir, "db_1.txt")) # "4"
 }
 }

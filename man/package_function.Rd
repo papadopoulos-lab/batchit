@@ -2,53 +2,74 @@
 % Please edit documentation in R/batch.R
 \name{package_function}
 \alias{package_function}
-\title{Describe a dispatch target}
+\title{Identify a function in an installed package, so a worker can run it}
 \usage{
 package_function(package, symbol, version = NULL)
 }
 \arguments{
-\item{package}{Package holding the target (character scalar). This is the
-CONSUMER package; it need not be \code{batchit}.}
+\item{package}{Name of the installed package holding your function (a
+single string). It does not need to be \code{batchit} itself.}
 
-\item{symbol}{Name of the target function in that package (character scalar).
-May be an internal (unexported) symbol -- it is resolved in the package's
-namespace.}
+\item{symbol}{Name of your function inside that package (a single
+string). It can be an exported OR an internal (unexported) function
+name.}
 
-\item{version}{Optional recorded version; defaults to the package's installed
-version. Advisory only -- the hash is what the child actually checks.}
+\item{version}{A version label to record for your own reference. Defaults
+to the package's currently installed version. This is informational
+only: what a worker actually checks before running is the code hash
+below, not this version string.}
 }
 \value{
-A \code{package_function} descriptor: a list with class \code{"package_function"} and
-elements \code{package}, \code{symbol}, \code{version}, \code{hash}, \code{formal_names}.
+An object of class \code{"package_function"}: a list with elements
+\code{package}, \code{symbol}, \code{version}, \code{hash} (a hash of the function's code,
+used to verify the worker loaded the same definition), and
+\code{formal_names} (the function's argument names). Pass the whole object
+as \code{fn}.
 }
 \description{
-A target is a \emph{descriptor}, never a function object, name, or closure:
-package + symbol + a hash of the function's body and formals. Package name
-plus symbol alone is insufficient -- development code, installed code and
-cache identity can differ -- so the descriptor also records a
-\code{digest(list(body, formals))} identity hash. The child re-computes that hash
-after loading the target and refuses to run if it differs, which closes the
-stale-code / wrong-version hole a bare package+symbol reference would leave.
+Builds a small object that names a function in an installed package, for
+passing as the \code{fn} argument to \code{\link[=run]{run()}}, \code{\link[=run_and_collect]{run_and_collect()}},
+\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}, or
+\code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}. This is the
+alternative to writing an inline function directly in one of those calls
+(see their help pages) -- \code{package_function()} is required for
+\code{stream_from_parent_and_write_files_atomically()}, and recommended for the
+others whenever you want a production run to verify that every worker
+really is running the code you tested, not just whatever happens to be
+installed. For a quick one-off run, an inline function is simpler and
+needs no setup.
 }
 \details{
-The hash is deliberately narrow: it covers the target's OWN body and formals
-only. A changed helper the target calls, a namespace constant it closes over,
-an S4/R6 method table, or a dependency's version are outside it -- so this
-proves "same target definition", not "provably identical behaviour", and the
-latter is not claimed. \code{utils::removeSource()} is applied before hashing so
-the identity is independent of srcref (comments / whitespace): otherwise an
-installed package (no srcref) and a \code{devtools::load_all()} tree (srcref)
-disagree on identical code, which is exactly what happens when the parent runs
-the installed package while a worker dev-loads the source.
+The object this function returns always identifies a function by package
+name + function name + a hash of its code -- it is never the function
+itself, a bare function name, or a closure. This is different from
+passing your function directly as \code{fn}, which \code{run()}, \code{run_and_collect()},
+and \code{run_and_write_files_atomically()} also accept (see their \code{fn}
+argument); only \code{stream_from_parent_and_write_files_atomically()}
+requires the form built by this function.
 
-A target that takes \code{...} is rejected: arbitrary dots are incompatible with
-the reliable detection of a mistyped or missing argument that the contract
-depends on.
+A function that takes \code{...} is rejected: batchit checks every item's
+argument names against the function's own fixed argument list, and \code{...}
+would make a mistyped or missing argument impossible to catch reliably.
 }
+\section{Advanced}{
+
+The code hash is deliberately narrow: it covers only the function's own
+body and its own argument list. A changed helper function it calls, a
+constant it refers to elsewhere, an S4/R6 method table, or a dependency's
+version are all outside it -- so a matching hash proves "the same
+function definition", not "provably identical behaviour". The hash is
+also computed after stripping comments and whitespace (\code{utils::removeSource()}),
+so it agrees whether the function was loaded from an installed package
+or from a \code{devtools::load_all()} source tree -- which otherwise disagree
+on identical code.
+}
+
 \examples{
 \dontrun{
-# target an exported or internal function of any installed package
-t <- package_function("mypkg", "process_one_slice")
+# `stats` ships with R, so this always works. In your own project, name
+# your own package and function here instead.
+t <- package_function("stats", "sd")
 t$formal_names
 }
 }
