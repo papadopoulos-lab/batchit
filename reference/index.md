@@ -10,24 +10,23 @@ each item’s data arrives and in what comes back: a return value, or
 output files committed atomically.
 
 - [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)
-  :
-
-  Run `fn` on each of a fixed list of items, one subprocess per item,
-  returning nothing
+  : Run a function once per item, in a fresh worker process, discarding
+  the results
 
 - [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
-  :
-
-  Run `fn` on each of a fixed list of items, one subprocess per item,
-  collecting values
+  : Run a function once per item, in a fresh worker process, and collect
+  the results
 
 - [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
-  : Run a target on each of a fixed list of items, committing DECLARED
-  OUTPUT FILES instead of returning a value
+  : Run a function once per item, in a fresh worker process, and have
+  batchit write its output files safely
 
 - [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)
-  : Stream a producer's items through a target, committing DECLARED
-  OUTPUT FILES instead of returning a value
+  :
+
+  Like
+  [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md),
+  but build each item lazily instead of all at once
 
 ## Building a dispatch
 
@@ -36,6 +35,7 @@ Helpers used when constructing a dispatch: name the target function
 `staged_writer` target, resolve where to write a declared output.
 
 - [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
-  : Describe a dispatch target
+  : Identify a function in an installed package, so a worker can run it
 - [`where_to_write_output()`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md)
-  : The staging path batchit pre-computed for one declared output
+  : Get the path to write one declared output to, inside a
+  "staged_writer" function

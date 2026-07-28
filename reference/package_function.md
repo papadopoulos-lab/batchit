@@ -1,13 +1,20 @@
-# Describe a dispatch target
+# Identify a function in an installed package, so a worker can run it
 
-A target is a *descriptor*, never a function object, name, or closure:
-package + symbol + a hash of the function's body and formals. Package
-name plus symbol alone is insufficient – development code, installed
-code and cache identity can differ – so the descriptor also records a
-`digest(list(body, formals))` identity hash. The child re-computes that
-hash after loading the target and refuses to run if it differs, which
-closes the stale-code / wrong-version hole a bare package+symbol
-reference would leave.
+Builds a small object that names a function in an installed package, for
+passing as the `fn` argument to
+[`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md),
+[`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md),
+[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md),
+or
+[`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md).
+This is the alternative to writing an inline function directly in one of
+those calls (see their help pages) – `package_function()` is required
+for
+[`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md),
+and recommended for the others whenever you want a production run to
+verify that every worker really is running the code you tested, not just
+whatever happens to be installed. For a quick one-off run, an inline
+function is simpler and needs no setup.
 
 ## Usage
 
@@ -19,51 +26,67 @@ package_function(package, symbol, version = NULL)
 
 - package:
 
-  Package holding the target (character scalar). This is the CONSUMER
-  package; it need not be `batchit`.
+  Name of the installed package holding your function (a single string).
+  It does not need to be `batchit` itself.
 
 - symbol:
 
-  Name of the target function in that package (character scalar). May be
-  an internal (unexported) symbol – it is resolved in the package's
-  namespace.
+  Name of your function inside that package (a single string). It can be
+  an exported OR an internal (unexported) function name.
 
 - version:
 
-  Optional recorded version; defaults to the package's installed
-  version. Advisory only – the hash is what the child actually checks.
+  A version label to record for your own reference. Defaults to the
+  package's currently installed version. This is informational only:
+  what a worker actually checks before running is the code hash below,
+  not this version string.
 
 ## Value
 
-A `package_function` descriptor: a list with class `"package_function"`
-and elements `package`, `symbol`, `version`, `hash`, `formal_names`.
+An object of class `"package_function"`: a list with elements `package`,
+`symbol`, `version`, `hash` (a hash of the function's code, used to
+verify the worker loaded the same definition), and `formal_names` (the
+function's argument names). Pass the whole object as `fn`.
 
 ## Details
 
-The hash is deliberately narrow: it covers the target's OWN body and
-formals only. A changed helper the target calls, a namespace constant it
-closes over, an S4/R6 method table, or a dependency's version are
-outside it – so this proves "same target definition", not "provably
-identical behaviour", and the latter is not claimed.
-[`utils::removeSource()`](https://rdrr.io/r/utils/removeSource.html) is
-applied before hashing so the identity is independent of srcref
-(comments / whitespace): otherwise an installed package (no srcref) and
-a
-[`devtools::load_all()`](https://devtools.r-lib.org/reference/load_all.html)
-tree (srcref) disagree on identical code, which is exactly what happens
-when the parent runs the installed package while a worker dev-loads the
-source.
+The object this function returns always identifies a function by package
+name + function name + a hash of its code – it is never the function
+itself, a bare function name, or a closure. This is different from
+passing your function directly as `fn`, which
+[`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md),
+[`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md),
+and
+[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
+also accept (see their `fn` argument); only
+[`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)
+requires the form built by this function.
 
-A target that takes `...` is rejected: arbitrary dots are incompatible
-with the reliable detection of a mistyped or missing argument that the
-contract depends on.
+A function that takes `...` is rejected: batchit checks every item's
+argument names against the function's own fixed argument list, and `...`
+would make a mistyped or missing argument impossible to catch reliably.
+
+## Advanced
+
+The code hash is deliberately narrow: it covers only the function's own
+body and its own argument list. A changed helper function it calls, a
+constant it refers to elsewhere, an S4/R6 method table, or a
+dependency's version are all outside it – so a matching hash proves "the
+same function definition", not "provably identical behaviour". The hash
+is also computed after stripping comments and whitespace
+([`utils::removeSource()`](https://rdrr.io/r/utils/removeSource.html)),
+so it agrees whether the function was loaded from an installed package
+or from a
+[`devtools::load_all()`](https://devtools.r-lib.org/reference/load_all.html)
+source tree – which otherwise disagree on identical code.
 
 ## Examples
 
 ``` r
 if (FALSE) { # \dontrun{
-# target an exported or internal function of any installed package
-t <- package_function("mypkg", "process_one_slice")
+# `stats` ships with R, so this always works. In your own project, name
+# your own package and function here instead.
+t <- package_function("stats", "sd")
 t$formal_names
 } # }
 ```

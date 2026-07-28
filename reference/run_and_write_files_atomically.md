@@ -1,20 +1,16 @@
-# Run a target on each of a fixed list of items, committing DECLARED OUTPUT FILES instead of returning a value
+# Run a function once per item, in a fresh worker process, and have batchit write its output files safely
 
-The declared-output sibling of
-[`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)/[`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
-(design PHASE6_DESIGN.md sections 2-3): same transport (a fresh
-subprocess per item via `processx`, the same worker script, the same
-both-ends item validation and hash-verified target), but instead of a
-raw return value crossing back, the target's return is committed to
-`outputs[[i]]` – a named map of final file paths – by the CHILD, via an
-all-or-nothing 7-step rename sequence (`.batch_commit_task()`). A
-per-item MARKER file is the atomic witness of a complete commit – but
-only a VALID, engine-produced marker (one that decodes and whose
-protocol/attempt-token/committed-output-map verify) is that witness;
-bare pathname EXISTENCE is not. A target that errors before the old
-marker is removed (commit step 4) leaves an unrelated pre-existing
-marker at that path completely untouched, so a file sitting at the
-marker path does not by itself mean this attempt committed.
+Use this when each item's job is to produce one or more files, and you
+want a guarantee that a failed or interrupted item never leaves a
+half-written file at its final path. Each item runs `fn` in its own,
+brand-new R process (a worker), with up to `n_workers` running at the
+same time – like
+[`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)
+and
+[`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
+– but instead of `fn`'s return value crossing back to you, batchit
+writes the files you declared in `outputs` and hands back a small record
+of what it wrote.
 
 ## Usage
 
@@ -37,123 +33,164 @@ run_and_write_files_atomically(
 
 - fn:
 
-  EITHER a `package_function` descriptor from
+  The function to run once per item. Either an inline function written
+  directly in this call, or an object from
   [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
-  (`fn_kind = "package"`) OR a bare closure (`fn_kind = "adhoc"`):
-  self-contained (base R, `pkg::`-qualified calls, and its own formals
-  only – see `.batch_lint_adhoc_fn()`), not a primitive, and not taking
-  `...`.
+  naming a function in an installed package. An inline function must be
+  self-contained: it may only use its own arguments, base R
+  functions/operators, and `pkg::fun()`-qualified calls to other
+  packages (including a call to
+  [`where_to_write_output()`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md),
+  which must be written as
+  [`batchit::where_to_write_output()`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md))
+  – see
+  [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)'s
+  Advanced section for accepted and rejected examples.
 
 - items:
 
-  List of items; each a fully-named list of `fn`'s formals. Named items
-  keep their name as the item id; unnamed items get their index.
+  One entry per call. Each entry is a named list holding the arguments
+  for that one call to `fn` – every argument `fn` takes must be named,
+  including ones with a default value (an omitted optional argument is
+  treated as a mistake, not "use the default"). A named entry keeps its
+  name as that item's id; an unnamed entry is identified by its position
+  instead (1, 2, 3, ...). Item ids must not contain `/` or `\` (they're
+  used to build an internal bookkeeping filename – see the Advanced
+  section of the package README).
 
 - outputs:
 
-  A list aligned to `items`: `outputs[[i]]` is item `i`'s output map, a
-  named character vector `c(<name> = <final path>)`. May instead be
-  NAMED BY ITEM ID (same name set as the derived item ids, any order)
-  when `items` itself is named. Every path must be absolute; each
-  destination must be absent or an existing non-directory, non-symlink
-  file (base R cannot portably distinguish a FIFO/socket/device special
-  file, so such a file is not rejected here and MAY be replaced by the
-  commit rename); every output AND every derived marker path must be
-  unique across the WHOLE call.
+  The files `fn` must produce for each item. One element per item, in
+  the same order as `items` (or, when `items` is named, you may instead
+  name `outputs` the same way – same names, any order). Each element is
+  a named character vector giving the FINAL path for each declared
+  output, e.g. `c(main = "/path/to/result.qs2")`. Every path must be
+  absolute; every destination must either not exist yet, or already be
+  an ordinary file (not a directory or a symlink); and every path,
+  across every item in this one call, must be unique.
 
 - style:
 
-  Commit style: `"return"` (the target returns a named list – Unit 1) or
-  `"staged_writer"` (the target writes each output via
-  [`where_to_write_output()`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md)
-  instead – Unit 2). Any other value errors.
+  `"return"` (the default) or `"staged_writer"` – see the description
+  above for what each means for `fn`. Any other value errors.
 
 - n_workers:
 
-  Concurrent subprocesses (validated: finite, whole, \>= 1).
+  How many items to run at the same time (a whole number, 1 or more).
 
 - dev_path:
 
-  For `fn_kind = "package"`, the CONSUMER package's source tree for
-  [`devtools::load_all()`](https://devtools.r-lib.org/reference/load_all.html)
-  in the worker (or `NULL` for the installed consumer package). For
-  `fn_kind = "adhoc"` there is no consumer identity, so this instead
-  names BATCHIT'S OWN source tree (see
+  Advanced; see
   [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)'s
-  `dev_path` doc) – `NULL` (the default) uses the installed `batchit`.
+  Advanced section. Leave as `NULL` (the default) to run the installed
+  version of your package.
 
 - p:
 
-  A progress callback such as a `progressr` progressor, or `NULL`.
+  A progress callback, such as a `progressr` progressor.
 
 - label:
 
-  Optional short stage tag prefixed to the progress message.
+  An optional short label added to each progress message.
 
 - timeout:
 
-  Per-item wall-clock limit in seconds; see
+  Maximum time, in seconds, to let one item's worker run before killing
+  it and reporting it as failed; see
   [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md).
 
 - target:
 
-  Deprecated former name of `fn` (Unit 1/2 originally shipped this
-  parameter as `target = ...`). Pass `fn` instead; supplying both
-  errors.
+  Deprecated former name of `fn`, kept for old callers. Pass `fn`
+  instead; supplying both is an error.
 
 ## Value
 
-A list, named by item id, in item order: each element is that item's
-commit record,
-`list(committed = <named char: name -> final path>, attempt = <token>)`.
-Never the target's raw return value.
+A list, one element per item, **in the same order as `items`**, named by
+item id. Each element describes what was written –
+`list(committed = <named character vector: output name -> final path actually written>, attempt = <an internal per-run identifier; you can ignore this>)`.
+Never `fn`'s raw return value.
 
 ## Details
 
-Two commit styles, for EITHER fn_kind: `style = "return"` (Unit 1 – the
-target returns `list(<name> = <value>, ...)`, names matching the
-declared outputs EXACTLY; each value is qs2-serialized to its declared
-path) and `style = "staged_writer"` (Unit 2 – the target instead WRITES
-each output to
-[`where_to_write_output()`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md)`(<name>)`
-as it goes; its return value is ignored). There is deliberately no
-`collect` argument – the point of `run_and_write_files_atomically()` is
-that raw values never cross back to the parent; only a small commit
-record does.
+**The guarantee:** batchit writes every declared output to a temporary
+file next to its final destination, and only renames the temporary files
+into place after ALL of that item's outputs have finished writing
+successfully. If anything goes wrong partway through an item – an error
+in `fn`, a timeout, a rename failure – none of that item's declared
+files are replaced; whatever was already at those paths (or nothing, if
+they didn't exist) is left untouched. Every item is always run: batchit
+never checks whether an output already exists and skips the item because
+of it.
 
-`fn` is EITHER a
-[`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
-descriptor (`fn_kind = "package"`) OR a bare closure
-(`fn_kind = "adhoc"`, Phase 6' Unit 3, design PHASE6_DESIGN.md sections
-1-2) – both drive the SAME commit engine (`.batch_commit_task()`, both
-styles, the same marker/§0 doctrine). A closure is gated by the same
-self-containedness lint and mandatory
-[`baseenv()`](https://rdrr.io/r/base/environment.html) rebase
-[`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)/
+There are two ways for `fn` to produce its declared outputs, chosen with
+`style`:
+
+- `style = "return"` (the default): `fn` returns a named list, one
+  element per declared output, with names matching `outputs` exactly;
+  batchit saves each value to its file (in the `qs2` format – read it
+  back with
+  [`qs2::qs_read()`](https://rdrr.io/pkg/qs2/man/qs_read.html)).
+
+- `style = "staged_writer"`: `fn` writes each output itself, to the path
+  given by
+  [`where_to_write_output()`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md)`(<name>)`;
+  its return value is ignored. Use this when `fn` already writes files
+  on its own (for example, in a format other than `qs2`, or via another
+  package's own writer), so it doesn't have to build the whole object in
+  memory just to hand it back for batchit to save again.
+
+Use
+[`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)
+or
 [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
-use (see `.batch_lint_adhoc_fn()`); commit-record identity is unaffected
-either way (it is bound to the marker's own attempt token, never to
-fn_kind).
+instead if you're happy managing your own output files without this
+guarantee, or want a value back in R rather than files on disk. Use
+[`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)
+instead if building every item up front (as a plain list, the way
+`items` works here) would use too much memory.
 
-No batchit-computed "should this item re-run?" logic exists here or
-anywhere in these Units: every item is dispatched and every target is
-always run (PUBLIC_API.md section 5: the former opt-in consumer-skip
-mechanism, design section 7, was removed – no consumer ever needed it).
-Nor does the parent ever inspect a marker's existence or contents before
-dispatch (design section 0) – dispatch behaves identically whether a
-target's marker already exists, is stale, or is malformed; only the
-CHILD, while committing, ever reads one.
+## Advanced
+
+Uses the same fresh-worker-per-item transport as
+[`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)
+and
+[`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
+(one `processx` subprocess per item), and the same code-identity check
+when `fn` is a
+[`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
+reference – see
+[`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)'s
+Advanced section for both.
+
+After an item commits successfully, batchit leaves a small bookkeeping
+file named `.batchit__<item id>` next to its outputs, as its own record
+that this run finished writing every declared file. Don't create, read,
+or rely on a file with that name yourself; batchit manages it entirely,
+and overwrites it cleanly the next time that item id is committed.
 
 ## Examples
 
 ``` r
 if (FALSE) { # \dontrun{
-t <- package_function("mypkg", "process_one_slice")
-run_and_write_files_atomically(
-  t,
-  items = list(list(x = 1), list(x = 2)),
-  outputs = list(c(main = "/data/out_1.qs2"), c(main = "/data/out_2.qs2")),
+# style = "return": fn returns a named list, and batchit saves each
+# value to its declared path (as qs2 files).
+make_two_values <- function(x) list(squared = x^2, doubled = x * 2)
+
+out_dir <- tempdir()
+result <- run_and_write_files_atomically(
+  fn = make_two_values,
+  items = list(list(x = 2), list(x = 3)),
+  outputs = list(
+    c(squared = file.path(out_dir, "sq_1.qs2"), doubled = file.path(out_dir, "db_1.qs2")),
+    c(squared = file.path(out_dir, "sq_2.qs2"), doubled = file.path(out_dir, "db_2.qs2"))
+  ),
   n_workers = 2
 )
+result
+qs2::qs_read(file.path(out_dir, "sq_1.qs2")) # 4
+
+# style = "staged_writer": fn writes each output itself -- see
+# ?where_to_write_output for a complete example.
 } # }
 ```

@@ -1,14 +1,19 @@
-# Run `fn` on each of a fixed list of items, one subprocess per item, returning nothing
+# Run a function once per item, in a fresh worker process, discarding the results
 
-The `collect = FALSE` sibling of
+Use this as a parallel `for` loop: `fn` runs once per item, each call in
+its own, brand-new R process (a worker), with up to `n_workers` running
+at the same time. Use this specifically when you don't need anything
+back in your R session – for example, `fn` writes its own files, or is
+called purely for a side effect. If you want each call's return value
+back, use
 [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
-– same shape-A transport (see
-[`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
-and `.batch_run_impl()` for the shared contract details: hash-verified
-target/adhoc dispatch, both-end validation, per-item logs, bounded log
-tail, loud failure). Use this when `fn` writes its own output (or is
-called purely for a side effect) and no value needs to cross back to the
-parent.
+instead; it works identically otherwise. If you want batchit itself to
+manage output files safely (so a failed item never leaves a half-written
+file), use
+[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
+instead – files that `fn` writes on its own here get none of that
+protection: if `fn` is interrupted partway through writing one, whatever
+it already wrote is left exactly as it is.
 
 ## Usage
 
@@ -28,65 +33,117 @@ run(
 
 - fn:
 
-  EITHER a `package_function` descriptor from
+  The function to run once per item. Either an inline function written
+  directly in this call, or an object from
   [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
-  OR a bare closure – see the details above.
+  naming a function in an installed package. An inline function must be
+  self-contained: it may only use its own arguments, base R
+  functions/operators, and `pkg::fun()`-qualified calls to other
+  packages – see the Advanced section below for accepted and rejected
+  examples.
 
 - items:
 
-  List of items; each a fully-named list of `fn`'s formals. Named items
-  keep their name as the item id; unnamed items get their index.
+  One entry per call. Each entry is a named list holding the arguments
+  for that one call to `fn` – every argument `fn` takes must be named,
+  including ones with a default value (an omitted optional argument is
+  treated as a mistake, not "use the default", so a silently dropped
+  argument is caught rather than passed through unnoticed). A named
+  entry keeps its name as that item's id (used in progress messages and
+  error messages); an unnamed entry is identified by its position
+  instead (1, 2, 3, ...).
 
 - n_workers:
 
-  Concurrent subprocesses (validated: finite, whole, \>= 1).
+  How many items to run at the same time (a whole number, 1 or more).
 
 - dev_path:
 
-  Source tree for
-  [`devtools::load_all()`](https://devtools.r-lib.org/reference/load_all.html)
-  in the worker, or `NULL` for the installed package. For a
-  [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
-  `fn` this is the CONSUMER's source tree; for a bare-closure `fn` it is
-  batchit's own (an adhoc closure has no separate consumer identity to
-  load). A given-but-wrong path errors rather than silently falling back
-  to installed code.
+  Advanced; see the Advanced section below. Leave as `NULL` (the
+  default) to run the installed version of your package.
 
 - p:
 
-  A progress callback such as a `progressr` progressor, or `NULL`. It is
-  called once per completed item with `message = <id and time>`.
+  A progress callback, such as a `progressr` progressor. Leave as `NULL`
+  (the default) to print simple progress messages instead.
 
 - label:
 
-  Optional short stage tag prefixed to the progress message.
+  An optional short label added to each progress message (for example, a
+  stage name).
 
 - timeout:
 
-  Per-item wall-clock limit in seconds; a worker that exceeds it is
-  killed and reported as a failure. Defaults to a generous hang-catcher
-  (the internal `.BATCH_DEFAULT_TIMEOUT`, 6 hours); pass `Inf` to
-  disable.
+  Maximum time, in seconds, to let one item's worker run before killing
+  it and reporting it as failed. Defaults to 6 hours; pass `Inf` to
+  disable the limit.
 
 ## Value
 
-`invisible(NULL)`.
+Nothing useful (`invisible(NULL)`). Use
+[`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
+if you need each item's return value.
 
 ## Details
 
-`fn` is EITHER a
+If any item's worker errors, exits unexpectedly, or exceeds `timeout`,
+the whole call stops immediately with an R error (printing that worker's
+captured output first) – it does not continue past the failure.
+
+## Advanced
+
+Accepted and rejected inline functions:
+
+    # Allowed -- uses only its own argument and base R:
+    function(x) x^2
+
+    # Allowed -- calls another package's function, package-qualified:
+    function(x) data.table::data.table(x = x, y = x^2)
+
+    # NOT allowed -- `threshold` is not an argument of this function:
+    threshold <- 10
+    function(x) x > threshold
+
+    # NOT allowed -- `my_helper` is a plain call to a function defined
+    # outside this one:
+    my_helper <- function(x) x * 2
+    function(x) my_helper(x)
+
+When `fn` is a
 [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
-descriptor (hash-verified, auditable; use in production) OR a bare
-closure (ad-hoc, gated by a static self-containedness lint and a
-mandatory [`baseenv()`](https://rdrr.io/r/base/environment.html) rebase;
-for tests and one-offs only – this folds in the former ad-hoc-closure
-frontend).
+reference, each worker re-checks a hash of its code before running it,
+and refuses to run if that code has changed since you called
+[`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
+– see that function's help page for what the hash does and does not
+cover.
+
+`dev_path` names a package source tree to load in the worker with
+[`devtools::load_all()`](https://devtools.r-lib.org/reference/load_all.html),
+instead of using the installed package – the package named in your
+[`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
+reference, or (for an inline `fn`) batchit's own source tree. A path
+that doesn't exist, or doesn't match the expected package, is an error
+rather than a silent fall-back to the installed version.
+
+batchit does not set BLAS or `data.table` thread counts. If `fn` is
+itself multi-threaded, reduce its thread count yourself when running
+several workers at once, to avoid oversubscribing your CPU cores.
 
 ## Examples
 
 ``` r
 if (FALSE) { # \dontrun{
-t <- package_function("mypkg", "process_one_slice")
-run(t, items = list(list(x = 1), list(x = 2)), n_workers = 2)
+out_dir <- tempdir()
+run(
+  fn = function(x, dir) saveRDS(x^2, file.path(dir, paste0(x, ".rds"))),
+  items = list(
+    list(x = 1, dir = out_dir),
+    list(x = 2, dir = out_dir),
+    list(x = 3, dir = out_dir)
+  ),
+  n_workers = 2
+)
+list.files(out_dir)
+readRDS(file.path(out_dir, "2.rds")) # 4
 } # }
 ```

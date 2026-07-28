@@ -1,15 +1,15 @@
-# The staging path batchit pre-computed for one declared output
+# Get the path to write one declared output to, inside a "staged_writer" function
 
-Inside a `style = "staged_writer"`
+When you use `style = "staged_writer"` with
 [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
-target, WRITE each declared output to `where_to_write_output(<name>)` –
-an attempt-scoped temp path in the SAME directory as that output's final
-destination (so the later commit rename is same-filesystem) – instead of
-returning it. The target's own return value is ignored by the commit
-engine; batchit finds out what was written by checking, once the target
-returns, that this exact path exists as a regular, non-symlink file
-(design PHASE6_DESIGN.md section 3.4) – a declared name the target never
-wrote fails the whole item, with zero renames.
+or
+[`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md),
+your function does not return its output – it writes each declared
+output itself, to the path this function gives you. Call
+`where_to_write_output(name)` once for each output name you declared in
+`outputs`, and write to exactly that path. Do not read it back, move it,
+or rename it yourself – batchit renames it into place, next to the other
+declared outputs, once your function returns successfully.
 
 ## Usage
 
@@ -21,7 +21,8 @@ where_to_write_output(name)
 
 - name:
 
-  The declared output name – must be one of this item's `outputs` names.
+  The declared output name to write – must be one of this item's
+  `outputs` names.
 
 ## Value
 
@@ -31,22 +32,49 @@ once every declared output has been staged.
 
 ## Details
 
-Only callable from inside the
-[`do.call()`](https://rdrr.io/r/base/do.call.html) of a
-`style = "staged_writer"`
-[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
-item – i.e. only in a batchit worker subprocess, while that one target
-call is running. Calling it any other time (outside a staged_writer run
-entirely, or for a `name` this item never declared) is an error.
+Use `style = "return"` instead when it's simpler for your function to
+just build R objects and return them in a named list; batchit then
+serializes each one to its final path for you. Use `"staged_writer"`
+when your function already writes files itself – for example, in a
+format other than `qs2`, or via another package's own writer – so it
+doesn't have to build the whole object in memory just to hand it to
+batchit to save again.
+
+This only works while your function is actually running inside a batchit
+worker, during a `style = "staged_writer"` item. Calling it at any other
+time, or asking for a `name` this item didn't declare in `outputs`, is
+an error.
+
+If your function is an inline function (see
+[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)'s
+`fn` argument), call it as `batchit::where_to_write_output()` – an
+inline function may only call other packages' functions in
+package-qualified form, and `batchit` is not automatically attached. If
+your function instead lives in your own installed package, either import
+`where_to_write_output` or call it the same package-qualified way.
 
 ## Examples
 
 ``` r
 if (FALSE) { # \dontrun{
-# inside a style = "staged_writer" target:
-my_writer <- function(x) {
-  saveRDS(x, where_to_write_output("primary"))
-  invisible(NULL)
+write_two_files <- function(x) {
+  saveRDS(x^2, batchit::where_to_write_output("squared"))
+  writeLines(as.character(x * 2), batchit::where_to_write_output("doubled"))
+  invisible(NULL) # ignored by batchit for style = "staged_writer"
 }
+
+out_dir <- tempdir()
+run_and_write_files_atomically(
+  fn = write_two_files,
+  items = list(list(x = 2), list(x = 3)),
+  outputs = list(
+    c(squared = file.path(out_dir, "sq_1.rds"), doubled = file.path(out_dir, "db_1.txt")),
+    c(squared = file.path(out_dir, "sq_2.rds"), doubled = file.path(out_dir, "db_2.txt"))
+  ),
+  style = "staged_writer",
+  n_workers = 2
+)
+readRDS(file.path(out_dir, "sq_1.rds")) # 4
+readLines(file.path(out_dir, "db_1.txt")) # "4"
 } # }
 ```
