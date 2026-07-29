@@ -1,5 +1,86 @@
 # Changelog
 
+## batchit 26.7.29
+
+**New vignette: “Choosing a dispatch function”**
+(`vignettes/choosing-a-dispatch-function.Rmd`). The pkgdown site had a
+reference index but no articles. This walks through all four dispatch
+functions with worked examples, states the two questions that pick
+between them, and covers the two `style`s, inline `fn` versus
+[`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md),
+the name-every-argument rule, what the atomic guarantee does and does
+not cover, and failure behaviour. No code changes: documentation only.
+
+Chunks are `eval = FALSE` with output shown as `#>` comments. Every
+example starts real subprocesses, and the streaming one needs a function
+installed in the reader’s own package, so executing them at build time
+would be slow and partly impossible.
+
+`.github/workflows/R-CMD-check.yaml` gains
+`r-lib/actions/setup-pandoc@v2`. `R CMD check` builds and re-renders
+vignettes; the pkgdown workflow already had this step, this one did not,
+because the package shipped no vignette until now. `DESCRIPTION` gains
+`VignetteBuilder: knitr` and `knitr` + `rmarkdown` under `Suggests`.
+
+**pkgdown site adopts the shared house style.** `_pkgdown.yml` switches
+from a bare `template: bootstrap: 5` to
+`template: package: pkgdowntemplate` – the same template package swereg
+uses – and adds a `params: hero:` block (overline, title, lede, and two
+calls to action pointing at the new vignette and the reference index),
+plus the shared `authors:` footer/sidebar block. `DESCRIPTION` gains
+`Config/Needs/website: papadopoulos-lab/pkgdowntemplate`, which is how
+the pkgdown workflow installs it (`setup-r-dependencies` with
+`needs: website`).
+
+batchit ships no logo, unlike swereg. The hero’s art column is
+`auto`-width and the template emits it only when a logo exists, so the
+band renders text-only with no gap. Adding `man/figures/logo.png` (and
+[`pkgdown::build_favicons()`](https://pkgdown.r-lib.org/reference/build_favicons.html))
+would populate it later with no config change.
+
+**CORRECTION: the atomic-write guarantee was documented as stronger than
+it is.** `README.md` and the
+[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
+roxygen both said that on any failure – explicitly including a rename
+failure – none of an item’s declared files are replaced. That is false,
+and `.batch_commit_task()`’s own internal roxygen has always said so:
+step 5 replaces finals one at a time and “never rolls back an
+already-renamed final – a crash between two output renames leaves a torn
+state”.
+
+All three copies (vignette, `README.md`, roxygen) now state the boundary
+by phase:
+
+- **before the first replacement** – an error in `fn`, a `"return"`
+  value whose names do not match, an output a `"staged_writer"` never
+  wrote, a failure serializing a staged file – no declared output is
+  touched;
+- **during the replacement loop** – not transactional; a kill or a
+  rename failure can leave the set torn, with no valid marker vouching
+  for it. An individual file is still never half-written, rename
+  replacement being atomic within a filesystem;
+- **after the marker is written** – committed, even when the call
+  reports failure, because the worker serializes its result envelope
+  only after committing.
+
+A `timeout` is explicitly NOT confined to the first phase: it measures
+the worker’s whole lifetime and can land mid-commit, which `R/batch.R`’s
+own comment notes for the `mirai` path.
+
+Four smaller documentation claims were wrong the same way and are also
+corrected: `producer()` is called when an in-flight SLOT frees, not when
+a worker is idle (the bound is `min(2 * n_workers, length(ids))`); the
+64,000-byte / 100-line captured log tail belongs to the three `processx`
+functions and not to the streaming one; with a bare closure `dev_path`
+can only name batchit’s OWN source tree; and the `.batchit__<id>` marker
+sits in the directory of the item’s lexicographically first declared
+output, which is only “beside the outputs” when they share a directory.
+
+No behaviour changed – every edit under `R/` is a `#'` comment. Note
+that the release as a whole is not purely documentation: it also adds a
+CI step, changes `DESCRIPTION` metadata, and changes the pkgdown site
+configuration.
+
 ## batchit 26.7.20
 
 **Public API naming migration (v2) complete (`PUBLIC_API.md`).** The

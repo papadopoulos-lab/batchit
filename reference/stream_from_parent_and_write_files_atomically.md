@@ -9,9 +9,12 @@ all require) would itself use too much memory – for example, when each
 item is a large data slice, or there are far too many items to hold as a
 list at once. Instead of an `items` list, you give an `ids` vector and a
 `producer(id)` function that builds one item's arguments at a time.
-batchit calls `producer()` only when a worker is free to take the
-result, so at most a bounded number of items – about `2 * n_workers` –
-exist in memory at once. Everything else works like
+batchit keeps at most `min(2 * n_workers, length(ids))` items in flight
+and calls `producer()` only when one of those slots is free, which is
+what bounds how many produced items exist at once. A free slot is not
+the same as an idle worker: when every worker is busy, roughly
+`n_workers` further items may already be produced and queued. Everything
+else works like
 [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md):
 each item's function runs on a background worker, and its declared
 output files are written safely – see that function's help page for the
@@ -54,10 +57,10 @@ stream_from_parent_and_write_files_atomically(
   that one item: a named list holding all of `fn`'s arguments, exactly
   as one element of `items` would be for
   [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md).
-  Called once per id, in your R session (never on a worker), only when a
-  worker is free to take the result – so load or build each item's data
-  inside this function, rather than before calling
-  `stream_from_parent_and_write_files_atomically()`.
+  Called once per id, in your R session (never on a worker), only when
+  one of the `min(2 * n_workers, length(ids))` in-flight slots is free –
+  so load or build each item's data inside this function, rather than
+  before calling `stream_from_parent_and_write_files_atomically()`.
 
 - outputs:
 
@@ -110,7 +113,7 @@ stream_from_parent_and_write_files_atomically(
 
 A list, named by id, **in the same order as `ids`**: each element
 describes what that item wrote –
-`list(committed = <named character vector: output name -> final path written>, attempt = <an internal per-run identifier; you can ignore this>)`.
+`list(committed = <named character vector: output name -> final path written>, attempt = <an internal per-item identifier; you can ignore this>)`.
 Never `fn`'s raw return value.
 
 ## Details

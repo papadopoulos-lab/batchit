@@ -8,7 +8,10 @@
 <title>One Subprocess Dispatcher with a Both-Ends-Validated Contract • batchit</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
-<script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/Source_Sans_3-0.4.10/font.css" rel="stylesheet">
+<link href="deps/IBM_Plex_Mono-0.4.10/font.css" rel="stylesheet">
+<link href="deps/Newsreader-0.4.10/font.css" rel="stylesheet">
+<link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="One Subprocess Dispatcher with a Both-Ends-Validated Contract">
 <meta name="description" content="A generic parent/child dispatch contract for running one R function across many subprocesses. A package target is a descriptor -- package plus symbol plus a body/formals identity hash, never a closure -- so the child can refuse code that differs from what the parent dispatched; an ad-hoc target dispatches a self-contained closure by value instead. Work items are validated at both ends against the targets formals, and every result comes back in a structured envelope (protocol, id, status, value-or-error, target identity, captured warnings). Two transports share the one contract: a fresh process per item via processx for memory-bound work where process exit is the memory strategy, and a lazy producer with bounded backpressure via mirai' daemons for work whose items are generated on demand.">
@@ -22,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.20</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.29</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +35,12 @@
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto">
 <li class="nav-item"><a class="nav-link" href="reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
+<li><a class="dropdown-item" href="articles/choosing-a-dispatch-function.html">Choosing a dispatch function</a></li>
+  </ul>
+</li>
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
@@ -45,10 +54,23 @@
 
   </div>
 </nav><div class="container template-home">
-<div class="row">
-  <main id="main" class="col-md-9"><div class="section level1">
-<div class="page-header"><h1 id="batchit">batchit<a class="anchor" aria-label="anchor" href="#batchit"></a>
-</h1></div>
+
+<div class="rw-hero">
+  <div class="rw-hero-body">
+    <p class="overline">R package · Parallel subprocess dispatch</p>
+    <div class="page-header"><h1>Run one R function across many worker processes.</h1></div>
+    <div class="rw-rule"></div>
+    <p class="rw-lede">Dispatch one function over many items, each in its own worker process. Take the return values back, or let batchit write each item's output files -- with a guarantee that a failed item never leaves a half-written file at its final path.
+</p>
+    <p class="rw-cta"><a class="rw-btn" href="articles/choosing-a-dispatch-function.html">Get started</a> <a class="rw-btn-link" href="reference/index.html">Browse the reference →</a></p>
+  </div>
+
+</div>
+
+<div class="rw-home">
+  <main id="main" class="rw-home-main"><div class="section level1">
+<h1 id="batchit">batchit<a class="anchor" aria-label="anchor" href="#batchit"></a>
+</h1>
 <p><code>batchit</code> runs one R function many times in parallel, each call in its own worker process, and then either gives you the return values back or writes each call’s output files for you.</p>
 <div class="section level2">
 <h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
@@ -110,7 +132,7 @@
 </tbody>
 </table>
 <p><code><a href="reference/run.html">run()</a></code>, <code><a href="reference/run_and_collect.html">run_and_collect()</a></code>, and <code><a href="reference/run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code> all work the same way as the quick start above: you build the full <code>items</code> list first, and each item runs in a fresh worker process. A fresh process per item matters for memory-heavy work – when a worker’s R session exits, the operating system reclaims all the memory it used, which is not true if the same worker were reused for the next item.</p>
-<p><code><a href="reference/stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code> is for when building the full <code>items</code> list first would itself use too much memory (for example: each item is a large data slice, or there are far too many items to hold as a list). Instead, you give it an <code>ids</code> vector and a function that produces one item’s arguments at a time, and batchit calls that function only when a worker is free – so at most a bounded number of items exist in memory at once. The trade-off: this function uses a small number of long-running background workers instead of one fresh process per item, so a single worker’s memory is not automatically reclaimed between items the way process exit reclaims it for the other three functions. It’s a better fit for many small-to-medium items than for a few huge ones.</p>
+<p><code><a href="reference/stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code> is for when building the full <code>items</code> list first would itself use too much memory (for example: each item is a large data slice, or there are far too many items to hold as a list). Instead, you give it an <code>ids</code> vector and a function that produces one item’s arguments at a time. batchit keeps at most <code>min(2 * n_workers, length(ids))</code> items in flight and calls that function only when one of those slots is free, which is what bounds how many produced items exist at once. The trade-off: this function uses a small number of long-running background workers instead of one fresh process per item, so a single worker’s memory is not automatically reclaimed between items the way process exit reclaims it for the other three functions. It’s a better fit for many small-to-medium items than for a few huge ones.</p>
 </div>
 <div class="section level2">
 <h2 id="writing-the-function-you-dispatch-fn">Writing the function you dispatch (<code>fn</code>)<a class="anchor" aria-label="anchor" href="#writing-the-function-you-dispatch-fn"></a>
@@ -118,7 +140,7 @@
 <p>Every one of the four functions above takes an <code>fn</code> argument: the function to run once per item. You can pass it two ways:</p>
 <ul>
 <li>
-<strong>An inline function</strong>, written directly in your call – as in the quick start above. Supported by <code><a href="reference/run.html">run()</a></code>, <code><a href="reference/run_and_collect.html">run_and_collect()</a></code>, and <code><a href="reference/run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code>. NOT supported by <code><a href="reference/stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code>, which requires the second form below.</li>
+<strong>An inline function</strong> – an ordinary R function passed by value, whether written directly in the call (as in the quick start above) or assigned to a variable first. Supported by <code><a href="reference/run.html">run()</a></code>, <code><a href="reference/run_and_collect.html">run_and_collect()</a></code>, and <code><a href="reference/run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code>. NOT supported by <code><a href="reference/stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code>, which requires the second form below.</li>
 <li>
 <strong>A reference built by <code>package_function(package, symbol)</code></strong>, naming a function that already lives in an installed R package (see <code><a href="reference/package_function.html">?package_function</a></code>). Use this for production runs, where you want every worker to verify it is running the exact code you tested, rather than whatever happens to be installed. Required by <code><a href="reference/stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code>; optional (but recommended) for the other three.</li>
 </ul>
@@ -141,13 +163,20 @@
 <span><span class="co"># function defined outside this one:</span></span>
 <span><span class="va">my_helper</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span> <span class="op">*</span> <span class="fl">2</span></span>
 <span><span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="fu">my_helper</span><span class="op">(</span><span class="va">x</span><span class="op">)</span></span></code></pre></div>
+<p>batchit checks this with a best-effort static scan, not a proof. Indirect lookups such as <code><a href="https://rdrr.io/r/base/get.html" class="external-link">get()</a></code>, <code>eval(parse())</code> or a string-based <code><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call()</a></code> can pass the check and still fail in the worker, because the function’s environment is replaced before it is sent. Keep to the rule even where the check lets something through.</p>
 <p>If your function needs something from outside its own arguments, either pass it in as an extra argument (add it to every item), reference it with <code>pkg::fun()</code> if it lives in an installed package, or move the function itself into a package and use <code><a href="reference/package_function.html">package_function()</a></code> instead.</p>
 </div>
 </div>
 <div class="section level2">
 <h2 id="writing-output-files-safely">Writing output files safely<a class="anchor" aria-label="anchor" href="#writing-output-files-safely"></a>
 </h2>
-<p><code><a href="reference/run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code> and <code><a href="reference/stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code> give you a guarantee about the files each item produces: <strong>a failed or interrupted item never leaves a half-written file at its final path.</strong> batchit writes each declared output to a temporary file next to its destination, and only renames the temporary files into place after every one of that item’s outputs has finished writing successfully. If anything goes wrong partway through an item – an error in <code>fn</code>, a timeout, a rename failure – none of that item’s files are replaced; whatever was already there (or nothing, if it didn’t exist yet) is left untouched. Every item is always run: batchit never checks whether an output already exists and skips the item because of it.</p>
+<p><code><a href="reference/run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code> and <code><a href="reference/stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code> give you a guarantee about the files each item produces: <strong>a failed or interrupted item never leaves a half-written file at its final path.</strong> batchit stages every one of an item’s declared outputs – each to a temporary file in its destination’s own directory – before it replaces any final file. It then replaces the final files one at a time, by rename, and writes its commit marker last.</p>
+<p>The guarantee differs across those three phases.</p>
+<p><strong>Before the first replacement</strong> – an error in <code>fn</code>, a missing or misnamed output, a failure serializing a staged file – <strong>no declared output</strong> is touched, and whatever was already there (or nothing, if it didn’t exist yet) is left untouched.</p>
+<p><strong>During the replacement loop</strong>, the set is not transactional. A kill or a rename failure partway through it can leave some of the item’s outputs replaced and others not; batchit never rolls back a final it has already renamed. An individual file is not left half-written – rename replacement is atomic under the filesystem semantics batchit supports – but the <em>set</em> can be torn, and a torn set has no valid commit marker vouching for it.</p>
+<p><strong>After the marker is written</strong>, the files are committed even if the call still reports failure: the worker serializes its result envelope only after committing, so a failure in that window leaves everything correctly in place while the item is reported as failed.</p>
+<p>A <code>timeout</code> is not confined to one phase. It measures the worker’s whole lifetime and can land in any of the three, including mid-commit.</p>
+<p>batchit never treats an existing output file as a reason to skip an item. It schedules every item, subject to validation or an earlier failure stopping the call first.</p>
 <p>You tell each of these functions what to write with the <code>outputs</code> argument: one absolute final path per declared output name, per item, e.g. <code>c(main = "/data/result.qs2")</code>. There are two ways for <code>fn</code> to actually produce those files, chosen with the <code>style</code> argument:</p>
 <ul>
 <li>
@@ -160,7 +189,9 @@
 <div class="section level2">
 <h2 id="what-you-see-when-something-goes-wrong">What you see when something goes wrong<a class="anchor" aria-label="anchor" href="#what-you-see-when-something-goes-wrong"></a>
 </h2>
-<p>If any item’s worker errors, exits unexpectedly, or runs longer than <code>timeout</code> seconds (6 hours by default), the whole call stops immediately with an R error – it does not continue past the failure or return a partial result. Before stopping, batchit prints that worker’s captured output (stdout and stderr, up to about 64 KB) so you can see what happened.</p>
+<p>If any item’s worker errors, exits unexpectedly, or runs longer than <code>timeout</code> seconds (6 hours by default), the call stops with an R error – it does not continue past the failure or return a partial result. Work already running may finish before the call unwinds.</p>
+<p><code><a href="reference/run.html">run()</a></code>, <code><a href="reference/run_and_collect.html">run_and_collect()</a></code> and <code><a href="reference/run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code> print the failing worker’s combined stdout and stderr first – the last 64,000 bytes, and at most 100 lines – so you can see what happened. <code><a href="reference/stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code> reports the error that came back through <code>mirai</code>; it has no equivalent captured-log tail.</p>
+<p>On success a worker’s output is discarded. Warnings are the exception: up to the first 100 per item are carried back and re-raised in your session, labelled with the item id.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
@@ -181,13 +212,13 @@
 <li>
 <strong>Argument-name checking.</strong> For every item, batchit checks that you named every one of <code>fn</code>’s arguments – including ones with a default value – and named nothing else, in both your R session (before dispatching) and inside the worker (before running). Requiring every argument by name, defaults included, is what catches an argument you meant to set but silently left out; a missing-but-optional argument would otherwise look identical to one you deliberately left at its default.</li>
 <li>
-<strong><code>dev_path</code>.</strong> Every dispatch function takes a <code>dev_path</code> argument: the source tree of the package your <code>fn</code> lives in, loaded in each worker with <code><a href="https://devtools.r-lib.org/reference/load_all.html" class="external-link">devtools::load_all()</a></code> instead of the installed package. Leave it <code>NULL</code> (the default) to use the installed package. A path that doesn’t exist, or doesn’t match the package you named, is an error – it never silently falls back to the installed version.</li>
+<strong><code>dev_path</code>.</strong> Every dispatch function takes a <code>dev_path</code> argument: a package source tree loaded in each worker with <code><a href="https://devtools.r-lib.org/reference/load_all.html" class="external-link">devtools::load_all()</a></code> instead of the installed package. Which tree it must name depends on <code>fn</code>. With a <code><a href="reference/package_function.html">package_function()</a></code> reference it is that package’s source tree, and you should load the same tree in your own session before building the reference, so the hash the parent records matches what the worker loads. With an inline function there is no consumer package to load, so <code>dev_path</code> can only name batchit’s own source tree – useful when developing batchit itself. Leave it <code>NULL</code> (the default) to use the installed package. A path that doesn’t exist, or doesn’t match the expected package, is an error – it never silently falls back to the installed version.</li>
 <li>
 <strong>Thread settings.</strong> batchit does not set BLAS or <code>data.table</code> thread counts for you. If <code>fn</code> is itself multi-threaded, reduce its thread count yourself when running several workers at once, so the workers don’t compete for the same CPU cores (oversubscription).</li>
 <li>
-<strong>The internal marker file.</strong> After an item commits its output files successfully, batchit leaves a small bookkeeping file named <code>.batchit__&lt;item id&gt;</code> next to them, as its own record that this specific run finished writing every declared output. Don’t create, read, or rely on a file with that name yourself – batchit manages it entirely, and overwrites it cleanly the next time that same item id is committed. Item ids (from <code>items</code>’ names, or from <code>ids</code> for the streaming function) must not contain <code>/</code> or <code>\</code>, since this filename is built directly from them.</li>
+<strong>The internal marker file.</strong> After an item commits its output files successfully, batchit leaves a small bookkeeping file named <code>.batchit__&lt;item id&gt;</code>, as its own record that this specific run finished writing every declared output. There is one marker per item, in the directory of that item’s lexicographically first declared output path – beside the outputs when they share a directory, and in one of them when they do not. Don’t create, read, or rely on a file with that name yourself – batchit manages it entirely, and overwrites it cleanly the next time that same item id is committed. Item ids (from <code>items</code>’ names, or from <code>ids</code> for the streaming function) must not contain <code>/</code> or <code>\</code>, since this filename is built directly from them.</li>
 <li>
-<strong><code><a href="reference/stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code>’s background workers.</strong> This function runs its workers as persistent <code>mirai</code> daemons, in a private compute profile it creates and tears down for that one call – it never touches or resets any <code>mirai</code> daemon configuration you already had. At most <code>2 * n_workers</code> items are held in memory at once: the function that produces the next item’s arguments is not called until a worker is free, which is what keeps memory bounded.</li>
+<strong><code><a href="reference/stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code>’s background workers.</strong> This function runs its workers as persistent <code>mirai</code> daemons, in a private compute profile it creates and tears down for that one call – it never touches or resets any <code>mirai</code> daemon configuration you already had. At most <code>min(2 * n_workers, length(ids))</code> items are in flight at once, and the function that produces the next item’s arguments is not called until one of those slots is free – which is what bounds how many produced items exist at a time. A free slot is not the same as an idle worker: when every worker is busy, roughly <code>n_workers</code> further items may already be produced and queued. The bound covers produced item arguments, not the <code>ids</code>, <code>outputs</code> and result list, which all live in your session for the whole call.</li>
 </ul>
 </div>
 <div class="section level2">
@@ -196,7 +227,7 @@
 <p><code>batchit</code> began as part of the <a href="https://github.com/papadopoulos-lab/swereg" class="external-link"><code>swereg</code></a> package, where the same dispatch logic ran registry-analysis pipelines in production. It was later extracted into its own package so other projects could use it without depending on <code>swereg</code>. See swereg’s <code>PROJECT.md</code> for that history.</p>
 </div>
 </div>
-  </main><aside class="col-md-3"><div class="links">
+  </main><aside class="rw-home-aside"><div class="links">
 <h2 data-toc-skip>Links</h2>
 <ul class="list-unstyled">
 <li><a href="https://github.com/papadopoulos-lab/batchit/" class="external-link">Browse source code</a></li>
@@ -224,7 +255,8 @@
 <div class="developers">
 <h2 data-toc-skip>Developers</h2>
 <ul class="list-unstyled">
-<li>Richard Aubrey White <br><small class="roles"> Author, maintainer </small> <a href="https://orcid.org/0000-0002-6747-1726" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>  </li>
+<li>
+<a href="https://www.rwhite.no" class="external-link">Richard Aubrey White</a> <br><small class="roles"> Author, maintainer </small> <a href="https://orcid.org/0000-0002-6747-1726" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>  </li>
 </ul>
 </div>
 
@@ -235,7 +267,7 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Richard Aubrey White.</p>
+  <p>Crafted by <a href="https://www.rwhite.no" class="external-link">Richard Aubrey White</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

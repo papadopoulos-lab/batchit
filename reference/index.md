@@ -2,12 +2,14 @@
 
 ## Dispatch a function across subprocesses
 
-Run one function over many items, one fresh subprocess per item. Each
-takes `fn` — a
+Run one function over many items, in worker processes — a fresh one per
+item for the first three, a reused pool for the fourth. Each takes `fn`:
+a
 [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
-descriptor (hash-verified) or a bare closure — and they differ in how
-each item’s data arrives and in what comes back: a return value, or
-output files committed atomically.
+descriptor (hash-verified), or a bare closure for all but the streaming
+function. They differ in how each item’s data arrives and in what comes
+back — a return value, or declared output files that batchit stages and
+then commits.
 
 - [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)
   : Run a function once per item, in a fresh worker process, discarding
