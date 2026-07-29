@@ -1,15 +1,49 @@
 url: https://papadopoulos-lab.github.io/batchit/
 
+# House style shared with the other papadopoulos-lab packages (swereg et al).
+# The template package supplies bootstrap 5, the typography, the palette, and
+# the navbar/footer structure. Everything under `params: hero:` is this
+# package's own copy for the home-page hero band. Without a logo the hero's
+# art column collapses and the band renders text-only, which is intended here.
 template:
-  bootstrap: 5
+  package: pkgdowntemplate
+  params:
+    hero:
+      overline: "R package · Parallel subprocess dispatch"
+      title: "Run one R function across many worker processes."
+      lede: >
+        Dispatch one function over many items, each in its own worker process.
+        Take the return values back, or let batchit write each item's output
+        files -- with a guarantee that a failed item never leaves a half-written
+        file at its final path.
+      cta:
+        primary:
+          text: "Get started"
+          href: "articles/choosing-a-dispatch-function.html"
+        secondary:
+          text: "Browse the reference →"
+          href: "reference/index.html"
+
+authors:
+  footer:
+    roles: [cre, aut]
+    text: "Crafted by"
+  sidebar:
+    roles: [cre, aut, cph]
+  before: "This package is proudly brought to you by:"
+  after: "See the [changelog](news/index.html) for other contributors."
+  Richard Aubrey White:
+    href: "https://www.rwhite.no"
 
 reference:
 - title: Dispatch a function across subprocesses
   desc: >
-    Run one function over many items, one fresh subprocess per item. Each takes
-    `fn` — a `package_function()` descriptor (hash-verified) or a bare closure —
-    and they differ in how each item's data arrives and in what comes back: a
-    return value, or output files committed atomically.
+    Run one function over many items, in worker processes — a fresh one per item
+    for the first three, a reused pool for the fourth. Each takes `fn`: a
+    `package_function()` descriptor (hash-verified), or a bare closure for all
+    but the streaming function. They differ in how each item's data arrives and
+    in what comes back — a return value, or declared output files that batchit
+    stages and then commits.
   contents:
   - run
   - run_and_collect

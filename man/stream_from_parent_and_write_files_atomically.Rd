@@ -28,9 +28,10 @@ Must be unique, non-missing values (coerced to character).}
 and returns that one item: a named list holding all of \code{fn}'s
 arguments, exactly as one element of \code{items} would be for
 \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}. Called once per id, in your R
-session (never on a worker), only when a worker is free to take the
-result -- so load or build each item's data inside this function,
-rather than before calling \code{stream_from_parent_and_write_files_atomically()}.}
+session (never on a worker), only when one of the
+\code{min(2 * n_workers, length(ids))} in-flight slots is free -- so load or
+build each item's data inside this function, rather than before calling
+\code{stream_from_parent_and_write_files_atomically()}.}
 
 \item{outputs}{A list aligned to \code{ids}: \code{outputs[[i]]} is item \code{i}'s
 output map, a named character vector \verb{c(<name> = <final path>)}. May
@@ -64,7 +65,7 @@ treated as failed (6 hours by default; \code{Inf} disables the limit).}
 }
 \value{
 A list, named by id, \strong{in the same order as \code{ids}}: each element
-describes what that item wrote -- \verb{list(committed = <named character vector: output name -> final path written>, attempt = <an internal per-run identifier; you can ignore this>)}. Never \code{fn}'s raw return
+describes what that item wrote -- \verb{list(committed = <named character vector: output name -> final path written>, attempt = <an internal per-item identifier; you can ignore this>)}. Never \code{fn}'s raw return
 value.
 }
 \description{
@@ -74,9 +75,11 @@ would itself use too much memory -- for example, when each item is a
 large data slice, or there are far too many items to hold as a list at
 once. Instead of an \code{items} list, you give an \code{ids} vector and a
 \code{producer(id)} function that builds one item's arguments at a time.
-batchit calls \code{producer()} only when a worker is free to take the
-result, so at most a bounded number of items -- about \code{2 * n_workers} --
-exist in memory at once. Everything else works like
+batchit keeps at most \code{min(2 * n_workers, length(ids))} items in flight
+and calls \code{producer()} only when one of those slots is free, which is what
+bounds how many produced items exist at once. A free slot is not the same
+as an idle worker: when every worker is busy, roughly \code{n_workers} further
+items may already be produced and queued. Everything else works like
 \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}: each item's function runs on a
 background worker, and its declared output files are written safely --
 see that function's help page for the atomic-write guarantee and the two

@@ -68,7 +68,7 @@ before killing it and reporting it as failed; see \code{\link[=run]{run()}}.}
 \value{
 A list, one element per item, \strong{in the same order as \code{items}},
 named by item id. Each element describes what was written --
-\verb{list(committed = <named character vector: output name -> final path actually written>, attempt = <an internal per-run identifier; you can ignore this>)}. Never \code{fn}'s raw return value.
+\verb{list(committed = <named character vector: output name -> final path actually written>, attempt = <an internal per-item identifier; you can ignore this>)}. Never \code{fn}'s raw return value.
 }
 \description{
 Use this when each item's job is to produce one or more files, and you
@@ -80,15 +80,39 @@ return value crossing back to you, batchit writes the files you declared
 in \code{outputs} and hands back a small record of what it wrote.
 }
 \details{
-\strong{The guarantee:} batchit writes every declared output to a temporary
-file next to its final destination, and only renames the temporary files
-into place after ALL of that item's outputs have finished writing
-successfully. If anything goes wrong partway through an item -- an error
-in \code{fn}, a timeout, a rename failure -- none of that item's declared
-files are replaced; whatever was already at those paths (or nothing, if
-they didn't exist) is left untouched. Every item is always run: batchit
-never checks whether an output already exists and skips the item because
-of it.
+\strong{The guarantee, and its boundary.} batchit stages every one of an item's
+declared outputs -- each to a temporary file in its final destination's own
+directory -- before it replaces any final file. It then replaces the final
+files one at a time, by rename, and writes the commit marker last.
+
+The guarantee differs across those three phases.
+
+BEFORE THE FIRST REPLACEMENT -- fully covered. An error in \code{fn}, a
+\code{"return"} value whose names do not match the declared outputs, a declared
+output a \code{"staged_writer"} never wrote, a failure serializing a staged file
+-- in each case NO declared output is touched, and whatever was already at
+those paths (or nothing, if they didn't exist) is left untouched. The
+item's own previous marker is removed before the first replacement, so it
+does not survive even here.
+
+DURING THE REPLACEMENT LOOP -- not transactional. A kill or a rename
+failure partway through it can leave some of the item's outputs replaced
+and others not; batchit never rolls back a final it has already renamed. An
+individual file is not left half-written -- rename replacement is atomic
+under the filesystem semantics batchit supports -- but the SET can be torn,
+and a torn set has no valid marker vouching for it.
+
+AFTER THE MARKER IS WRITTEN -- committed, even if the call reports failure.
+The worker serializes its result envelope only after committing, so a
+failure in that window leaves every final and the marker correctly in place
+while the item is reported as failed.
+
+A \code{timeout} is NOT confined to one phase: it measures the worker's whole
+lifetime and can land in any of the three, including mid-commit.
+
+batchit never treats an existing output file as a reason to skip an item;
+it schedules every item, subject to validation or an earlier failure
+stopping the call first.
 
 There are two ways for \code{fn} to produce its declared outputs, chosen with
 \code{style}:
@@ -120,10 +144,13 @@ code-identity check when \code{fn} is a \code{\link[=package_function]{package_f
 \code{\link[=run]{run()}}'s Advanced section for both.
 
 After an item commits successfully, batchit leaves a small bookkeeping
-file named \verb{.batchit__<item id>} next to its outputs, as its own record
-that this run finished writing every declared file. Don't create, read,
-or rely on a file with that name yourself; batchit manages it entirely,
-and overwrites it cleanly the next time that item id is committed.
+file named \verb{.batchit__<item id>}, as its own record that this run finished
+writing every declared file. There is ONE marker per item, in the
+directory of that item's lexicographically first declared output path --
+beside the outputs when they share a directory, and in one of them when
+they do not. Don't create, read, or rely on a file with that name
+yourself; batchit manages it entirely, and overwrites it cleanly the next
+time that item id is committed.
 }
 
 \examples{
