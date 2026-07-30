@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.29</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.29.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -36,6 +36,14 @@
       <small>Source: <a href="https://github.com/papadopoulos-lab/batchit/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="26.7.29.1" id="batchit-267291">batchit 26.7.29.1<a class="anchor" aria-label="anchor" href="#batchit-267291"></a></h2>
+<p><strong>New export: <code><a href="../reference/write_qs2_atomically.html">write_qs2_atomically()</a></code>.</strong> A standalone atomic qs2 writer, moved here from swereg’s <code>qs2_write_atomic()</code> with its semantics unchanged: serialize to a <code><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile()</a></code> in the destination’s own directory, then <code><a href="https://rdrr.io/r/base/files.html" class="external-link">file.rename()</a></code> it into place, so the destination is either absent or complete and never truncated. <code>...</code> is forwarded to <code><a href="https://rdrr.io/pkg/qs2/man/qs_save.html" class="external-link">qs2::qs_save()</a></code>, the supplied <code>path</code> comes back invisibly, and the partial temp is removed only when the write failed.</p>
+<p>The roxygen carries the three non-promises verbatim: this is not durability (<code><a href="https://rdrr.io/r/base/files.html" class="external-link">file.rename()</a></code> is not an <code>fsync</code>), not a lock (two concurrent writers both produce a complete file and the last rename wins), and not guaranteed cleanup (<code><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit()</a></code> cannot run after a <code>SIGKILL</code>, so a hard-killed worker leaves its <code>.tmp</code> behind – the destination is still absent-or-complete). The parent directory must already exist; this function never creates it.</p>
+<p>It is independent of the <code><a href="../reference/run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code> commit engine and does not touch it. It does its own <code><a href="https://rdrr.io/r/base/files.html" class="external-link">file.rename()</a></code> rather than calling <code>.batch_atomic_replace()</code>, because that helper hard-codes the <code>batch commit:</code> error prefix, which a standalone save must not emit, and is documented as the ONE place a commit temp becomes final. Its temp is <code>&lt;basename(path)&gt;.tmp&lt;random&gt;</code> and carries no dispatch attempt token, so <code>.batch_sweep_task_temps()</code> can never match it.</p>
+<p>Version is <code>26.7.29.1</code> rather than <code>26.7.30</code>: a same-day second release of a <code>YY.M.D</code> version needs a fourth component to express it.</p>
+<p>The version bump is the only <code>DESCRIPTION</code> change. New tests in <code>tests/testthat/test-write_qs2_atomically.R</code>.</p>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="26.7.29" id="batchit-26729">batchit 26.7.29<a class="anchor" aria-label="anchor" href="#batchit-26729"></a></h2>
 <p><strong>New vignette: “Choosing a dispatch function”</strong> (<code>vignettes/choosing-a-dispatch-function.Rmd</code>). The pkgdown site had a reference index but no articles. This walks through all four dispatch functions with worked examples, states the two questions that pick between them, and covers the two <code>style</code>s, inline <code>fn</code> versus <code><a href="../reference/package_function.html">package_function()</a></code>, the name-every-argument rule, what the atomic guarantee does and does not cover, and failure behaviour. No code changes: documentation only.</p>

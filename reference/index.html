@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.29</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.29.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -95,6 +95,22 @@
 
         </dt>
         <dd>Get the path to write one declared output to, inside a "staged_writer" function</dd>
+      </dl></div><div class="section level2">
+      <h2 id="writing-one-file-atomically">Writing one file atomically<a class="anchor" aria-label="anchor" href="#writing-one-file-atomically"></a></h2>
+
+      <div class="section-desc"><p>A standalone atomic qs2 writer, usable on its own with no dispatch: it writes to a temporary file beside the destination and renames it into place, so the destination is never a truncated file. Independent of the <code><a href="../reference/run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code> commit engine.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="write_qs2_atomically.html">write_qs2_atomically()</a></code>
+
+        </dt>
+        <dd>Atomically write an object to a qs2 file</dd>
       </dl></div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

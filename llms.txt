@@ -362,6 +362,17 @@ Helpers used when constructing a dispatch: name the target function
   : Get the path to write one declared output to, inside a
   "staged_writer" function
 
+## Writing one file atomically
+
+A standalone atomic qs2 writer, usable on its own with no dispatch: it
+writes to a temporary file beside the destination and renames it into
+place, so the destination is never a truncated file. Independent of the
+[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
+commit engine.
+
+- [`write_qs2_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/write_qs2_atomically.md)
+  : Atomically write an object to a qs2 file
+
 # Articles
 
 ### All vignettes
