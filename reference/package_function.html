@@ -4,7 +4,7 @@ passing as the fn argument to run(), run_and_collect(),
 run_and_write_files_atomically(), or
 stream_from_parent_and_write_files_atomically(). This is the
 alternative to writing an inline function directly in one of those calls
-(see their help pages) – package_function() is required for
+(see their help pages). package_function() is required for
 stream_from_parent_and_write_files_atomically(), and recommended for the
 others whenever you want a production run to verify that every worker
 really is running the code you tested, not just whatever happens to be
@@ -14,7 +14,7 @@ passing as the fn argument to run(), run_and_collect(),
 run_and_write_files_atomically(), or
 stream_from_parent_and_write_files_atomically(). This is the
 alternative to writing an inline function directly in one of those calls
-(see their help pages) – package_function() is required for
+(see their help pages). package_function() is required for
 stream_from_parent_and_write_files_atomically(), and recommended for the
 others whenever you want a production run to verify that every worker
 really is running the code you tested, not just whatever happens to be
@@ -27,7 +27,7 @@ needs no setup."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.29.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.30</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -63,7 +63,7 @@ passing as the <code>fn</code> argument to <code><a href="run.html">run()</a></c
 <code><a href="run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code>, or
 <code><a href="stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code>. This is the
 alternative to writing an inline function directly in one of those calls
-(see their help pages) – <code>package_function()</code> is required for
+(see their help pages). <code>package_function()</code> is required for
 <code><a href="stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code>, and recommended for the
 others whenever you want a production run to verify that every worker
 really is running the code you tested, not just whatever happens to be
@@ -109,7 +109,7 @@ as <code>fn</code>.</p>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The object this function returns always identifies a function by package
-name + function name + a hash of its code – it is never the function
+name + function name + a hash of its code. It is never the function
 itself, a bare function name, or a closure. This is different from
 passing your function directly as <code>fn</code>, which <code><a href="run.html">run()</a></code>, <code><a href="run_and_collect.html">run_and_collect()</a></code>,
 and <code><a href="run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code> also accept (see their <code>fn</code>
@@ -126,11 +126,11 @@ would make a mistyped or missing argument impossible to catch reliably.</p>
 <p>The code hash is deliberately narrow: it covers only the function's own
 body and its own argument list. A changed helper function it calls, a
 constant it refers to elsewhere, an S4/R6 method table, or a dependency's
-version are all outside it – so a matching hash proves "the same
+version are all outside it, so a matching hash proves "the same
 function definition", not "provably identical behaviour". The hash is
 also computed after stripping comments and whitespace (<code><a href="https://rdrr.io/r/utils/removeSource.html" class="external-link">utils::removeSource()</a></code>),
 so it agrees whether the function was loaded from an installed package
-or from a <code><a href="https://devtools.r-lib.org/reference/load_all.html" class="external-link">devtools::load_all()</a></code> source tree – which otherwise disagree
+or from a <code><a href="https://devtools.r-lib.org/reference/load_all.html" class="external-link">devtools::load_all()</a></code> source tree, which otherwise disagree
 on identical code.</p>
     </div>
 

@@ -3,9 +3,9 @@
 Writes to a uniquely-named temporary file in the same directory as
 `path`, then renames it into place. Rename-into-place is atomic on POSIX
 filesystems (and server-side atomic on SMB/CIFS), so an interrupted
-write – `SIGKILL`, crash, dropped mount – leaves the destination either
-absent or complete, never a truncated file that a later read would halt
-on. `...` is forwarded to
+write, whether from a `SIGKILL`, a crash, or a dropped mount, leaves the
+destination either absent or complete, never a truncated file that a
+later read would halt on. `...` is forwarded to
 [`qs2::qs_save()`](https://rdrr.io/pkg/qs2/man/qs_save.html).
 
 ## Usage
@@ -54,7 +54,7 @@ wrong:
 - **It does not always clean up after itself.** The partial temp file is
   removed on an R-level error, but
   [`on.exit()`](https://rdrr.io/r/base/on.exit.html) cannot run after a
-  `SIGKILL` – so a hard-killed worker leaves its randomly-named `.tmp`
+  `SIGKILL`, so a hard-killed worker leaves its randomly-named `.tmp`
   behind. The *destination* is still absent-or-complete, which is the
   guarantee that matters; the litter is not.
 
@@ -63,8 +63,8 @@ The temporary file is created with
 directory rather than `paste0(path, ".tmp", Sys.getpid())`. A PID suffix
 is not collision-proof: PIDs are unique only among *live processes on
 one host*, and data of this kind commonly lives on a share that two
-hosts mount at once – so the same PID on two machines could pick the
-same temp path for the same target. Same directory is required:
+hosts mount at once, so the same PID on two machines could pick the same
+temp path for the same target. Same directory is required:
 [`file.rename()`](https://rdrr.io/r/base/files.html) is not atomic
 across filesystems.
 

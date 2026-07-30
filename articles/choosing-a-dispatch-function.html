@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.29.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.30</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -159,7 +159,7 @@ streaming function gives up.</p>
 </div>
 <div class="section level2">
 <h2 id="run_and_collect-a-parallel-lapply">
-<code>run_and_collect()</code> — a parallel
+<code>run_and_collect()</code>: a parallel
 <code>lapply()</code><a class="anchor" aria-label="anchor" href="#run_and_collect-a-parallel-lapply"></a>
 </h2>
 <p>Use this when you need every item’s return value.</p>
@@ -193,7 +193,7 @@ of an item, but for a large one it is usually better to have
 </div>
 <div class="section level2">
 <h2 id="run-run-items-and-discard-the-return-values">
-<code>run()</code> — run items and discard the return values<a class="anchor" aria-label="anchor" href="#run-run-items-and-discard-the-return-values"></a>
+<code>run()</code>: run items and discard the return values<a class="anchor" aria-label="anchor" href="#run-run-items-and-discard-the-return-values"></a>
 </h2>
 <p>Use this when <code>fn</code> is called for an effect outside R: it
 writes its own files, or updates a database. It works exactly like
@@ -225,7 +225,7 @@ partway through writing <code>2.qs2</code>, a half-written
 </div>
 <div class="section level2">
 <h2 id="run_and_write_files_atomically-batchit-writes-the-files">
-<code>run_and_write_files_atomically()</code> — batchit writes the
+<code>run_and_write_files_atomically()</code>: batchit writes the
 files<a class="anchor" aria-label="anchor" href="#run_and_write_files_atomically-batchit-writes-the-files"></a>
 </h2>
 <p>Declare, per item, the final path of every file that item must
@@ -233,7 +233,7 @@ produce. batchit writes each one to a temporary file in the same
 directory as its destination, and replaces the final files only after
 every one of that item’s outputs has been written successfully.</p>
 <p><code>outputs</code> is one named character vector per item, in the
-same order as <code>items</code> — or, when <code>items</code> is named,
+same order as <code>items</code>. When <code>items</code> is named,
 <code>outputs</code> may carry the same names instead, in any order.
 Every path must be absolute, its parent directory must already exist,
 and every path across the whole call must be unique. A destination may
@@ -245,9 +245,9 @@ socket or device file, so those are not caught.)</p>
 <code>style = "return"</code> (the default)<a class="anchor" aria-label="anchor" href="#style-return-the-default"></a>
 </h3>
 <p><code>fn</code> returns a named list, one element per declared
-output. Its names must be the same set as the declared output names —
-any order, no duplicates, none missing or extra. batchit saves each
-value to its path in the <code>qs2</code> format.</p>
+output. Its names must be the same set as the declared output names, in
+any order, with no duplicates and none missing or extra. batchit saves
+each value to its path in the <code>qs2</code> format.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">out_dir</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
@@ -280,7 +280,7 @@ identifier; ignore it.</p>
 </div>
 <div class="section level3">
 <h3 id="style-staged_writer-fn-writes-the-files-itself">
-<code>style = "staged_writer"</code> — <code>fn</code> writes the
+<code>style = "staged_writer"</code>: <code>fn</code> writes the
 files itself<a class="anchor" aria-label="anchor" href="#style-staged_writer-fn-writes-the-files-itself"></a>
 </h3>
 <p>Ask <code>where_to_write_output(name)</code> for the path to write
@@ -315,10 +315,11 @@ it. Before committing, it checks that every declared output now exists
 at its staging path as a plain, non-symlink file, and errors naming the
 output that is missing.</p>
 <p>Two rules for <code><a href="../reference/where_to_write_output.html">where_to_write_output()</a></code>. Write to the path
-it returns, and leave it alone otherwise — batchit moves it into place
-itself. And call it as <code><a href="../reference/where_to_write_output.html">batchit::where_to_write_output()</a></code>
-from an inline function, because an inline function may only call other
-packages in package-qualified form.</p>
+it returns and leave it alone otherwise, because batchit moves it into
+place itself. And call it as
+<code><a href="../reference/where_to_write_output.html">batchit::where_to_write_output()</a></code> from an inline function,
+because an inline function may only call other packages in
+package-qualified form.</p>
 <p>Pick <code>"staged_writer"</code> when <code>fn</code> already writes
 files on its own, in a format other than <code>qs2</code> or through
 another package’s writer. It then writes each file directly, instead of
@@ -329,7 +330,7 @@ most of the time.</p>
 </div>
 <div class="section level2">
 <h2 id="stream_from_parent_and_write_files_atomically-build-items-lazily">
-<code>stream_from_parent_and_write_files_atomically()</code> — build
+<code>stream_from_parent_and_write_files_atomically()</code>: build
 items lazily<a class="anchor" aria-label="anchor" href="#stream_from_parent_and_write_files_atomically-build-items-lazily"></a>
 </h2>
 <p>Use this when building the full <code>items</code> list would itself
@@ -364,7 +365,7 @@ queued.</p>
 <span>  n_workers <span class="op">=</span> <span class="fl">2</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><code>producer()</code> runs in the parent R session, never in a
-worker process, so it is an ordinary function — the self-containedness
+worker process, so it is an ordinary function. The self-containedness
 rules below apply to <code>fn</code>, not to it. Load or build each
 item’s data inside <code>producer()</code>; doing it beforehand defeats
 the point.</p>
@@ -392,23 +393,23 @@ daemon configuration you set up yourself.</p>
 <h2 id="naming-the-function-inline-or-package_function">Naming the function: inline or <code>package_function()</code><a class="anchor" aria-label="anchor" href="#naming-the-function-inline-or-package_function"></a>
 </h2>
 <p>An <strong>inline function</strong> is an ordinary R function passed
-by value — written directly in the call, or assigned to a variable
-first, as <code>write_two_files</code> was above. It is the quick
-option, and every example here except the streaming one uses it.</p>
+by value, written directly in the call, or assigned to a variable first,
+as <code>write_two_files</code> was above. It is the quick option, and
+every example here except the streaming one uses it.</p>
 <p>It must be self-contained: it may use only its own arguments, base R,
 and <code>pkg::fun()</code>-qualified calls to other packages.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Allowed -- own argument and base R:</span></span>
+<code class="sourceCode R"><span><span class="co"># Allowed, own argument and base R:</span></span>
 <span><span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span><span class="op">^</span><span class="fl">2</span></span>
 <span></span>
-<span><span class="co"># Allowed -- another package, package-qualified:</span></span>
+<span><span class="co"># Allowed, another package, package-qualified:</span></span>
 <span><span class="kw">function</span><span class="op">(</span><span class="va">path</span><span class="op">)</span> <span class="fu">qs2</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/qs2/man/qs_read.html" class="external-link">qs_read</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># NOT allowed -- `threshold` is not an argument of this function:</span></span>
+<span><span class="co"># NOT allowed, `threshold` is not an argument of this function:</span></span>
 <span><span class="va">threshold</span> <span class="op">&lt;-</span> <span class="fl">10</span></span>
 <span><span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span> <span class="op">&gt;</span> <span class="va">threshold</span></span>
 <span></span>
-<span><span class="co"># NOT allowed -- `my_helper` is a plain call to a function defined outside:</span></span>
+<span><span class="co"># NOT allowed, `my_helper` is a plain call to a function defined outside:</span></span>
 <span><span class="va">my_helper</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span> <span class="op">*</span> <span class="fl">2</span></span>
 <span><span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="fu">my_helper</span><span class="op">(</span><span class="va">x</span><span class="op">)</span></span></code></pre></div>
 <p>batchit checks this with a best-effort static scan, not a proof.
@@ -429,10 +430,10 @@ it loads does not match. Use it for production runs.</p>
 <span><span class="va">fn</span><span class="op">$</span><span class="va">formal_names</span></span>
 <span><span class="co">#&gt; [1] "id" "n_iter"</span></span></code></pre></div>
 <p>The hash is deliberately narrow. It covers the target function’s own
-body and formals, and nothing else — a changed helper it calls, a
-changed constant, or a different dependency version are all outside it.
-A match proves the body and formals are the definition the parent R
-session hashed, not that behaviour is identical. It ignores comments and
+body and formals, and nothing else. A changed helper it calls, a changed
+constant, and a different dependency version are all outside it. A match
+proves the body and formals are the definition the parent R session
+hashed, not that behaviour is identical. It ignores comments and
 whitespace, so an installed package and a
 <code><a href="https://devtools.r-lib.org/reference/load_all.html" class="external-link">devtools::load_all()</a></code> tree agree on identical code.</p>
 <p><code>symbol</code> may name an internal function; it does not have
@@ -442,13 +443,13 @@ to be exported.</p>
 <h2 id="name-every-argument-every-time">Name every argument, every time<a class="anchor" aria-label="anchor" href="#name-every-argument-every-time"></a>
 </h2>
 <p>For every item, batchit checks that you named <strong>every</strong>
-formal <code>fn</code> has — including ones with a default — and nothing
+formal <code>fn</code> has, including ones with a default, and nothing
 else. It checks in the parent R session before dispatching, and again in
 the worker process.</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fn</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span>, <span class="va">scale</span> <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="va">x</span> <span class="op">*</span> <span class="va">scale</span></span>
 <span></span>
-<span><span class="co"># Rejected -- `scale` has a default, but it still must be named:</span></span>
+<span><span class="co"># Rejected, `scale` has a default but it still must be named:</span></span>
 <span><span class="va">items</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Correct:</span></span>
@@ -466,40 +467,41 @@ replaces any final file. It then replaces the final files one at a time,
 each by a rename within the destination directory. Last, it writes a
 marker recording the commit. The guarantee is different in each of those
 three phases.</p>
-<p><strong>Before the first replacement — fully covered.</strong> If the
-item fails here — an error in <code>fn</code>, a <code>"return"</code>
-value whose names do not match the declared outputs, a declared output a
-<code>"staged_writer"</code> never wrote, a failure serializing one of
-the staged files — then <strong>no declared output</strong> is touched.
-Whatever was at those paths stays exactly as it was, and if nothing was
-there, nothing appears. The item’s own previous marker is removed before
-the first replacement, so that one does not survive even here.</p>
-<p><strong>During the replacement loop — not transactional.</strong> If
+<p><strong>Before the first replacement: fully covered.</strong> Suppose
+the item fails here, with an error in <code>fn</code>, a
+<code>"return"</code> value whose names do not match the declared
+outputs, a declared output a <code>"staged_writer"</code> never wrote,
+or a failure serializing one of the staged files. Then <strong>no
+declared output</strong> is touched. Whatever was at those paths stays
+exactly as it was, and if nothing was there, nothing appears. The item’s
+own previous marker is removed before the first replacement, so that one
+does not survive even here.</p>
+<p><strong>During the replacement loop: not transactional.</strong> If
 the worker process is killed, or a rename fails, partway through the
 loop, some of the item’s outputs can be new while others are still old.
 batchit never rolls back a file it has already renamed. An individual
-file is not left half-written — rename replacement is atomic under the
-filesystem semantics batchit supports — but the <em>set</em> can be
+file is not left half-written, since rename replacement is atomic under
+the filesystem semantics batchit supports, but the <em>set</em> can be
 torn.</p>
-<p><strong>After the marker is written — committed, but the call may
+<p><strong>After the marker is written: committed, but the call may
 still report failure.</strong> The worker serializes its result envelope
 only after committing. If that fails, or the worker is killed in that
 window, every final file and the marker are correctly in place while the
 call reports the item as failed.</p>
 <p><strong>A timeout is not confined to one phase.</strong>
 <code>timeout</code> measures the worker process’s whole lifetime, so it
-can land in any of the three — batchit’s own source notes that a timeout
+can land in any of the three. batchit’s own source notes that a timeout
 can kill a worker mid-commit. Do not read “timeout” as a pre-replacement
 failure.</p>
 <p>The marker is what tells a complete commit from a torn one: a small
 file named <code>.batchit__&lt;item id&gt;</code>, written only after
 every replacement has succeeded. A torn set has no valid marker vouching
 for it. batchit places one per item, in the directory of the item’s
-lexicographically first declared output path — which is beside the
-outputs when they share a directory, and in one of them when they do
-not. Do not create, read or depend on that file yourself; batchit
-manages it. Because the name is built from the item id, an id used with
-either file-writing function must not contain <code>/</code> or
+lexicographically first declared output path. That is beside the outputs
+when they share a directory, and in one of them when they do not. Do not
+create, read or depend on that file yourself; batchit manages it.
+Because the name is built from the item id, an id used with either
+file-writing function must not contain <code>/</code> or
 <code>\</code>.</p>
 <p><strong>Not a skip mechanism.</strong> batchit never treats an
 existing output file as a reason to skip an item. It schedules every
@@ -519,8 +521,8 @@ with an error object in the failed slot. Work already running may finish
 before the call unwinds.</p>
 <p><code><a href="../reference/run.html">run()</a></code>, <code><a href="../reference/run_and_collect.html">run_and_collect()</a></code> and
 <code><a href="../reference/run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code> print the failing worker
-process’s combined stdout and stderr first — the last 64,000 bytes, and
-at most 100 lines — so the cause is visible.
+process’s combined stdout and stderr first (the last 64,000 bytes, and
+at most 100 lines) so the cause is visible.
 <code><a href="../reference/stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code> reports the
 error that came back through <code>mirai</code>; it has no equivalent
 captured-log tail.</p>
@@ -553,8 +555,8 @@ worker process loads.</li>
 useful when developing batchit itself.</li>
 </ul>
 <p>Leave it <code>NULL</code> to use installed packages. A path that
-does not exist, or that does not hold the expected package, is an error
-— it never falls back to the installed version quietly.</p>
+does not exist, or that does not hold the expected package, is an error.
+It never falls back to the installed version quietly.</p>
 <p><strong>Thread counts.</strong> batchit does not set BLAS or
 <code>data.table</code> thread counts for you. If <code>fn</code> is
 itself multi-threaded, lower its thread count when running many worker
@@ -567,11 +569,11 @@ processes, or they will compete for the same cores.</p>
 <li>
 <code><a href="../reference/run.html">?run</a></code>, <code><a href="../reference/run_and_collect.html">?run_and_collect</a></code>,
 <code><a href="../reference/run_and_write_files_atomically.html">?run_and_write_files_atomically</a></code>,
-<code><a href="../reference/stream_from_parent_and_write_files_atomically.html">?stream_from_parent_and_write_files_atomically</a></code> — full
+<code><a href="../reference/stream_from_parent_and_write_files_atomically.html">?stream_from_parent_and_write_files_atomically</a></code> for the full
 argument reference.</li>
 <li>
-<code><a href="../reference/package_function.html">?package_function</a></code>, <code><a href="../reference/where_to_write_output.html">?where_to_write_output</a></code>
-— the two helpers.</li>
+<code><a href="../reference/package_function.html">?package_function</a></code> and
+<code><a href="../reference/where_to_write_output.html">?where_to_write_output</a></code> for the two helpers.</li>
 </ul>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

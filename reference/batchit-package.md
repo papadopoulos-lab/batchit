@@ -20,8 +20,8 @@ function (every argument must be named, including ones with a default
 value). Your function can be either an inline function you write
 directly in the call, or a reference to a function in an installed
 package built by
-[`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
-– see that function's help page for when to prefer one over the other.
+[`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md).
+See that function's help page for when to prefer one over the other.
 
 For a runnable quick-start example and a fuller explanation of each
 function, see the README at
@@ -44,7 +44,7 @@ When `fn` is a
 reference, batchit checks that each worker loaded the exact same
 function definition your R session did (via a hash of the function's
 body and arguments), and validates every item's argument names against
-the function's own arguments – in both your R session and the worker,
+the function's own arguments, in both your R session and the worker,
 before anything runs. batchit does not change BLAS or `data.table`
 thread settings; if your function is itself multi-threaded, divide your
 CPU cores across `n_workers` yourself.

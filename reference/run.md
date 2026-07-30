@@ -3,15 +3,15 @@
 Use this as a parallel `for` loop: `fn` runs once per item, each call in
 its own, brand-new R process (a worker), with up to `n_workers` running
 at the same time. Use this specifically when you don't need anything
-back in your R session – for example, `fn` writes its own files, or is
-called purely for a side effect. If you want each call's return value
+back in your R session, for example when `fn` writes its own files, or
+is called purely for a side effect. If you want each call's return value
 back, use
 [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
 instead; it works identically otherwise. If you want batchit itself to
 manage output files safely (so a failed item never leaves a half-written
 file), use
 [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
-instead – files that `fn` writes on its own here get none of that
+instead. Files that `fn` writes on its own here get none of that
 protection: if `fn` is interrupted partway through writing one, whatever
 it already wrote is left exactly as it is.
 
@@ -39,13 +39,13 @@ run(
   naming a function in an installed package. An inline function must be
   self-contained: it may only use its own arguments, base R
   functions/operators, and `pkg::fun()`-qualified calls to other
-  packages – see the Advanced section below for accepted and rejected
+  packages. See the Advanced section below for accepted and rejected
   examples.
 
 - items:
 
   One entry per call. Each entry is a named list holding the arguments
-  for that one call to `fn` – every argument `fn` takes must be named,
+  for that one call to `fn`. Every argument `fn` takes must be named,
   including ones with a default value (an omitted optional argument is
   treated as a mistake, not "use the default", so a silently dropped
   argument is caught rather than passed through unnoticed). A named
@@ -88,23 +88,23 @@ if you need each item's return value.
 
 If any item's worker errors, exits unexpectedly, or exceeds `timeout`,
 the whole call stops immediately with an R error (printing that worker's
-captured output first) – it does not continue past the failure.
+captured output first). It does not continue past the failure.
 
 ## Advanced
 
 Accepted and rejected inline functions:
 
-    # Allowed -- uses only its own argument and base R:
+    # Allowed, uses only its own argument and base R:
     function(x) x^2
 
-    # Allowed -- calls another package's function, package-qualified:
+    # Allowed, calls another package's function, package-qualified:
     function(x) data.table::data.table(x = x, y = x^2)
 
-    # NOT allowed -- `threshold` is not an argument of this function:
+    # NOT allowed, `threshold` is not an argument of this function:
     threshold <- 10
     function(x) x > threshold
 
-    # NOT allowed -- `my_helper` is a plain call to a function defined
+    # NOT allowed, `my_helper` is a plain call to a function defined
     # outside this one:
     my_helper <- function(x) x * 2
     function(x) my_helper(x)
@@ -113,13 +113,12 @@ When `fn` is a
 [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
 reference, each worker re-checks a hash of its code before running it,
 and refuses to run if that code has changed since you called
-[`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
-– see that function's help page for what the hash does and does not
-cover.
+[`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md).
+See that function's help page for what the hash does and does not cover.
 
 `dev_path` names a package source tree to load in the worker with
 [`devtools::load_all()`](https://devtools.r-lib.org/reference/load_all.html),
-instead of using the installed package – the package named in your
+instead of using the installed package: the package named in your
 [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
 reference, or (for an inline `fn`) batchit's own source tree. A path
 that doesn't exist, or doesn't match the expected package, is an error

@@ -72,7 +72,7 @@ alternative: put a small identifier or file path in each item and have
 the fresh-process-per-item memory behaviour, which the streaming
 function gives up.
 
-## `run_and_collect()` — a parallel `lapply()`
+## `run_and_collect()`: a parallel `lapply()`
 
 Use this when you need every item’s return value.
 
@@ -107,7 +107,7 @@ session. A small object can also travel into a worker process as part of
 an item, but for a large one it is usually better to have `fn` read it
 from disk itself.
 
-## `run()` — run items and discard the return values
+## `run()`: run items and discard the return values
 
 Use this when `fn` is called for an effect outside R: it writes its own
 files, or updates a database. It works exactly like
@@ -142,7 +142,7 @@ a half-written `2.qs2` would be left at that path.
 [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
 is what prevents that.
 
-## `run_and_write_files_atomically()` — batchit writes the files
+## `run_and_write_files_atomically()`: batchit writes the files
 
 Declare, per item, the final path of every file that item must produce.
 batchit writes each one to a temporary file in the same directory as its
@@ -150,7 +150,7 @@ destination, and replaces the final files only after every one of that
 item’s outputs has been written successfully.
 
 `outputs` is one named character vector per item, in the same order as
-`items` — or, when `items` is named, `outputs` may carry the same names
+`items`. When `items` is named, `outputs` may carry the same names
 instead, in any order. Every path must be absolute, its parent directory
 must already exist, and every path across the whole call must be unique.
 A destination may already exist as a plain file, in which case it is
@@ -160,9 +160,9 @@ portably reject a FIFO, socket or device file, so those are not caught.)
 ### `style = "return"` (the default)
 
 `fn` returns a named list, one element per declared output. Its names
-must be the same set as the declared output names — any order, no
-duplicates, none missing or extra. batchit saves each value to its path
-in the `qs2` format.
+must be the same set as the declared output names, in any order, with no
+duplicates and none missing or extra. batchit saves each value to its
+path in the `qs2` format.
 
 ``` r
 
@@ -200,7 +200,7 @@ str(result[[1]])
 `committed` maps each declared output name to the final path actually
 written. `attempt` is an internal per-item identifier; ignore it.
 
-### `style = "staged_writer"` — `fn` writes the files itself
+### `style = "staged_writer"`: `fn` writes the files itself
 
 Ask `where_to_write_output(name)` for the path to write each declared
 output to, and write there. `fn`’s return value is discarded without
@@ -240,8 +240,8 @@ output that is missing.
 
 Two rules for
 [`where_to_write_output()`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md).
-Write to the path it returns, and leave it alone otherwise — batchit
-moves it into place itself. And call it as
+Write to the path it returns and leave it alone otherwise, because
+batchit moves it into place itself. And call it as
 [`batchit::where_to_write_output()`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md)
 from an inline function, because an inline function may only call other
 packages in package-qualified form.
@@ -252,7 +252,7 @@ writes each file directly, instead of building the whole object in
 memory to hand back for batchit to serialize. Pick `"return"` the rest
 of the time, which is most of the time.
 
-## `stream_from_parent_and_write_files_atomically()` — build items lazily
+## `stream_from_parent_and_write_files_atomically()`: build items lazily
 
 Use this when building the full `items` list would itself use too much
 memory. Instead of `items`, give an `ids` vector and a `producer(id)`
@@ -289,7 +289,7 @@ stream_from_parent_and_write_files_atomically(
 ```
 
 `producer()` runs in the parent R session, never in a worker process, so
-it is an ordinary function — the self-containedness rules below apply to
+it is an ordinary function. The self-containedness rules below apply to
 `fn`, not to it. Load or build each item’s data inside `producer()`;
 doing it beforehand defeats the point.
 
@@ -314,7 +314,7 @@ configuration you set up yourself.
 
 ## Naming the function: inline or `package_function()`
 
-An **inline function** is an ordinary R function passed by value —
+An **inline function** is an ordinary R function passed by value,
 written directly in the call, or assigned to a variable first, as
 `write_two_files` was above. It is the quick option, and every example
 here except the streaming one uses it.
@@ -324,17 +324,17 @@ and `pkg::fun()`-qualified calls to other packages.
 
 ``` r
 
-# Allowed -- own argument and base R:
+# Allowed, own argument and base R:
 function(x) x^2
 
-# Allowed -- another package, package-qualified:
+# Allowed, another package, package-qualified:
 function(path) qs2::qs_read(path)
 
-# NOT allowed -- `threshold` is not an argument of this function:
+# NOT allowed, `threshold` is not an argument of this function:
 threshold <- 10
 function(x) x > threshold
 
-# NOT allowed -- `my_helper` is a plain call to a function defined outside:
+# NOT allowed, `my_helper` is a plain call to a function defined outside:
 my_helper <- function(x) x * 2
 function(x) my_helper(x)
 ```
@@ -364,10 +364,10 @@ fn$formal_names
 ```
 
 The hash is deliberately narrow. It covers the target function’s own
-body and formals, and nothing else — a changed helper it calls, a
-changed constant, or a different dependency version are all outside it.
-A match proves the body and formals are the definition the parent R
-session hashed, not that behaviour is identical. It ignores comments and
+body and formals, and nothing else. A changed helper it calls, a changed
+constant, and a different dependency version are all outside it. A match
+proves the body and formals are the definition the parent R session
+hashed, not that behaviour is identical. It ignores comments and
 whitespace, so an installed package and a
 [`devtools::load_all()`](https://devtools.r-lib.org/reference/load_all.html)
 tree agree on identical code.
@@ -376,15 +376,15 @@ tree agree on identical code.
 
 ## Name every argument, every time
 
-For every item, batchit checks that you named **every** formal `fn` has
-— including ones with a default — and nothing else. It checks in the
-parent R session before dispatching, and again in the worker process.
+For every item, batchit checks that you named **every** formal `fn` has,
+including ones with a default, and nothing else. It checks in the parent
+R session before dispatching, and again in the worker process.
 
 ``` r
 
 fn <- function(x, scale = 1) x * scale
 
-# Rejected -- `scale` has a default, but it still must be named:
+# Rejected, `scale` has a default but it still must be named:
 items <- list(list(x = 2))
 
 # Correct:
@@ -404,30 +404,30 @@ each by a rename within the destination directory. Last, it writes a
 marker recording the commit. The guarantee is different in each of those
 three phases.
 
-**Before the first replacement — fully covered.** If the item fails here
-— an error in `fn`, a `"return"` value whose names do not match the
-declared outputs, a declared output a `"staged_writer"` never wrote, a
-failure serializing one of the staged files — then **no declared
+**Before the first replacement: fully covered.** Suppose the item fails
+here, with an error in `fn`, a `"return"` value whose names do not match
+the declared outputs, a declared output a `"staged_writer"` never wrote,
+or a failure serializing one of the staged files. Then **no declared
 output** is touched. Whatever was at those paths stays exactly as it
 was, and if nothing was there, nothing appears. The item’s own previous
 marker is removed before the first replacement, so that one does not
 survive even here.
 
-**During the replacement loop — not transactional.** If the worker
+**During the replacement loop: not transactional.** If the worker
 process is killed, or a rename fails, partway through the loop, some of
 the item’s outputs can be new while others are still old. batchit never
 rolls back a file it has already renamed. An individual file is not left
-half-written — rename replacement is atomic under the filesystem
-semantics batchit supports — but the *set* can be torn.
+half-written, since rename replacement is atomic under the filesystem
+semantics batchit supports, but the *set* can be torn.
 
-**After the marker is written — committed, but the call may still report
+**After the marker is written: committed, but the call may still report
 failure.** The worker serializes its result envelope only after
 committing. If that fails, or the worker is killed in that window, every
 final file and the marker are correctly in place while the call reports
 the item as failed.
 
 **A timeout is not confined to one phase.** `timeout` measures the
-worker process’s whole lifetime, so it can land in any of the three —
+worker process’s whole lifetime, so it can land in any of the three.
 batchit’s own source notes that a timeout can kill a worker mid-commit.
 Do not read “timeout” as a pre-replacement failure.
 
@@ -435,8 +435,8 @@ The marker is what tells a complete commit from a torn one: a small file
 named `.batchit__<item id>`, written only after every replacement has
 succeeded. A torn set has no valid marker vouching for it. batchit
 places one per item, in the directory of the item’s lexicographically
-first declared output path — which is beside the outputs when they share
-a directory, and in one of them when they do not. Do not create, read or
+first declared output path. That is beside the outputs when they share a
+directory, and in one of them when they do not. Do not create, read or
 depend on that file yourself; batchit manages it. Because the name is
 built from the item id, an id used with either file-writing function
 must not contain `/` or `\`.
@@ -461,8 +461,8 @@ call unwinds.
 [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
 and
 [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
-print the failing worker process’s combined stdout and stderr first —
-the last 64,000 bytes, and at most 100 lines — so the cause is visible.
+print the failing worker process’s combined stdout and stderr first (the
+last 64,000 bytes, and at most 100 lines) so the cause is visible.
 [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)
 reports the error that came back through `mirai`; it has no equivalent
 captured-log tail.
@@ -495,7 +495,7 @@ on `fn`:
   developing batchit itself.
 
 Leave it `NULL` to use installed packages. A path that does not exist,
-or that does not hold the expected package, is an error — it never falls
+or that does not hold the expected package, is an error. It never falls
 back to the installed version quietly.
 
 **Thread counts.** batchit does not set BLAS or `data.table` thread
@@ -509,7 +509,8 @@ cores.
   [`?run_and_collect`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md),
   [`?run_and_write_files_atomically`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md),
   [`?stream_from_parent_and_write_files_atomically`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)
-  — full argument reference.
-- [`?package_function`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md),
+  for the full argument reference.
+- [`?package_function`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
+  and
   [`?where_to_write_output`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md)
-  — the two helpers.
+  for the two helpers.

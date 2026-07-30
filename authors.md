@@ -16,14 +16,14 @@ for other contributors.
 Source:
 [`DESCRIPTION`](https://github.com/papadopoulos-lab/batchit/blob/main/DESCRIPTION)
 
-White RA (2026). *batchit: One Subprocess Dispatcher with a
-Both-Ends-Validated Contract*. R package version 26.7.29.1,
+White RA (2026). *batchit: Run One R Function Across Many Worker
+Processes*. R package version 26.7.30,
 <https://papadopoulos-lab.github.io/batchit>.
 
     @Manual{,
-      title = {batchit: One Subprocess Dispatcher with a Both-Ends-Validated Contract},
+      title = {batchit: Run One R Function Across Many Worker Processes},
       author = {Richard Aubrey White},
       year = {2026},
-      note = {R package version 26.7.29.1},
+      note = {R package version 26.7.30},
       url = {https://papadopoulos-lab.github.io/batchit},
     }

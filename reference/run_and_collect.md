@@ -4,10 +4,10 @@ Use this as a parallel version of
 [`lapply()`](https://rdrr.io/r/base/lapply.html): `fn` runs once per
 item, each call in its own, brand-new R process (a worker), with up to
 `n_workers` running at the same time, and you get back a list of each
-call's return value. If you don't need the return values – `fn` writes
-its own output, or is called for a side effect – use
+call's return value. If you don't need the return values, because `fn`
+writes its own output or is called for a side effect, use
 [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)
-instead; it works identically but discards them.
+instead. It works identically but discards them.
 
 ## Usage
 
@@ -33,14 +33,14 @@ run_and_collect(
   naming a function in an installed package. An inline function must be
   self-contained: it may only use its own arguments, base R
   functions/operators, and `pkg::fun()`-qualified calls to other
-  packages – see
+  packages. See
   [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)'s
   Advanced section for accepted and rejected examples.
 
 - items:
 
   One entry per call. Each entry is a named list holding the arguments
-  for that one call to `fn` – every argument `fn` takes must be named,
+  for that one call to `fn`. Every argument `fn` takes must be named,
   including ones with a default value (an omitted optional argument is
   treated as a mistake, not "use the default", so a silently dropped
   argument is caught rather than passed through unnoticed). A named
@@ -79,7 +79,7 @@ run_and_collect(
 
 A list of each item's return value, one element per item, **in the same
 order as `items`** (not the order workers happened to finish). The list
-itself is never named by item id – even if `items` was named – unlike
+itself is never named by item id, even if `items` was named, unlike
 [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
 and
 [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md),
@@ -95,12 +95,12 @@ worker (for example, read it from disk) rather than pass it through
 
 If any item's worker errors, exits unexpectedly, or exceeds `timeout`,
 the whole call stops immediately with an R error (printing that worker's
-captured output first) – it never returns a partial list, and it never
+captured output first). It never returns a partial list, and it never
 puts an error object in a failed item's slot.
 
 ## Advanced
 
-Fresh worker processes are not just a convenience here – they're the
+Fresh worker processes are not just a convenience here. They are the
 memory strategy for memory-heavy work. When one item's analysis peaks
 at, say, tens of gigabytes, R does not hand that memory back to the
 operating system on its own; exiting the worker process is what reclaims

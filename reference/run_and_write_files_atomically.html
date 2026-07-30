@@ -3,13 +3,13 @@
 want a guarantee that a failed or interrupted item never leaves a
 half-written file at its final path. Each item runs fn in its own,
 brand-new R process (a worker), with up to n_workers running at the
-same time – like run() and run_and_collect() – but instead of fn's
+same time, like run() and run_and_collect(). But instead of fn's
 return value crossing back to you, batchit writes the files you declared
 in outputs and hands back a small record of what it wrote."><meta property="og:description" content="Use this when each item's job is to produce one or more files, and you
 want a guarantee that a failed or interrupted item never leaves a
 half-written file at its final path. Each item runs fn in its own,
 brand-new R process (a worker), with up to n_workers running at the
-same time – like run() and run_and_collect() – but instead of fn's
+same time, like run() and run_and_collect(). But instead of fn's
 return value crossing back to you, batchit writes the files you declared
 in outputs and hands back a small record of what it wrote."></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -19,7 +19,7 @@ in outputs and hands back a small record of what it wrote."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.29.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.30</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -54,7 +54,7 @@ in outputs and hands back a small record of what it wrote."></head><body>
 want a guarantee that a failed or interrupted item never leaves a
 half-written file at its final path. Each item runs <code>fn</code> in its own,
 brand-new R process (a worker), with up to <code>n_workers</code> running at the
-same time – like <code><a href="run.html">run()</a></code> and <code><a href="run_and_collect.html">run_and_collect()</a></code> – but instead of <code>fn</code>'s
+same time, like <code><a href="run.html">run()</a></code> and <code><a href="run_and_collect.html">run_and_collect()</a></code>. But instead of <code>fn</code>'s
 return value crossing back to you, batchit writes the files you declared
 in <code>outputs</code> and hands back a small record of what it wrote.</p>
     </div>
@@ -86,26 +86,26 @@ naming a function in an installed package. An inline function must be
 self-contained: it may only use its own arguments, base R
 functions/operators, and <code>pkg::fun()</code>-qualified calls to other
 packages (including a call to <code><a href="where_to_write_output.html">where_to_write_output()</a></code>, which must be
-written as <code><a href="where_to_write_output.html">batchit::where_to_write_output()</a></code>) – see <code><a href="run.html">run()</a></code>'s
+written as <code><a href="where_to_write_output.html">batchit::where_to_write_output()</a></code>). See <code><a href="run.html">run()</a></code>'s
 Advanced section for accepted and rejected examples.</p></dd>
 
 
 <dt id="arg-items">items<a class="anchor" aria-label="anchor" href="#arg-items"></a></dt>
 <dd><p>One entry per call. Each entry is a named list holding the
-arguments for that one call to <code>fn</code> – every argument <code>fn</code> takes must be
+arguments for that one call to <code>fn</code>. Every argument <code>fn</code> takes must be
 named, including ones with a default value (an omitted optional
 argument is treated as a mistake, not "use the default"). A named entry
 keeps its name as that item's id; an unnamed entry is identified by its
 position instead (1, 2, 3, ...). Item ids must not contain <code>/</code> or <code>\</code>
-(they're used to build an internal bookkeeping filename – see the
+(they're used to build an internal bookkeeping filename; see the
 Advanced section of the package README).</p></dd>
 
 
 <dt id="arg-outputs">outputs<a class="anchor" aria-label="anchor" href="#arg-outputs"></a></dt>
 <dd><p>The files <code>fn</code> must produce for each item. One element per
 item, in the same order as <code>items</code> (or, when <code>items</code> is named, you may
-instead name <code>outputs</code> the same way – same names, any order). Each
-element is a named character vector giving the FINAL path for each
+instead name <code>outputs</code> the same way, with the same names in any order).
+Each element is a named character vector giving the FINAL path for each
 declared output, e.g. <code>c(main = "/path/to/result.qs2")</code>. Every path
 must be absolute; every destination must either not exist yet, or
 already be an ordinary file (not a directory or a symlink); and every
@@ -113,7 +113,7 @@ path, across every item in this one call, must be unique.</p></dd>
 
 
 <dt id="arg-style">style<a class="anchor" aria-label="anchor" href="#arg-style"></a></dt>
-<dd><p><code>"return"</code> (the default) or <code>"staged_writer"</code> – see the
+<dd><p><code>"return"</code> (the default) or <code>"staged_writer"</code>. See the
 description above for what each means for <code>fn</code>. Any other value
 errors.</p></dd>
 
@@ -149,30 +149,30 @@ before killing it and reporting it as failed; see <code><a href="run.html">run()
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list, one element per item, <strong>in the same order as <code>items</code></strong>,
-named by item id. Each element describes what was written –
+named by item id. Each element describes what was written, as
 <code>list(committed = &lt;named character vector: output name -&gt; final path actually written&gt;, attempt = &lt;an internal per-item identifier; you can ignore this&gt;)</code>. Never <code>fn</code>'s raw return value.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p><strong>The guarantee, and its boundary.</strong> batchit stages every one of an item's
-declared outputs – each to a temporary file in its final destination's own
-directory – before it replaces any final file. It then replaces the final
+declared outputs, each to a temporary file in its final destination's own
+directory, before it replaces any final file. It then replaces the final
 files one at a time, by rename, and writes the commit marker last.</p>
 <p>The guarantee differs across those three phases.</p>
-<p>BEFORE THE FIRST REPLACEMENT – fully covered. An error in <code>fn</code>, a
+<p>BEFORE THE FIRST REPLACEMENT: fully covered. Take an error in <code>fn</code>, a
 <code>"return"</code> value whose names do not match the declared outputs, a declared
-output a <code>"staged_writer"</code> never wrote, a failure serializing a staged file
-– in each case NO declared output is touched, and whatever was already at
+output a <code>"staged_writer"</code> never wrote, or a failure serializing a staged
+file. In each case NO declared output is touched, and whatever was already at
 those paths (or nothing, if they didn't exist) is left untouched. The
 item's own previous marker is removed before the first replacement, so it
 does not survive even here.</p>
-<p>DURING THE REPLACEMENT LOOP – not transactional. A kill or a rename
+<p>DURING THE REPLACEMENT LOOP: not transactional. A kill or a rename
 failure partway through it can leave some of the item's outputs replaced
 and others not; batchit never rolls back a final it has already renamed. An
-individual file is not left half-written – rename replacement is atomic
-under the filesystem semantics batchit supports – but the SET can be torn,
+individual file is not left half-written, since rename replacement is atomic
+under the filesystem semantics batchit supports, but the SET can be torn,
 and a torn set has no valid marker vouching for it.</p>
-<p>AFTER THE MARKER IS WRITTEN – committed, even if the call reports failure.
+<p>AFTER THE MARKER IS WRITTEN: committed, even if the call reports failure.
 The worker serializes its result envelope only after committing, so a
 failure in that window leaves every final and the marker correctly in place
 while the item is reported as failed.</p>
@@ -184,8 +184,8 @@ stopping the call first.</p>
 <p>There are two ways for <code>fn</code> to produce its declared outputs, chosen with
 <code>style</code>:</p><ul><li><p><code>style = "return"</code> (the default): <code>fn</code> returns a named list, one
 element per declared output, with names matching <code>outputs</code> exactly;
-batchit saves each value to its file (in the <code>qs2</code> format – read it
-back with <code><a href="https://rdrr.io/pkg/qs2/man/qs_read.html" class="external-link">qs2::qs_read()</a></code>).</p></li>
+batchit saves each value to its file, in the <code>qs2</code> format. Read it
+back with <code><a href="https://rdrr.io/pkg/qs2/man/qs_read.html" class="external-link">qs2::qs_read()</a></code>.</p></li>
 <li><p><code>style = "staged_writer"</code>: <code>fn</code> writes each output itself, to the path
 given by <code><a href="where_to_write_output.html">where_to_write_output()</a></code><code>(&lt;name&gt;)</code>; its return value is
 ignored. Use this when <code>fn</code> already writes files on its own (for
@@ -205,13 +205,13 @@ use too much memory.</p>
 
 <p>Uses the same fresh-worker-per-item transport as <code><a href="run.html">run()</a></code> and
 <code><a href="run_and_collect.html">run_and_collect()</a></code> (one <code>processx</code> subprocess per item), and the same
-code-identity check when <code>fn</code> is a <code><a href="package_function.html">package_function()</a></code> reference – see
+code-identity check when <code>fn</code> is a <code><a href="package_function.html">package_function()</a></code> reference. See
 <code><a href="run.html">run()</a></code>'s Advanced section for both.</p>
 <p>After an item commits successfully, batchit leaves a small bookkeeping
 file named <code>.batchit__&lt;item id&gt;</code>, as its own record that this run finished
 writing every declared file. There is ONE marker per item, in the
-directory of that item's lexicographically first declared output path –
-beside the outputs when they share a directory, and in one of them when
+directory of that item's lexicographically first declared output path. That
+is beside the outputs when they share a directory, and in one of them when
 they do not. Don't create, read, or rely on a file with that name
 yourself; batchit manages it entirely, and overwrites it cleanly the next
 time that item id is committed.</p>
@@ -237,7 +237,7 @@ time that item id is committed.</p>
 <span class="r-in"><span><span class="va">result</span></span></span>
 <span class="r-in"><span><span class="fu">qs2</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/qs2/man/qs_read.html" class="external-link">qs_read</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">out_dir</span>, <span class="st">"sq_1.qs2"</span><span class="op">)</span><span class="op">)</span> <span class="co"># 4</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># style = "staged_writer": fn writes each output itself -- see</span></span></span>
+<span class="r-in"><span><span class="co"># style = "staged_writer": fn writes each output itself. See</span></span></span>
 <span class="r-in"><span><span class="co"># ?where_to_write_output for a complete example.</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>

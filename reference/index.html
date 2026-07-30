@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.29.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.30</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,7 +38,7 @@
     <div class="section level2">
       <h2 id="dispatch-a-function-across-subprocesses">Dispatch a function across subprocesses<a class="anchor" aria-label="anchor" href="#dispatch-a-function-across-subprocesses"></a></h2>
 
-      <div class="section-desc"><p>Run one function over many items, in worker processes — a fresh one per item for the first three, a reused pool for the fourth. Each takes <code>fn</code>: a <code><a href="../reference/package_function.html">package_function()</a></code> descriptor (hash-verified), or a bare closure for all but the streaming function. They differ in how each item’s data arrives and in what comes back — a return value, or declared output files that batchit stages and then commits.</p></div>
+      <div class="section-desc"><p>Run one function over many items, in worker processes: a fresh one per item for the first three, a reused pool for the fourth. Each takes <code>fn</code>, either a <code><a href="../reference/package_function.html">package_function()</a></code> descriptor (hash-verified) or a bare closure for all but the streaming function. They differ in how each item’s data arrives and in what comes back, a return value or declared output files that batchit stages and then commits.</p></div>
 
       <dl></dl></div><div class="section level2">
 
