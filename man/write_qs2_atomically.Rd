@@ -19,9 +19,10 @@ write_qs2_atomically(object, path, ...)
 \description{
 Writes to a uniquely-named temporary file in the same directory as \code{path},
 then renames it into place. Rename-into-place is atomic on POSIX
-filesystems (and server-side atomic on SMB/CIFS), so an interrupted write --
-\code{SIGKILL}, crash, dropped mount -- leaves the destination either absent or
-complete, never a truncated file that a later read would halt on. \code{...} is
+filesystems (and server-side atomic on SMB/CIFS), so an interrupted write,
+whether from a \code{SIGKILL}, a crash, or a dropped mount, leaves the destination
+either absent or complete, never a truncated file that a later read would
+halt on. \code{...} is
 forwarded to \code{\link[qs2:qs_save]{qs2::qs_save()}}.
 }
 \details{
@@ -39,8 +40,8 @@ process, not a killed machine.
 produce a complete file and the last rename wins. No reader sees a torn
 file, but nothing here decides \emph{which} writer should have won.
 \item \strong{It does not always clean up after itself.} The partial temp file is
-removed on an R-level error, but \code{on.exit()} cannot run after a \code{SIGKILL}
--- so a hard-killed worker leaves its randomly-named \code{.tmp} behind. The
+removed on an R-level error, but \code{on.exit()} cannot run after a \code{SIGKILL},
+so a hard-killed worker leaves its randomly-named \code{.tmp} behind. The
 \emph{destination} is still absent-or-complete, which is the guarantee that
 matters; the litter is not.
 }
@@ -49,7 +50,7 @@ The temporary file is created with \code{\link[=tempfile]{tempfile()}} in the de
 rather than \code{paste0(path, ".tmp", Sys.getpid())}. A PID suffix is not
 collision-proof: PIDs are unique only among \emph{live processes on one host},
 and data of this kind commonly lives on a share that two hosts mount at
-once -- so the same PID on two machines could pick the same temp path for
+once, so the same PID on two machines could pick the same temp path for
 the same target. Same directory is required: \code{file.rename()} is not atomic
 across filesystems.
 

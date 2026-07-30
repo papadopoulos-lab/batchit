@@ -23,7 +23,7 @@
 # is shape B: the parent IS the producer, items are generated lazily under
 # backpressure (mirai bounded queue), and delivery is via the same atomic
 # declared-output commit engine run_and_write_files_atomically() uses -- fn is
-# package_function()-only (no ad-hoc closure support; PUBLIC_API.md section 3.2).
+# package_function()-only (no ad-hoc closure support; DESIGN.md section 3).
 # All four share target/fn resolution, both-end validation, the result
 # envelope, and failure semantics. They differ only in internal transport,
 # which is private.
@@ -35,7 +35,7 @@
 # consumer's code. The worker and the mirai daemon each load BOTH packages (see
 # inst/batch_worker.R and stream_from_parent_and_write_files_atomically() below).
 
-# Bumped to 2 for Phase 6' Unit 1 (see PHASE6_DESIGN.md): the envelope gained a
+# Bumped to 2 (see DESIGN.md section 2): the envelope gained a
 # REQUIRED meta$fn_kind discriminator ("package" | "adhoc") plus the
 # declared-output commit fields (outputs/marker/style/attempt) used by
 # run_and_write_files_atomically(). An old (protocol 1) envelope has none of these, so a
@@ -62,7 +62,7 @@
 #' [run_and_write_files_atomically()], or
 #' [stream_from_parent_and_write_files_atomically()]. This is the
 #' alternative to writing an inline function directly in one of those calls
-#' (see their help pages) -- `package_function()` is required for
+#' (see their help pages). `package_function()` is required for
 #' `stream_from_parent_and_write_files_atomically()`, and recommended for the
 #' others whenever you want a production run to verify that every worker
 #' really is running the code you tested, not just whatever happens to be
@@ -70,7 +70,7 @@
 #' needs no setup.
 #'
 #' The object this function returns always identifies a function by package
-#' name + function name + a hash of its code -- it is never the function
+#' name + function name + a hash of its code. It is never the function
 #' itself, a bare function name, or a closure. This is different from
 #' passing your function directly as `fn`, which `run()`, `run_and_collect()`,
 #' and `run_and_write_files_atomically()` also accept (see their `fn`
@@ -106,11 +106,11 @@
 #' The code hash is deliberately narrow: it covers only the function's own
 #' body and its own argument list. A changed helper function it calls, a
 #' constant it refers to elsewhere, an S4/R6 method table, or a dependency's
-#' version are all outside it -- so a matching hash proves "the same
+#' version are all outside it, so a matching hash proves "the same
 #' function definition", not "provably identical behaviour". The hash is
 #' also computed after stripping comments and whitespace (`utils::removeSource()`),
 #' so it agrees whether the function was loaded from an installed package
-#' or from a `devtools::load_all()` source tree -- which otherwise disagree
+#' or from a `devtools::load_all()` source tree, which otherwise disagree
 #' on identical code.
 #' @export
 package_function <- function(package, symbol, version = NULL) {
@@ -210,7 +210,7 @@ package_function <- function(package, symbol, version = NULL) {
 #' (a `package_function` descriptor's `formal_names`) and the `adhoc` sibling
 #' `.batch_validate_adhoc_item()` (a bare closure's own `formal_names`, no
 #' package/symbol identity to build a lead from) -- see `R/batch_adhoc.R`
-#' (Phase 6' Unit 3, PHASE6_DESIGN.md sections 1, 4). Takes an already-built
+#' (DESIGN.md sections 2 and 5). Takes an already-built
 #' `lead` string so both callers keep their own distinct error-message shape.
 #' @noRd
 .batch_validate_item_against_formals <- function(formal_names, lead, args) {
@@ -291,17 +291,17 @@ package_function <- function(package, symbol, version = NULL) {
 #' of a clear one here. Argument validation (against the target's formals) is a
 #' separate step -- see `.batch_validate_item()`.
 #'
-#' Branches on `meta$fn_kind` (design PHASE6_DESIGN.md sections 1/4): `"package"`
+#' Branches on `meta$fn_kind` (design DESIGN.md sections 2 and 5): `"package"`
 #' requires `package`/`symbol`/`hash` and forbids `fn`/`nonce`; `"adhoc"` is
 #' the reverse -- requires `fn` (the closure, re-linted for self-containedness
-#' HERE -- design section 5, `.batch_lint_adhoc_fn()` in `R/batch_adhoc.R` --
+#' HERE -- design section 6, `.batch_lint_adhoc_fn()` in `R/batch_adhoc.R` --
 #' the CHILD-side correctness copy of the check a frontend already ran at
 #' dispatch time) and `nonce` (its per-dispatch identity token, design section
 #' 9.4), and forbids `package`/`symbol`/`hash` (there is no package to
 #' resolve). Also branches on whether `meta$outputs` is present: absent means today's
 #' return-value dispatch (`collect` required; `style`/`marker`/`attempt`
 #' forbidden); present means a declared-output commit dispatch (`style`/
-#' `marker`/`attempt` required; `collect` forbidden) -- design section 4. Any
+#' `marker`/`attempt` required; `collect` forbidden) -- design section 5. Any
 #' `meta` field outside the known set is rejected, not silently ignored.
 #' @noRd
 .batch_check_envelope <- function(env) {
@@ -316,7 +316,7 @@ package_function <- function(package, symbol, version = NULL) {
     stop(".batch envelope has duplicate field names", call. = FALSE)
   }
   # Unknown top-level fields are rejected, not ignored -- the same policy
-  # already applied to meta (design PHASE6_DESIGN.md section 4) extended to
+  # already applied to meta (design DESIGN.md section 5) extended to
   # the outer envelope, so a typo'd or smuggled top-level field cannot ride
   # along silently.
   known_top_fields <- c("protocol", "meta", "args")
@@ -378,16 +378,16 @@ package_function <- function(package, symbol, version = NULL) {
         "fn_kind is \"package\" (adhoc-only fields)"), call. = FALSE)
     }
   } else {
-    # fn_kind == "adhoc" (Phase 6' Unit 3, PHASE6_DESIGN.md sections 1, 4, 5):
+    # fn_kind == "adhoc" (DESIGN.md sections 2, 5, 6):
     # no package/symbol/hash to resolve -- the closure and its per-dispatch
-    # identity nonce (section 9.4) travel directly in meta$fn / meta$nonce.
+    # identity nonce (section 7) travel directly in meta$fn / meta$nonce.
     for (f in c("package", "symbol", "hash")) {
       if (!is.null(meta[[f]])) {
         stop(sprintf(paste0(".batch envelope: meta$%s is forbidden when fn_kind is ",
           "\"adhoc\" (there is no package to resolve)"), f), call. = FALSE)
       }
     }
-    # Re-lint HERE, in the CHILD: design section 5's self-containedness check
+    # Re-lint HERE, in the CHILD: design section 6's self-containedness check
     # runs at BOTH ends. A frontend (run()/run_and_collect() /
     # run_and_write_files_atomically() with a bare closure) already linted at
     # dispatch time (early UX); this is the
@@ -422,7 +422,7 @@ package_function <- function(package, symbol, version = NULL) {
     # The CHILD may replay independently (it is not merely a passive
     # executor of whatever the parent already checked), so it re-validates
     # the same conservative path rules the parent enforced at dispatch time
-    # (design PHASE6_DESIGN.md section 3.1) -- reusing
+    # (design DESIGN.md section 4.1) -- reusing
     # .batch_validate_output_paths() -- rather than trusting structural
     # presence alone. Crucially the child must NOT silently re-normalize a
     # path into something DIFFERENT from what the parent dispatched (that
@@ -560,7 +560,7 @@ package_function <- function(package, symbol, version = NULL) {
           hash = target$hash)
       } else {
         # fn_kind == "adhoc" (Phase 6' Unit 3): .batch_check_envelope() above
-        # already re-linted meta$fn for self-containedness (design section 5)
+        # already re-linted meta$fn for self-containedness (design section 6)
         # and required meta$nonce -- there is no package/symbol to resolve.
         # Rebase AGAIN defensively right before do.call(): the parent already
         # rebased onto baseenv() before serializing (and qs2 round-trips a
@@ -589,7 +589,7 @@ package_function <- function(package, symbol, version = NULL) {
       stage_prior <- NULL
       if (staged) {
         # Pre-compute EVERY declared output's staging path BEFORE do.call()
-        # (design PHASE6_DESIGN.md section 3.4), and register them for cleanup
+        # (design DESIGN.md section 4.4), and register them for cleanup
         # in THIS frame: a target that errors PARTWAY through streaming never
         # reaches .batch_commit_task(), so only an on.exit registered before
         # do.call() still fires. Safe through a successful commit too -- by then
@@ -617,7 +617,7 @@ package_function <- function(package, symbol, version = NULL) {
         # Exit the staged_writer scope the INSTANT the target returns or
         # errors -- NOT during the commit below. where_to_write_output() must
         # be answerable ONLY while the target itself runs (design section
-        # 3.4); leaving it active through the commit would let e.g. a classed
+        # 4.4); leaving it active through the commit would let e.g. a classed
         # `outputs` map's `[[` method reach it after the target is done.
         finally = {
           if (staged) .batch_stage_scope_exit(stage_prior)
@@ -634,7 +634,7 @@ package_function <- function(package, symbol, version = NULL) {
         )
       } else {
         # Declared-output commit dispatch (run_and_write_files_atomically(),
-        # design PHASE6_DESIGN.md section 3.3). The raw target `value` is
+        # design DESIGN.md section 4.3). The raw target `value` is
         # discarded after commit (unconditionally for staged_writer, or once
         # matched against `outputs` for return) -- it never crosses back,
         # only the small commit record does.
@@ -694,8 +694,8 @@ package_function <- function(package, symbol, version = NULL) {
 #' when inspecting a `run_and_write_files_atomically()` (declared-output
 #' commit) result: the value
 #' field is then a commit record, not raw data, and is checked against the
-#' `outputs` actually DISPATCHED for this item (design PHASE6_DESIGN.md
-#' section 3.5) -- names AND paths must match exactly, or a stale/substituted
+#' `outputs` actually DISPATCHED for this item (design DESIGN.md
+#' section 4.5) -- names AND paths must match exactly, or a stale/substituted
 #' result is rejected the same way a wrong id or wrong target identity is. The
 #' record's `attempt` token is checked against `expected_attempt`
 #' UNCONDITIONALLY. Existing (return-value) callers pass neither and are
@@ -706,8 +706,8 @@ package_function <- function(package, symbol, version = NULL) {
 #' descriptor for the child to echo back, so identity is instead bound to the
 #' id (already checked above) PLUS a fresh, high-entropy per-dispatch nonce
 #' the parent issued and the child echoes in its result `target` field as
-#' `list(fn_kind = "adhoc", nonce = <nonce>)` (design PHASE6_DESIGN.md section
-#' 9.4) -- `target` itself is unused (may be `NULL`) on this path.
+#' `list(fn_kind = "adhoc", nonce = <nonce>)` (design DESIGN.md section
+#' 7) -- `target` itself is unused (may be `NULL`) on this path.
 #' @noRd
 .batch_inspect_result <- function(envelope, expected_id, target,
                                     expected_outputs = NULL, expected_attempt = NULL,
@@ -777,7 +777,7 @@ package_function <- function(package, symbol, version = NULL) {
       reason = "result envelope has a malformed target field"))
   }
   if (!is.null(expected_nonce)) {
-    # adhoc (Phase 6' Unit 3, design section 9.4): no package identity to
+    # adhoc (design section 7): no package identity to
     # check -- bind on fn_kind == "adhoc" plus the per-dispatch nonce the
     # parent issued and the child echoed back (id was already checked above).
     if (!is.character(expected_nonce) || length(expected_nonce) != 1L ||
@@ -816,7 +816,7 @@ package_function <- function(package, symbol, version = NULL) {
     # would let a worker smuggle arbitrary raw data back to the parent (e.g.
     # `list(committed = ..., attempt = ..., raw = <huge>)`), defeating the
     # whole point of run_and_write_files_atomically() (only a small commit
-    # record ever crosses back; see design PHASE6_DESIGN.md section 3.5).
+    # record ever crosses back; see design DESIGN.md section 4.5).
     if (!is.list(val) || is.null(val_nm) || any(!nzchar(val_nm)) ||
         anyDuplicated(val_nm) ||
         !identical(sort(val_nm), sort(c("committed", "attempt")))) {
@@ -1027,7 +1027,7 @@ package_function <- function(package, symbol, version = NULL) {
 #' `outputs`/`marker`/`style`/`attempt` are the declared-output commit fields
 #' `run_and_write_files_atomically()` and
 #' `stream_from_parent_and_write_files_atomically()` supply instead (design
-#' PHASE6_DESIGN.md sections 3/4); `collect` and those four are mutually
+#' DESIGN.md sections 4 and 5); `collect` and those four are mutually
 #' exclusive, enforced by `.batch_check_envelope()`.
 #'
 #' `fn`/`nonce` are the `fn_kind = "adhoc"` fields (Phase 6' Unit 3, design
@@ -1050,7 +1050,7 @@ package_function <- function(package, symbol, version = NULL) {
   # .batch_worker_check() / .batch_check_envelope() both access fields via
   # exact `[[`, never S3 dispatch, so the class is inert on the read path: no
   # package needs to be loaded to deserialize or structurally validate it
-  # (PUBLIC_API.md section 3.5).
+  # (DESIGN.md section 5).
   structure(
     list(
       protocol = .BATCH_PROTOCOL,
@@ -1495,28 +1495,28 @@ print.batch_envelope <- function(x, ...) {
 #' Use this as a parallel `for` loop: `fn` runs once per item, each call in
 #' its own, brand-new R process (a worker), with up to `n_workers` running at
 #' the same time. Use this specifically when you don't need anything back in
-#' your R session -- for example, `fn` writes its own files, or is called
+#' your R session, for example when `fn` writes its own files, or is called
 #' purely for a side effect. If you want each call's return value back, use
 #' [run_and_collect()] instead; it works identically otherwise. If you want
 #' batchit itself to manage output files safely (so a failed item never
 #' leaves a half-written file), use [run_and_write_files_atomically()]
-#' instead -- files that `fn` writes on its own here get none of that
+#' instead. Files that `fn` writes on its own here get none of that
 #' protection: if `fn` is interrupted partway through writing one, whatever
 #' it already wrote is left exactly as it is.
 #'
 #' If any item's worker errors, exits unexpectedly, or exceeds `timeout`, the
 #' whole call stops immediately with an R error (printing that worker's
-#' captured output first) -- it does not continue past the failure.
+#' captured output first). It does not continue past the failure.
 #'
 #' @param fn The function to run once per item. Either an inline function
 #'   written directly in this call, or an object from [package_function()]
 #'   naming a function in an installed package. An inline function must be
 #'   self-contained: it may only use its own arguments, base R
 #'   functions/operators, and `pkg::fun()`-qualified calls to other
-#'   packages -- see the Advanced section below for accepted and rejected
+#'   packages. See the Advanced section below for accepted and rejected
 #'   examples.
 #' @param items One entry per call. Each entry is a named list holding the
-#'   arguments for that one call to `fn` -- every argument `fn` takes must be
+#'   arguments for that one call to `fn`. Every argument `fn` takes must be
 #'   named, including ones with a default value (an omitted optional
 #'   argument is treated as a mistake, not "use the default", so a silently
 #'   dropped argument is caught rather than passed through unnoticed). A
@@ -1554,28 +1554,28 @@ print.batch_envelope <- function(x, ...) {
 #' @section Advanced:
 #' Accepted and rejected inline functions:
 #' ```r
-#' # Allowed -- uses only its own argument and base R:
+#' # Allowed, uses only its own argument and base R:
 #' function(x) x^2
 #'
-#' # Allowed -- calls another package's function, package-qualified:
+#' # Allowed, calls another package's function, package-qualified:
 #' function(x) data.table::data.table(x = x, y = x^2)
 #'
-#' # NOT allowed -- `threshold` is not an argument of this function:
+#' # NOT allowed, `threshold` is not an argument of this function:
 #' threshold <- 10
 #' function(x) x > threshold
 #'
-#' # NOT allowed -- `my_helper` is a plain call to a function defined
+#' # NOT allowed, `my_helper` is a plain call to a function defined
 #' # outside this one:
 #' my_helper <- function(x) x * 2
 #' function(x) my_helper(x)
 #' ```
 #' When `fn` is a [package_function()] reference, each worker re-checks a
 #' hash of its code before running it, and refuses to run if that code has
-#' changed since you called `package_function()` -- see that function's help
+#' changed since you called `package_function()`. See that function's help
 #' page for what the hash does and does not cover.
 #'
 #' `dev_path` names a package source tree to load in the worker with
-#' `devtools::load_all()`, instead of using the installed package -- the
+#' `devtools::load_all()`, instead of using the installed package: the
 #' package named in your `package_function()` reference, or (for an inline
 #' `fn`) batchit's own source tree. A path that doesn't exist, or doesn't
 #' match the expected package, is an error rather than a silent fall-back to
@@ -1603,9 +1603,9 @@ run <- function(
 #' Use this as a parallel version of `lapply()`: `fn` runs once per item,
 #' each call in its own, brand-new R process (a worker), with up to
 #' `n_workers` running at the same time, and you get back a list of each
-#' call's return value. If you don't need the return values -- `fn` writes
-#' its own output, or is called for a side effect -- use [run()] instead; it
-#' works identically but discards them.
+#' call's return value. If you don't need the return values, because `fn`
+#' writes its own output or is called for a side effect, use [run()] instead.
+#' It works identically but discards them.
 #'
 #' A small object can be included directly in an item's arguments (it
 #' travels to the worker with the rest of that item), but for a large
@@ -1615,7 +1615,7 @@ run <- function(
 #'
 #' If any item's worker errors, exits unexpectedly, or exceeds `timeout`,
 #' the whole call stops immediately with an R error (printing that worker's
-#' captured output first) -- it never returns a partial list, and it never
+#' captured output first). It never returns a partial list, and it never
 #' puts an error object in a failed item's slot.
 #'
 #' @param fn The function to run once per item. Either an inline function
@@ -1623,10 +1623,10 @@ run <- function(
 #'   naming a function in an installed package. An inline function must be
 #'   self-contained: it may only use its own arguments, base R
 #'   functions/operators, and `pkg::fun()`-qualified calls to other
-#'   packages -- see [run()]'s Advanced section for accepted and rejected
+#'   packages. See [run()]'s Advanced section for accepted and rejected
 #'   examples.
 #' @param items One entry per call. Each entry is a named list holding the
-#'   arguments for that one call to `fn` -- every argument `fn` takes must be
+#'   arguments for that one call to `fn`. Every argument `fn` takes must be
 #'   named, including ones with a default value (an omitted optional
 #'   argument is treated as a mistake, not "use the default", so a silently
 #'   dropped argument is caught rather than passed through unnoticed). A
@@ -1646,8 +1646,8 @@ run <- function(
 #'   `Inf` to disable the limit.
 #' @return A list of each item's return value, one element per item, **in
 #'   the same order as `items`** (not the order workers happened to
-#'   finish). The list itself is never named by item id -- even if `items`
-#'   was named -- unlike [run_and_write_files_atomically()] and
+#'   finish). The list itself is never named by item id, even if `items`
+#'   was named, unlike [run_and_write_files_atomically()] and
 #'   [stream_from_parent_and_write_files_atomically()], whose results are.
 #' @examples
 #' \dontrun{
@@ -1659,7 +1659,7 @@ run <- function(
 #' squares
 #' }
 #' @section Advanced:
-#' Fresh worker processes are not just a convenience here -- they're the
+#' Fresh worker processes are not just a convenience here. They are the
 #' memory strategy for memory-heavy work. When one item's analysis peaks at,
 #' say, tens of gigabytes, R does not hand that memory back to the operating
 #' system on its own; exiting the worker process is what reclaims it. This
@@ -1723,7 +1723,7 @@ run_and_collect <- function(
 #'
 #' Use this when building the full `items` list up front (the way [run()],
 #' [run_and_collect()], and [run_and_write_files_atomically()] all require)
-#' would itself use too much memory -- for example, when each item is a
+#' would itself use too much memory, for example when each item is a
 #' large data slice, or there are far too many items to hold as a list at
 #' once. Instead of an `items` list, you give an `ids` vector and a
 #' `producer(id)` function that builds one item's arguments at a time.
@@ -1733,13 +1733,13 @@ run_and_collect <- function(
 #' as an idle worker: when every worker is busy, roughly `n_workers` further
 #' items may already be produced and queued. Everything else works like
 #' [run_and_write_files_atomically()]: each item's function runs on a
-#' background worker, and its declared output files are written safely --
-#' see that function's help page for the atomic-write guarantee and the two
+#' background worker, and its declared output files are written safely. See
+#' that function's help page for the atomic-write guarantee and the two
 #' `style`s.
 #'
-#' Two restrictions specific to this function: `fn` must be an object from
-#' [package_function()] -- an inline function is not accepted here, unlike
-#' [run_and_write_files_atomically()] -- and it requires the `mirai`
+#' Two restrictions specific to this function. `fn` must be an object from
+#' [package_function()], because an inline function is not accepted here,
+#' unlike [run_and_write_files_atomically()]. And it requires the `mirai`
 #' package to be installed. There is also no way to get a raw return value
 #' back; only the output-file record described below, exactly as in
 #' [run_and_write_files_atomically()].
@@ -1748,12 +1748,12 @@ run_and_collect <- function(
 #'   installed package. An inline function is not accepted here.
 #' @param ids One id per item, in the order you want items produced and run.
 #'   Must be unique, non-missing values (coerced to character).
-#' @param producer A function of one argument -- an item's id -- that builds
+#' @param producer A function of one argument, an item's id, that builds
 #'   and returns that one item: a named list holding all of `fn`'s
 #'   arguments, exactly as one element of `items` would be for
 #'   [run_and_write_files_atomically()]. Called once per id, in your R
 #'   session (never on a worker), only when one of the
-#'   `min(2 * n_workers, length(ids))` in-flight slots is free -- so load or
+#'   `min(2 * n_workers, length(ids))` in-flight slots is free. So load or
 #'   build each item's data inside this function, rather than before calling
 #'   `stream_from_parent_and_write_files_atomically()`.
 #' @param outputs A list aligned to `ids`: `outputs[[i]]` is item `i`'s
@@ -1765,7 +1765,7 @@ run_and_collect <- function(
 #'   one call, unique.
 #' @param style `"return"` (the target returns a named list) or
 #'   `"staged_writer"` (the target writes each output via
-#'   [where_to_write_output()] instead) -- see
+#'   [where_to_write_output()] instead). See
 #'   [run_and_write_files_atomically()] for what each means. Any other
 #'   value errors.
 #' @param n_workers Number of persistent background workers (`mirai`
@@ -1773,20 +1773,20 @@ run_and_collect <- function(
 #' @param dev_path The source tree of the package named in `fn`, loaded once
 #'   per worker with `devtools::load_all()`, instead of using the installed
 #'   package. Leave as `NULL` (the default) to use the installed package. A
-#'   path that doesn't exist, or doesn't match that package, is an error --
+#'   path that doesn't exist, or doesn't match that package, is an error,
 #'   even when there turn out to be no items to run.
 #' @param p A progress callback, such as a `progressr` progressor.
 #' @param label An optional short label added to each progress message.
 #' @param timeout Maximum time, in seconds, to let one item run before it is
 #'   treated as failed (6 hours by default; `Inf` disables the limit).
 #' @return A list, named by id, **in the same order as `ids`**: each element
-#'   describes what that item wrote -- `list(committed = <named character
+#'   describes what that item wrote, as `list(committed = <named character
 #'   vector: output name -> final path written>, attempt = <an internal
 #'   per-item identifier; you can ignore this>)`. Never `fn`'s raw return
 #'   value.
 #' @examples
 #' \dontrun{
-#' # `write_one_slice()` must live in an INSTALLED package -- this function
+#' # `write_one_slice()` must live in an INSTALLED package. This function
 #' # loads it by package name + function name (never by value, unlike the
 #' # other three dispatch functions), so it cannot be an inline function
 #' # defined at the console. Put it in your own package's R/ directory,
@@ -1809,14 +1809,14 @@ run_and_collect <- function(
 #' }
 #' @section Advanced:
 #' This function runs its workers as persistent `mirai` daemons, in a
-#' private compute profile it creates and tears down for this call only --
-#' it never touches or resets any daemon configuration you already had
+#' private compute profile it creates and tears down for this call only.
+#' It never touches or resets any daemon configuration you already had
 #' outside this call. A background worker loads the package named in `fn`
 #' once, when it starts (not once per item).
 #'
 #' At most `2 * n_workers` items are in flight at once, each carrying its
 #' own `timeout`: `producer()` is not called again until an in-flight slot
-#' frees up, which is what keeps memory bounded -- an item that hangs past
+#' frees up, which is what keeps memory bounded. An item that hangs past
 #' its timeout resolves as an error instead of blocking the others forever.
 #'
 #' As with [run()]/[run_and_collect()], batchit does not set BLAS or

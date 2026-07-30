@@ -1,4 +1,4 @@
-# Phase 6' Unit 3 (see PHASE6_DESIGN.md sections 1, 2, 4, 5, 9.4): the `adhoc`
+# See DESIGN.md sections 2, 3, 5, 6 and 7: the `adhoc`
 # fn_kind -- dispatch a bare closure VALUE instead of a package_function()
 # descriptor. Gated by a best-effort static self-containedness LINT
 # (codetools::findGlobals()) applied at BOTH ends (parent: early UX at
@@ -14,7 +14,7 @@
 # object bound there survives serialization whole), while a baseenv()-rooted
 # closure reconnects to the receiving session's OWN baseenv() instead.
 #
-# NARROWED PROMISE (design section 5): this is a best-effort static lint that
+# NARROWED PROMISE (design section 6): this is a best-effort static lint that
 # rejects DIRECTLY DETECTABLE unqualified global references. It does NOT
 # prove behavioural closure, hermetic execution, portability, or dependency
 # identity. Known blind spots: get()/mget()/assign()/a string-argument
@@ -24,7 +24,7 @@
 # variable. Production stages stay on fn_kind = "package" (a hash-verified,
 # auditable descriptor); fn_kind = "adhoc" is for ad-hoc dispatch only.
 
-#' Self-containedness lint for an adhoc closure (design PHASE6_DESIGN.md section 5)
+#' Self-containedness lint for an adhoc closure (design DESIGN.md section 6)
 #'
 #' Runs at BOTH ends: a frontend (`run()`/`run_and_collect()` /
 #' `run_and_write_files_atomically()` with a bare closure) calls this at
@@ -82,18 +82,19 @@
   bad <- sort(candidates[!is_base])
   if (length(bad) > 0L) {
     stop(sprintf(paste0(
-      "%s: adhoc `fn` is not self-contained -- it references global(s) that ",
+      "%s: adhoc `fn` is not self-contained. It references global(s) that ",
       "are neither base R nor `pkg::`-qualified: %s. Every value the closure ",
       "needs must be a base function/operator/constant, a declared formal, ",
       "or referenced via an explicit `pkg::fun()` call. (This is a ",
-      "best-effort static lint -- see PHASE6_DESIGN.md section 5 for its ",
-      "documented blind spots; it does not prove behavioural closure.)"),
+      "best-effort static lint; see the \"Choosing a dispatch function\" ",
+      "vignette for its documented blind spots. It does not prove ",
+      "behavioural closure.)"),
       lead, paste(bad, collapse = ", ")), call. = FALSE)
   }
   invisible(TRUE)
 }
 
-#' Rebase an accepted adhoc closure onto `baseenv()` (design section 5, mandatory)
+#' Rebase an accepted adhoc closure onto `baseenv()` (design section 6, mandatory)
 #'
 #' Called ONLY after `.batch_lint_adhoc_fn()` has accepted `fn` -- once, by
 #' the parent, before the closure is ever serialized, and again, defensively,
@@ -113,7 +114,7 @@
   # run it). Then sever the enclosing environment. Together these enforce "code,
   # not captured data" for the two common carriers; the remaining exotic ones
   # (an object graph embedded in a default-argument expression or a bytecode
-  # constant) stay documented blind spots (design section 5), not enforced.
+  # constant) stay documented blind spots (design section 6), not enforced.
   attributes(fn) <- NULL
   environment(fn) <- baseenv()
   fn

@@ -7,21 +7,21 @@
 where_to_write_output(name)
 }
 \arguments{
-\item{name}{The declared output name to write -- must be one of this
+\item{name}{The declared output name to write. Must be one of this
 item's \code{outputs} names.}
 }
 \value{
 A single absolute path string. WRITE to this path; do not read it
-back or move/rename it yourself -- batchit renames it to the final
+back or move/rename it yourself. batchit renames it to the final
 destination once every declared output has been staged.
 }
 \description{
 When you use \code{style = "staged_writer"} with \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}
 or \code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}, your function does
-not return its output -- it writes each declared output itself, to the
+not return its output. It writes each declared output itself, to the
 path this function gives you. Call \code{where_to_write_output(name)} once for
 each output name you declared in \code{outputs}, and write to exactly that
-path. Do not read it back, move it, or rename it yourself -- batchit
+path. Do not read it back, move it, or rename it yourself. batchit
 renames it into place, next to the other declared outputs, once your
 function returns successfully.
 }
@@ -29,8 +29,8 @@ function returns successfully.
 Use \code{style = "return"} instead when it's simpler for your function to
 just build R objects and return them in a named list; batchit then
 serializes each one to its final path for you. Use \code{"staged_writer"} when
-your function already writes files itself -- for example, in a format
-other than \code{qs2}, or via another package's own writer -- so it doesn't
+your function already writes files itself, for example in a format
+other than \code{qs2}, or via another package's own writer, so it doesn't
 have to build the whole object in memory just to hand it to batchit to
 save again.
 
@@ -40,7 +40,7 @@ time, or asking for a \code{name} this item didn't declare in \code{outputs}, is
 error.
 
 If your function is an inline function (see \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}'s
-\code{fn} argument), call it as \code{batchit::where_to_write_output()} -- an
+\code{fn} argument), call it as \code{batchit::where_to_write_output()}. An
 inline function may only call other packages' functions in
 package-qualified form, and \code{batchit} is not automatically attached. If
 your function instead lives in your own installed package, either import

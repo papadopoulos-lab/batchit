@@ -32,7 +32,7 @@ passing as the \code{fn} argument to \code{\link[=run]{run()}}, \code{\link[=run
 \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}, or
 \code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}. This is the
 alternative to writing an inline function directly in one of those calls
-(see their help pages) -- \code{package_function()} is required for
+(see their help pages). \code{package_function()} is required for
 \code{stream_from_parent_and_write_files_atomically()}, and recommended for the
 others whenever you want a production run to verify that every worker
 really is running the code you tested, not just whatever happens to be
@@ -41,7 +41,7 @@ needs no setup.
 }
 \details{
 The object this function returns always identifies a function by package
-name + function name + a hash of its code -- it is never the function
+name + function name + a hash of its code. It is never the function
 itself, a bare function name, or a closure. This is different from
 passing your function directly as \code{fn}, which \code{run()}, \code{run_and_collect()},
 and \code{run_and_write_files_atomically()} also accept (see their \code{fn}
@@ -57,11 +57,11 @@ would make a mistyped or missing argument impossible to catch reliably.
 The code hash is deliberately narrow: it covers only the function's own
 body and its own argument list. A changed helper function it calls, a
 constant it refers to elsewhere, an S4/R6 method table, or a dependency's
-version are all outside it -- so a matching hash proves "the same
+version are all outside it, so a matching hash proves "the same
 function definition", not "provably identical behaviour". The hash is
 also computed after stripping comments and whitespace (\code{utils::removeSource()}),
 so it agrees whether the function was loaded from an installed package
-or from a \code{devtools::load_all()} source tree -- which otherwise disagree
+or from a \code{devtools::load_all()} source tree, which otherwise disagree
 on identical code.
 }
 

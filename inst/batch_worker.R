@@ -13,14 +13,14 @@
 # different packages here, which is the extraction seam: the runner supplies
 # .batch_execute, the consumer supplies the target.
 #
-# Protocol-before-consumer (Phase 6' Unit 1, PHASE6_DESIGN.md section 1): a
+# Protocol-before-consumer (DESIGN.md section 2): a
 # version-skewed envelope must be rejected before any CONSUMER code loads. The
 # runner itself is always loaded first regardless (it is needed both to check
 # the protocol and to supply .batch_execute), so "protocol before loading" here
 # means "before loading the CONSUMER" -- when runner == consumer (batchit
 # testing itself) that one load_all() satisfies both roles at once.
 #
-# fn_kind == "adhoc" (Phase 6' Unit 3, PHASE6_DESIGN.md sections 1, 4, 5): no
+# fn_kind == "adhoc" (DESIGN.md sections 2, 5 and 6): no
 # CONSUMER at all -- meta$package/meta$symbol/meta$hash are absent, and the
 # closure to run travels directly in meta$fn (already baseenv()-rebased by
 # the parent), with meta$nonce as its per-dispatch identity token in place of

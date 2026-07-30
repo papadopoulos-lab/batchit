@@ -20,11 +20,11 @@ written directly in this call, or an object from \code{\link[=package_function]{
 naming a function in an installed package. An inline function must be
 self-contained: it may only use its own arguments, base R
 functions/operators, and \code{pkg::fun()}-qualified calls to other
-packages -- see \code{\link[=run]{run()}}'s Advanced section for accepted and rejected
+packages. See \code{\link[=run]{run()}}'s Advanced section for accepted and rejected
 examples.}
 
 \item{items}{One entry per call. Each entry is a named list holding the
-arguments for that one call to \code{fn} -- every argument \code{fn} takes must be
+arguments for that one call to \code{fn}. Every argument \code{fn} takes must be
 named, including ones with a default value (an omitted optional
 argument is treated as a mistake, not "use the default", so a silently
 dropped argument is caught rather than passed through unnoticed). A
@@ -51,17 +51,17 @@ before killing it and reporting it as failed. Defaults to 6 hours; pass
 \value{
 A list of each item's return value, one element per item, \strong{in
 the same order as \code{items}} (not the order workers happened to
-finish). The list itself is never named by item id -- even if \code{items}
-was named -- unlike \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} and
+finish). The list itself is never named by item id, even if \code{items}
+was named, unlike \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} and
 \code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}, whose results are.
 }
 \description{
 Use this as a parallel version of \code{lapply()}: \code{fn} runs once per item,
 each call in its own, brand-new R process (a worker), with up to
 \code{n_workers} running at the same time, and you get back a list of each
-call's return value. If you don't need the return values -- \code{fn} writes
-its own output, or is called for a side effect -- use \code{\link[=run]{run()}} instead; it
-works identically but discards them.
+call's return value. If you don't need the return values, because \code{fn}
+writes its own output or is called for a side effect, use \code{\link[=run]{run()}} instead.
+It works identically but discards them.
 }
 \details{
 A small object can be included directly in an item's arguments (it
@@ -72,12 +72,12 @@ worker (for example, read it from disk) rather than pass it through
 
 If any item's worker errors, exits unexpectedly, or exceeds \code{timeout},
 the whole call stops immediately with an R error (printing that worker's
-captured output first) -- it never returns a partial list, and it never
+captured output first). It never returns a partial list, and it never
 puts an error object in a failed item's slot.
 }
 \section{Advanced}{
 
-Fresh worker processes are not just a convenience here -- they're the
+Fresh worker processes are not just a convenience here. They are the
 memory strategy for memory-heavy work. When one item's analysis peaks at,
 say, tens of gigabytes, R does not hand that memory back to the operating
 system on its own; exiting the worker process is what reclaims it. This

@@ -1,5 +1,5 @@
-# The `adhoc` fn_kind (Phase 6' Unit 3, see PHASE6_DESIGN.md sections 1, 2, 4,
-# 5, 9.4): dispatch a bare closure VALUE, gated by a self-containedness LINT
+# The `adhoc` fn_kind (see DESIGN.md sections 2, 3, 5, 6 and 7): dispatch a
+# bare closure VALUE, gated by a self-containedness LINT
 # (codetools::findGlobals()) applied at BOTH ends, with a mandatory baseenv()
 # rebase before serialization. Same real-subprocess discipline as the
 # shape-A / declared-output-commit test files: end-to-end tests drive the ACTUAL
@@ -14,7 +14,7 @@ PROTO <- batchit:::.BATCH_PROTOCOL
 
 # Hand-crafts a raw adhoc envelope and feeds it DIRECTLY to the real worker
 # script, bypassing run()/run_and_collect()'s own parent-side lint entirely -- the only way
-# to prove the CHILD independently re-lints (design section 5: "applied at
+# to prove the CHILD independently re-lints (design section 6: "applied at
 # BOTH ends") rather than merely trusting whatever a frontend already checked.
 .run_adhoc_worker_directly <- function(fn, args = list(), nonce = "tok-fixed",
                                          id = "1", collect = TRUE) {
@@ -206,7 +206,7 @@ test_that("run_and_collect(): a closure that passes the lint via get()/environme
 
   # get()/environment() are both base -- codetools does not flag this as a
   # free global, so the LINT alone would accept it (a documented blind spot,
-  # PHASE6_DESIGN.md section 5). It still fails at RUN time in the real child
+  # DESIGN.md section 6). It still fails at RUN time in the real child
   # subprocess, because .batch_rebase_adhoc_closure() rebased it onto
   # baseenv() before it was ever serialized.
   expect_true(batchit:::.batch_lint_adhoc_fn(leaky, where = "parent"))

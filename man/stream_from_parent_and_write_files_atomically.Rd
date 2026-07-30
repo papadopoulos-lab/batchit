@@ -24,12 +24,12 @@ installed package. An inline function is not accepted here.}
 \item{ids}{One id per item, in the order you want items produced and run.
 Must be unique, non-missing values (coerced to character).}
 
-\item{producer}{A function of one argument -- an item's id -- that builds
+\item{producer}{A function of one argument, an item's id, that builds
 and returns that one item: a named list holding all of \code{fn}'s
 arguments, exactly as one element of \code{items} would be for
 \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}. Called once per id, in your R
 session (never on a worker), only when one of the
-\code{min(2 * n_workers, length(ids))} in-flight slots is free -- so load or
+\code{min(2 * n_workers, length(ids))} in-flight slots is free. So load or
 build each item's data inside this function, rather than before calling
 \code{stream_from_parent_and_write_files_atomically()}.}
 
@@ -43,7 +43,7 @@ one call, unique.}
 
 \item{style}{\code{"return"} (the target returns a named list) or
 \code{"staged_writer"} (the target writes each output via
-\code{\link[=where_to_write_output]{where_to_write_output()}} instead) -- see
+\code{\link[=where_to_write_output]{where_to_write_output()}} instead). See
 \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} for what each means. Any other
 value errors.}
 
@@ -53,7 +53,7 @@ daemons) to run at once.}
 \item{dev_path}{The source tree of the package named in \code{fn}, loaded once
 per worker with \code{devtools::load_all()}, instead of using the installed
 package. Leave as \code{NULL} (the default) to use the installed package. A
-path that doesn't exist, or doesn't match that package, is an error --
+path that doesn't exist, or doesn't match that package, is an error,
 even when there turn out to be no items to run.}
 
 \item{p}{A progress callback, such as a \code{progressr} progressor.}
@@ -65,13 +65,13 @@ treated as failed (6 hours by default; \code{Inf} disables the limit).}
 }
 \value{
 A list, named by id, \strong{in the same order as \code{ids}}: each element
-describes what that item wrote -- \verb{list(committed = <named character vector: output name -> final path written>, attempt = <an internal per-item identifier; you can ignore this>)}. Never \code{fn}'s raw return
+describes what that item wrote, as \verb{list(committed = <named character vector: output name -> final path written>, attempt = <an internal per-item identifier; you can ignore this>)}. Never \code{fn}'s raw return
 value.
 }
 \description{
 Use this when building the full \code{items} list up front (the way \code{\link[=run]{run()}},
 \code{\link[=run_and_collect]{run_and_collect()}}, and \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} all require)
-would itself use too much memory -- for example, when each item is a
+would itself use too much memory, for example when each item is a
 large data slice, or there are far too many items to hold as a list at
 once. Instead of an \code{items} list, you give an \code{ids} vector and a
 \code{producer(id)} function that builds one item's arguments at a time.
@@ -81,14 +81,14 @@ bounds how many produced items exist at once. A free slot is not the same
 as an idle worker: when every worker is busy, roughly \code{n_workers} further
 items may already be produced and queued. Everything else works like
 \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}: each item's function runs on a
-background worker, and its declared output files are written safely --
-see that function's help page for the atomic-write guarantee and the two
+background worker, and its declared output files are written safely. See
+that function's help page for the atomic-write guarantee and the two
 \code{style}s.
 }
 \details{
-Two restrictions specific to this function: \code{fn} must be an object from
-\code{\link[=package_function]{package_function()}} -- an inline function is not accepted here, unlike
-\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} -- and it requires the \code{mirai}
+Two restrictions specific to this function. \code{fn} must be an object from
+\code{\link[=package_function]{package_function()}}, because an inline function is not accepted here,
+unlike \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}. And it requires the \code{mirai}
 package to be installed. There is also no way to get a raw return value
 back; only the output-file record described below, exactly as in
 \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}.
@@ -96,14 +96,14 @@ back; only the output-file record described below, exactly as in
 \section{Advanced}{
 
 This function runs its workers as persistent \code{mirai} daemons, in a
-private compute profile it creates and tears down for this call only --
-it never touches or resets any daemon configuration you already had
+private compute profile it creates and tears down for this call only.
+It never touches or resets any daemon configuration you already had
 outside this call. A background worker loads the package named in \code{fn}
 once, when it starts (not once per item).
 
 At most \code{2 * n_workers} items are in flight at once, each carrying its
 own \code{timeout}: \code{producer()} is not called again until an in-flight slot
-frees up, which is what keeps memory bounded -- an item that hangs past
+frees up, which is what keeps memory bounded. An item that hangs past
 its timeout resolves as an error instead of blocking the others forever.
 
 As with \code{\link[=run]{run()}}/\code{\link[=run_and_collect]{run_and_collect()}}, batchit does not set BLAS or
@@ -113,7 +113,7 @@ yourself if \code{fn} is itself multi-threaded.
 
 \examples{
 \dontrun{
-# `write_one_slice()` must live in an INSTALLED package -- this function
+# `write_one_slice()` must live in an INSTALLED package. This function
 # loads it by package name + function name (never by value, unlike the
 # other three dispatch functions), so it cannot be an inline function
 # defined at the console. Put it in your own package's R/ directory,

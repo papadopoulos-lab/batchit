@@ -1,9 +1,8 @@
-# Declared-output commit engine (run_and_write_files_atomically()) -- Phase 6'
-# Units 1-2. Package
-# targets, both commit styles: `return` (Unit 1, the target returns a named
-# list) and `staged_writer` (Unit 2, the target streams each output to
-# `where_to_write_output(<name>)` instead); see PHASE6_DESIGN.md sections 2-4, 9.1,
-# 9.5.
+# Declared-output commit engine (run_and_write_files_atomically()). Package
+# targets, both commit styles: `return` (the target returns a named list) and
+# `staged_writer` (the target streams each output to
+# `where_to_write_output(<name>)` instead). See DESIGN.md sections 1, 3, 4
+# and 5.
 # run_and_write_files_atomically() reuses run()/run_and_collect()'s transport
 # (a fresh subprocess per item via
 # processx, the SAME inst/batch_worker.R) but replaces the raw return-value
@@ -19,7 +18,7 @@
 # itself mean "this attempt committed" -- only a marker that decodes and
 # verifies does.
 #
-# Doctrine (PHASE6_DESIGN.md section 0, normative): no batchit LAUNCH decision
+# Doctrine (DESIGN.md section 1, normative): no batchit LAUNCH decision
 # may depend on marker existence or contents. The parent-side functions in this
 # file therefore validate only the marker's PATHNAME and its parent directory
 # -- they never call file.exists()/file.info()/Sys.readlink() (or read it) on
@@ -33,8 +32,8 @@
 #'
 #' `outputs` is either POSITIONAL (an unnamed list, 1:1 with `items`/`ids`) or,
 #' when the caller wants to name items instead of relying on position, NAMED BY
-#' ITEM ID -- same name set as `ids`, any order (design PHASE6_DESIGN.md
-#' section 9.1). Either way the return value is a plain (unnamed) list in `ids`
+#' ITEM ID -- same name set as `ids`, any order (design DESIGN.md
+#' section 4.6). Either way the return value is a plain (unnamed) list in `ids`
 #' order, so every downstream consumer can index it positionally alongside
 #' `items`/`ids`.
 #' @noRd
@@ -58,7 +57,7 @@
   unname(outputs[ids])
 }
 
-#' Validate one item's output map STRUCTURE (design PHASE6_DESIGN.md section 3.1)
+#' Validate one item's output map STRUCTURE (design DESIGN.md section 4.1)
 #'
 #' Both-ends: the parent calls this at `run_and_write_files_atomically()` dispatch time, the child
 #' again inside `.batch_check_envelope()` (a mismatched/corrupted envelope must
@@ -113,7 +112,7 @@
   !is.na(link) && nzchar(link)
 }
 
-#' Validate + normalize one item's output paths (design PHASE6_DESIGN.md 3.1)
+#' Validate + normalize one item's output paths (design DESIGN.md 4.1)
 #'
 #' Conservative, PARENT-side, filesystem-touching validation of the OUTPUT
 #' paths only (never the marker -- see the file banner). Every path must be
@@ -134,7 +133,7 @@
 #' clean fix would require a compiled/system-call helper; not worth the
 #' dependency for what is, in practice, an operator error at a data-pipeline
 #' output path. The cross-invocation hardlink-alias gap is a SEPARATE,
-#' explicitly accepted limit (design PHASE6_DESIGN.md section 3.1) -- not
+#' explicitly accepted limit (design DESIGN.md section 4.1) -- not
 #' this one.
 #' @noRd
 .batch_validate_output_paths <- function(map, id) {
@@ -174,7 +173,7 @@
   out
 }
 
-#' Derive an item's marker path deterministically (design PHASE6_DESIGN.md 9.1)
+#' Derive an item's marker path deterministically (design DESIGN.md 4.6)
 #'
 #' `dirname(sort(output_paths)[1])/.batchit__<item_id>` -- the lexicographically
 #' first output's directory plus the item's already-unique stable id, so two
@@ -187,10 +186,10 @@
   file.path(first_dir, paste0(".batchit__", id))
 }
 
-#' Invocation-wide output/marker collision check (design PHASE6_DESIGN.md 3.1, 9.1)
+#' Invocation-wide output/marker collision check (design DESIGN.md 4.1, 4.6)
 #'
 #' Within ONE `run_and_write_files_atomically()` call, no two paths -- across every item's outputs
-#' AND every item's marker -- may alias each other. The doctrine (section 0/9.1)
+#' AND every item's marker -- may alias each other. The doctrine (sections 1/4.6)
 #' forbids any LAUNCH decision depending on marker filesystem state. The markers
 #' are ALREADY canonical (each derived from a normalized output dir + a plain
 #' `.batchit__<id>` basename), so this check compares them EXACTLY as derived --
@@ -215,8 +214,8 @@
 #'
 #' Issued by the PARENT for every item, travels in the envelope, and is echoed
 #' back in the marker and the commit record -- the identity the child re-reads
-#' after committing (design PHASE6_DESIGN.md section 3.3 step 7) and the parent
-#' checks the result against (section 3.5). Built from `tempfile()` (a process-
+#' after committing (design DESIGN.md section 4.3 step 7) and the parent
+#' checks the result against (section 4.5). Built from `tempfile()` (a process-
 #' local counter, unique per call) exactly like the mirai compute-profile nonce
 #' [.batch_stream_profile()], NOT from R's RNG stream -- so issuing tokens can
 #' never disturb a caller's `set.seed()`/reproducibility. Distinct per item
@@ -228,8 +227,8 @@
 
 #' Best-effort PARENT-side sweep of one item's own commit temps
 #'
-#' `.batch_commit_task()`'s own `on.exit` cleanup (design PHASE6_DESIGN.md
-#' section 3.3) only runs if the CHILD process gets to run R-level unwind code
+#' `.batch_commit_task()`'s own `on.exit` cleanup (design DESIGN.md
+#' section 4.3) only runs if the CHILD process gets to run R-level unwind code
 #' at all -- a `kill_tree()` (the timeout path) or an OS-level SIGKILL sends a
 #' signal `on.exit` cannot intercept, so a worker killed while mid-commit can
 #' orphan `<basename(final)>.tmp*` temps in the output directories (`return`
@@ -250,7 +249,7 @@
 #' Deliberately conservative and narrow: it sweeps only the ONE item's own
 #' attempt-scoped temps across the directories it writes into -- it never
 #' inspects the MARKER's own existence/contents (only its temp-name pattern),
-#' so it stays inside the doctrine (design section 0): this runs on FAILURE
+#' so it stays inside the doctrine (design section 1): this runs on FAILURE
 #' cleanup, after the item has already been dispatched and has already
 #' failed, never as part of a launch decision.
 #' @param outputs_map This item's (already parent-validated, normalized)
@@ -276,7 +275,7 @@
   invisible(TRUE)
 }
 
-# --- child-side commit (design PHASE6_DESIGN.md section 3.3) ----------------
+# --- child-side commit (design DESIGN.md section 4.3) ----------------------
 
 #' Atomically replace `final` with `tmp` (rename, same filesystem)
 #'
@@ -300,9 +299,10 @@
 #'
 #' Writes to a uniquely-named temporary file in the same directory as `path`,
 #' then renames it into place. Rename-into-place is atomic on POSIX
-#' filesystems (and server-side atomic on SMB/CIFS), so an interrupted write --
-#' `SIGKILL`, crash, dropped mount -- leaves the destination either absent or
-#' complete, never a truncated file that a later read would halt on. `...` is
+#' filesystems (and server-side atomic on SMB/CIFS), so an interrupted write,
+#' whether from a `SIGKILL`, a crash, or a dropped mount, leaves the destination
+#' either absent or complete, never a truncated file that a later read would
+#' halt on. `...` is
 #' forwarded to [qs2::qs_save()].
 #'
 #' The parent directory of `path` must already exist: this function never
@@ -319,8 +319,8 @@
 #'   produce a complete file and the last rename wins. No reader sees a torn
 #'   file, but nothing here decides *which* writer should have won.
 #' * **It does not always clean up after itself.** The partial temp file is
-#'   removed on an R-level error, but `on.exit()` cannot run after a `SIGKILL`
-#'   -- so a hard-killed worker leaves its randomly-named `.tmp` behind. The
+#'   removed on an R-level error, but `on.exit()` cannot run after a `SIGKILL`,
+#'   so a hard-killed worker leaves its randomly-named `.tmp` behind. The
 #'   *destination* is still absent-or-complete, which is the guarantee that
 #'   matters; the litter is not.
 #'
@@ -328,7 +328,7 @@
 #' rather than `paste0(path, ".tmp", Sys.getpid())`. A PID suffix is not
 #' collision-proof: PIDs are unique only among *live processes on one host*,
 #' and data of this kind commonly lives on a share that two hosts mount at
-#' once -- so the same PID on two machines could pick the same temp path for
+#' once, so the same PID on two machines could pick the same temp path for
 #' the same target. Same directory is required: `file.rename()` is not atomic
 #' across filesystems.
 #'
@@ -364,7 +364,7 @@ write_qs2_atomically <- function(object, path, ...) {
   invisible(path)
 }
 
-# --- staged_writer scoped accessor (design PHASE6_DESIGN.md section 3.4) ----
+# --- staged_writer scoped accessor (design DESIGN.md section 4.4) ----------
 
 #' Pre-compute one item's per-output staging temp paths (staged_writer only)
 #'
@@ -434,18 +434,18 @@ write_qs2_atomically <- function(object, path, ...) {
 #'
 #' When you use `style = "staged_writer"` with [run_and_write_files_atomically()]
 #' or [stream_from_parent_and_write_files_atomically()], your function does
-#' not return its output -- it writes each declared output itself, to the
+#' not return its output. It writes each declared output itself, to the
 #' path this function gives you. Call `where_to_write_output(name)` once for
 #' each output name you declared in `outputs`, and write to exactly that
-#' path. Do not read it back, move it, or rename it yourself -- batchit
+#' path. Do not read it back, move it, or rename it yourself. batchit
 #' renames it into place, next to the other declared outputs, once your
 #' function returns successfully.
 #'
 #' Use `style = "return"` instead when it's simpler for your function to
 #' just build R objects and return them in a named list; batchit then
 #' serializes each one to its final path for you. Use `"staged_writer"` when
-#' your function already writes files itself -- for example, in a format
-#' other than `qs2`, or via another package's own writer -- so it doesn't
+#' your function already writes files itself, for example in a format
+#' other than `qs2`, or via another package's own writer, so it doesn't
 #' have to build the whole object in memory just to hand it to batchit to
 #' save again.
 #'
@@ -455,16 +455,16 @@ write_qs2_atomically <- function(object, path, ...) {
 #' error.
 #'
 #' If your function is an inline function (see [run_and_write_files_atomically()]'s
-#' `fn` argument), call it as `batchit::where_to_write_output()` -- an
+#' `fn` argument), call it as `batchit::where_to_write_output()`. An
 #' inline function may only call other packages' functions in
 #' package-qualified form, and `batchit` is not automatically attached. If
 #' your function instead lives in your own installed package, either import
 #' `where_to_write_output` or call it the same package-qualified way.
 #'
-#' @param name The declared output name to write -- must be one of this
+#' @param name The declared output name to write. Must be one of this
 #'   item's `outputs` names.
 #' @return A single absolute path string. WRITE to this path; do not read it
-#'   back or move/rename it yourself -- batchit renames it to the final
+#'   back or move/rename it yourself. batchit renames it to the final
 #'   destination once every declared output has been staged.
 #' @examples
 #' \dontrun{
@@ -492,8 +492,8 @@ write_qs2_atomically <- function(object, path, ...) {
 where_to_write_output <- function(name) {
   if (!isTRUE(.batch_stage_env$active)) {
     stop(paste0(
-      "where_to_write_output(): no staged_writer run_and_write_files_atomically() run is active -- only ",
-      "callable from inside the target of a style = \"staged_writer\" run_and_write_files_atomically() item"),
+      "where_to_write_output(): no staged_writer run_and_write_files_atomically() run is active. It is ",
+      "only callable from inside the target of a style = \"staged_writer\" run_and_write_files_atomically() item"),
       call. = FALSE)
   }
   if (!is.character(name) || length(name) != 1L || is.na(name) || !nzchar(name)) {
@@ -508,7 +508,7 @@ where_to_write_output <- function(name) {
   paths[[name]]
 }
 
-#' Child-side declared-output commit (design PHASE6_DESIGN.md section 3.3)
+#' Child-side declared-output commit (design DESIGN.md section 4.3)
 #'
 #' `fn_kind = "package"`; either commit style. Runs the 7-step sequence: (1)
 #' PREPARE every output temp -- `return`: validate the target's return names
@@ -542,12 +542,12 @@ where_to_write_output <- function(name) {
 #' from a PRIOR attempt, if the crash happened before step 4 removed it, is
 #' NOT evidence of THIS attempt -- only a marker whose attempt token matches
 #' is), which is exactly the point of the witness (nothing downstream may
-#' trust a partial commit); see PHASE6_DESIGN.md section 3.3 for the full
+#' trust a partial commit); see DESIGN.md section 4.3 for the full
 #' rationale.
 #'
 #' This is the one PARENT-adjacent function in this file that DOES read/remove/
 #' replace the marker -- by design: it runs in the CHILD, as part of
-#' committing, never as part of a launch decision (design section 0).
+#' committing, never as part of a launch decision (design section 1).
 #'
 #' @param value The target's raw return value. For `style = "return"` this
 #'   must be a named list matching `outputs`; for `style = "staged_writer"`
@@ -682,33 +682,33 @@ where_to_write_output <- function(name) {
 #' want a guarantee that a failed or interrupted item never leaves a
 #' half-written file at its final path. Each item runs `fn` in its own,
 #' brand-new R process (a worker), with up to `n_workers` running at the
-#' same time -- like [run()] and [run_and_collect()] -- but instead of `fn`'s
+#' same time, like [run()] and [run_and_collect()]. But instead of `fn`'s
 #' return value crossing back to you, batchit writes the files you declared
 #' in `outputs` and hands back a small record of what it wrote.
 #'
 #' **The guarantee, and its boundary.** batchit stages every one of an item's
-#' declared outputs -- each to a temporary file in its final destination's own
-#' directory -- before it replaces any final file. It then replaces the final
+#' declared outputs, each to a temporary file in its final destination's own
+#' directory, before it replaces any final file. It then replaces the final
 #' files one at a time, by rename, and writes the commit marker last.
 #'
 #' The guarantee differs across those three phases.
 #'
-#' BEFORE THE FIRST REPLACEMENT -- fully covered. An error in `fn`, a
+#' BEFORE THE FIRST REPLACEMENT: fully covered. Take an error in `fn`, a
 #' `"return"` value whose names do not match the declared outputs, a declared
-#' output a `"staged_writer"` never wrote, a failure serializing a staged file
-#' -- in each case NO declared output is touched, and whatever was already at
+#' output a `"staged_writer"` never wrote, or a failure serializing a staged
+#' file. In each case NO declared output is touched, and whatever was already at
 #' those paths (or nothing, if they didn't exist) is left untouched. The
 #' item's own previous marker is removed before the first replacement, so it
 #' does not survive even here.
 #'
-#' DURING THE REPLACEMENT LOOP -- not transactional. A kill or a rename
+#' DURING THE REPLACEMENT LOOP: not transactional. A kill or a rename
 #' failure partway through it can leave some of the item's outputs replaced
 #' and others not; batchit never rolls back a final it has already renamed. An
-#' individual file is not left half-written -- rename replacement is atomic
-#' under the filesystem semantics batchit supports -- but the SET can be torn,
+#' individual file is not left half-written, since rename replacement is atomic
+#' under the filesystem semantics batchit supports, but the SET can be torn,
 #' and a torn set has no valid marker vouching for it.
 #'
-#' AFTER THE MARKER IS WRITTEN -- committed, even if the call reports failure.
+#' AFTER THE MARKER IS WRITTEN: committed, even if the call reports failure.
 #' The worker serializes its result envelope only after committing, so a
 #' failure in that window leaves every final and the marker correctly in place
 #' while the item is reported as failed.
@@ -724,8 +724,8 @@ where_to_write_output <- function(name) {
 #' `style`:
 #' - `style = "return"` (the default): `fn` returns a named list, one
 #'   element per declared output, with names matching `outputs` exactly;
-#'   batchit saves each value to its file (in the `qs2` format -- read it
-#'   back with `qs2::qs_read()`).
+#'   batchit saves each value to its file, in the `qs2` format. Read it
+#'   back with `qs2::qs_read()`.
 #' - `style = "staged_writer"`: `fn` writes each output itself, to the path
 #'   given by [where_to_write_output()]`(<name>)`; its return value is
 #'   ignored. Use this when `fn` already writes files on its own (for
@@ -746,25 +746,25 @@ where_to_write_output <- function(name) {
 #'   self-contained: it may only use its own arguments, base R
 #'   functions/operators, and `pkg::fun()`-qualified calls to other
 #'   packages (including a call to [where_to_write_output()], which must be
-#'   written as `batchit::where_to_write_output()`) -- see [run()]'s
+#'   written as `batchit::where_to_write_output()`). See [run()]'s
 #'   Advanced section for accepted and rejected examples.
 #' @param items One entry per call. Each entry is a named list holding the
-#'   arguments for that one call to `fn` -- every argument `fn` takes must be
+#'   arguments for that one call to `fn`. Every argument `fn` takes must be
 #'   named, including ones with a default value (an omitted optional
 #'   argument is treated as a mistake, not "use the default"). A named entry
 #'   keeps its name as that item's id; an unnamed entry is identified by its
 #'   position instead (1, 2, 3, ...). Item ids must not contain `/` or `\`
-#'   (they're used to build an internal bookkeeping filename -- see the
+#'   (they're used to build an internal bookkeeping filename; see the
 #'   Advanced section of the package README).
 #' @param outputs The files `fn` must produce for each item. One element per
 #'   item, in the same order as `items` (or, when `items` is named, you may
-#'   instead name `outputs` the same way -- same names, any order). Each
-#'   element is a named character vector giving the FINAL path for each
+#'   instead name `outputs` the same way, with the same names in any order).
+#'   Each element is a named character vector giving the FINAL path for each
 #'   declared output, e.g. `c(main = "/path/to/result.qs2")`. Every path
 #'   must be absolute; every destination must either not exist yet, or
 #'   already be an ordinary file (not a directory or a symlink); and every
 #'   path, across every item in this one call, must be unique.
-#' @param style `"return"` (the default) or `"staged_writer"` -- see the
+#' @param style `"return"` (the default) or `"staged_writer"`. See the
 #'   description above for what each means for `fn`. Any other value
 #'   errors.
 #' @param n_workers How many items to run at the same time (a whole number,
@@ -778,7 +778,7 @@ where_to_write_output <- function(name) {
 #' @param target Deprecated former name of `fn`, kept for old callers. Pass
 #'   `fn` instead; supplying both is an error.
 #' @return A list, one element per item, **in the same order as `items`**,
-#'   named by item id. Each element describes what was written --
+#'   named by item id. Each element describes what was written, as
 #'   `list(committed = <named character vector: output name -> final path
 #'   actually written>, attempt = <an internal per-item identifier; you can
 #'   ignore this>)`. Never `fn`'s raw return value.
@@ -801,20 +801,20 @@ where_to_write_output <- function(name) {
 #' result
 #' qs2::qs_read(file.path(out_dir, "sq_1.qs2")) # 4
 #'
-#' # style = "staged_writer": fn writes each output itself -- see
+#' # style = "staged_writer": fn writes each output itself. See
 #' # ?where_to_write_output for a complete example.
 #' }
 #' @section Advanced:
 #' Uses the same fresh-worker-per-item transport as [run()] and
 #' [run_and_collect()] (one `processx` subprocess per item), and the same
-#' code-identity check when `fn` is a [package_function()] reference -- see
+#' code-identity check when `fn` is a [package_function()] reference. See
 #' [run()]'s Advanced section for both.
 #'
 #' After an item commits successfully, batchit leaves a small bookkeeping
 #' file named `.batchit__<item id>`, as its own record that this run finished
 #' writing every declared file. There is ONE marker per item, in the
-#' directory of that item's lexicographically first declared output path --
-#' beside the outputs when they share a directory, and in one of them when
+#' directory of that item's lexicographically first declared output path. That
+#' is beside the outputs when they share a directory, and in one of them when
 #' they do not. Don't create, read, or rely on a file with that name
 #' yourself; batchit manages it entirely, and overwrites it cleanly the next
 #' time that item id is committed.
@@ -941,7 +941,7 @@ run_and_write_files_atomically <- function(
 
   attempts <- vapply(seq_len(n_items), function(i) .batch_new_attempt_token(),
     character(1))
-  # fn_kind == "adhoc" (Phase 6' Unit 3, design section 9.4): a fresh
+  # fn_kind == "adhoc" (design section 7): a fresh
   # per-dispatch identity nonce, echoed back by the child and checked by
   # .batch_inspect_result() in place of the package/symbol/hash identity a
   # package_function descriptor would otherwise supply. Unused (stays NULL) for

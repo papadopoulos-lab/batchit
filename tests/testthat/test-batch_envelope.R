@@ -1,5 +1,5 @@
-# batch_envelope S3 wrapper (PUBLIC_API.md section 3.5, Stage 5 of the public
-# API migration): the per-item wire envelope gains a `class = "batch_envelope"`
+# batch_envelope S3 wrapper (DESIGN.md section 5): the per-item wire envelope
+# gains a `class = "batch_envelope"`
 # attribute plus a `print` method. This must NOT change the wire contract --
 # it stays a plain list a worker reads with bare `qs2::qs_read()` and
 # structurally checks (`.batch_worker_check()` in inst/batch_worker.R) BEFORE

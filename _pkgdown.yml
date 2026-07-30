@@ -14,7 +14,7 @@ template:
       lede: >
         Dispatch one function over many items, each in its own worker process.
         Take the return values back, or let batchit write each item's output
-        files -- with a guarantee that a failed item never leaves a half-written
+        files, with a guarantee that a failed item never leaves a half-written
         file at its final path.
       cta:
         primary:
@@ -38,11 +38,11 @@ authors:
 reference:
 - title: Dispatch a function across subprocesses
   desc: >
-    Run one function over many items, in worker processes — a fresh one per item
-    for the first three, a reused pool for the fourth. Each takes `fn`: a
-    `package_function()` descriptor (hash-verified), or a bare closure for all
+    Run one function over many items, in worker processes: a fresh one per item
+    for the first three, a reused pool for the fourth. Each takes `fn`, either a
+    `package_function()` descriptor (hash-verified) or a bare closure for all
     but the streaming function. They differ in how each item's data arrives and
-    in what comes back — a return value, or declared output files that batchit
+    in what comes back, a return value or declared output files that batchit
     stages and then commits.
   contents:
   - run

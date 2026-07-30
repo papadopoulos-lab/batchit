@@ -20,11 +20,11 @@ written directly in this call, or an object from \code{\link[=package_function]{
 naming a function in an installed package. An inline function must be
 self-contained: it may only use its own arguments, base R
 functions/operators, and \code{pkg::fun()}-qualified calls to other
-packages -- see the Advanced section below for accepted and rejected
+packages. See the Advanced section below for accepted and rejected
 examples.}
 
 \item{items}{One entry per call. Each entry is a named list holding the
-arguments for that one call to \code{fn} -- every argument \code{fn} takes must be
+arguments for that one call to \code{fn}. Every argument \code{fn} takes must be
 named, including ones with a default value (an omitted optional
 argument is treated as a mistake, not "use the default", so a silently
 dropped argument is caught rather than passed through unnoticed). A
@@ -56,35 +56,35 @@ need each item's return value.
 Use this as a parallel \code{for} loop: \code{fn} runs once per item, each call in
 its own, brand-new R process (a worker), with up to \code{n_workers} running at
 the same time. Use this specifically when you don't need anything back in
-your R session -- for example, \code{fn} writes its own files, or is called
+your R session, for example when \code{fn} writes its own files, or is called
 purely for a side effect. If you want each call's return value back, use
 \code{\link[=run_and_collect]{run_and_collect()}} instead; it works identically otherwise. If you want
 batchit itself to manage output files safely (so a failed item never
 leaves a half-written file), use \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}
-instead -- files that \code{fn} writes on its own here get none of that
+instead. Files that \code{fn} writes on its own here get none of that
 protection: if \code{fn} is interrupted partway through writing one, whatever
 it already wrote is left exactly as it is.
 }
 \details{
 If any item's worker errors, exits unexpectedly, or exceeds \code{timeout}, the
 whole call stops immediately with an R error (printing that worker's
-captured output first) -- it does not continue past the failure.
+captured output first). It does not continue past the failure.
 }
 \section{Advanced}{
 
 Accepted and rejected inline functions:
 
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{# Allowed -- uses only its own argument and base R:
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{# Allowed, uses only its own argument and base R:
 function(x) x^2
 
-# Allowed -- calls another package's function, package-qualified:
+# Allowed, calls another package's function, package-qualified:
 function(x) data.table::data.table(x = x, y = x^2)
 
-# NOT allowed -- `threshold` is not an argument of this function:
+# NOT allowed, `threshold` is not an argument of this function:
 threshold <- 10
 function(x) x > threshold
 
-# NOT allowed -- `my_helper` is a plain call to a function defined
+# NOT allowed, `my_helper` is a plain call to a function defined
 # outside this one:
 my_helper <- function(x) x * 2
 function(x) my_helper(x)
@@ -92,11 +92,11 @@ function(x) my_helper(x)
 
 When \code{fn} is a \code{\link[=package_function]{package_function()}} reference, each worker re-checks a
 hash of its code before running it, and refuses to run if that code has
-changed since you called \code{package_function()} -- see that function's help
+changed since you called \code{package_function()}. See that function's help
 page for what the hash does and does not cover.
 
 \code{dev_path} names a package source tree to load in the worker with
-\code{devtools::load_all()}, instead of using the installed package -- the
+\code{devtools::load_all()}, instead of using the installed package: the
 package named in your \code{package_function()} reference, or (for an inline
 \code{fn}) batchit's own source tree. A path that doesn't exist, or doesn't
 match the expected package, is an error rather than a silent fall-back to

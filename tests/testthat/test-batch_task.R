@@ -1,5 +1,5 @@
-# Declared-output commit (run_and_write_files_atomically()) -- Phase 6' Unit 1 (see
-# PHASE6_DESIGN.md). Same real-subprocess discipline as the shape-A test file: these
+# Declared-output commit (run_and_write_files_atomically()); see DESIGN.md
+# section 4. Same real-subprocess discipline as the shape-A test file: these
 # drive the ACTUAL inst/batch_worker.R through the real processx transport and
 # the real .batch_commit_task() rename sequence -- never a mocked commit path.
 
@@ -159,8 +159,7 @@ test_that("run_and_write_files_atomically(): target returns an empty list ('wrot
 # Every failure test above fails BEFORE .batch_commit_task() ever creates a
 # temp (name validation, or the target erroring before .batch_commit_task()
 # even runs) -- so its on.exit/pending cleanup path, and the parent-side
-# SIGKILL/timeout temp sweep (PHASE6_DESIGN.md "Timeout/SIGKILL temp leak"),
-# were untested. These two close that gap.
+# SIGKILL/timeout temp sweep (DESIGN.md section 4.2), were untested. These two close that gap.
 
 test_that("run_and_write_files_atomically(): commit fails PARTWAY through preparing temps (one already created) -- child's own on.exit cleans it up, no marker, no leak", {
   skip_if_not(have_tree, "package source tree not available")
@@ -442,7 +441,7 @@ test_that("run_and_write_files_atomically()'s PARENT-side dispatch path has NO m
   # itself (which includes its nested .launch()/.collect()/.fail() closures,
   # since those are sub-expressions of its own body) plus the two small
   # marker-aware helpers it calls. `.batch_commit_task()` is the CHILD-side
-  # function legitimately exempt (design section 0 / the file banner) and is
+  # function legitimately exempt (design section 1 / the file banner) and is
   # deliberately NOT included.
   # Every PARENT-side (pre-dispatch) function that RECEIVES or DERIVES a marker
   # path: run_and_write_files_atomically() itself, the two marker-aware helpers it calls, AND
@@ -450,7 +449,7 @@ test_that("run_and_write_files_atomically()'s PARENT-side dispatch path has NO m
   # -- so a planted marker read in that callee is caught too. (.batch_execute()
   # and .batch_commit_task() are deliberately EXEMPT: they run in the child,
   # as part of committing an already-dispatched item, never as a launch
-  # decision -- design section 0.)
+  # decision -- design section 1.)
   fns <- list(
     run_and_write_files_atomically = batchit::run_and_write_files_atomically,
     .batch_check_task_collisions = batchit:::.batch_check_task_collisions,
