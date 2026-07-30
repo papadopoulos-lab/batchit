@@ -58,3 +58,12 @@ reference:
   contents:
   - package_function
   - where_to_write_output
+
+- title: Writing one file atomically
+  desc: >
+    A standalone atomic qs2 writer, usable on its own with no dispatch: it
+    writes to a temporary file beside the destination and renames it into
+    place, so the destination is never a truncated file. Independent of the
+    `run_and_write_files_atomically()` commit engine.
+  contents:
+  - write_qs2_atomically

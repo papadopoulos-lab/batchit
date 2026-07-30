@@ -1,3 +1,32 @@
+# batchit 26.7.29.1
+
+**New export: `write_qs2_atomically()`.** A standalone atomic qs2 writer, moved here
+from swereg's `qs2_write_atomic()` with its semantics unchanged: serialize to a
+`tempfile()` in the destination's own directory, then `file.rename()` it into place,
+so the destination is either absent or complete and never truncated. `...` is
+forwarded to `qs2::qs_save()`, the supplied `path` comes back invisibly, and the
+partial temp is removed only when the write failed.
+
+The roxygen carries the three non-promises verbatim: this is not durability
+(`file.rename()` is not an `fsync`), not a lock (two concurrent writers both produce
+a complete file and the last rename wins), and not guaranteed cleanup (`on.exit()`
+cannot run after a `SIGKILL`, so a hard-killed worker leaves its `.tmp` behind --
+the destination is still absent-or-complete). The parent directory must already
+exist; this function never creates it.
+
+It is independent of the `run_and_write_files_atomically()` commit engine and does
+not touch it. It does its own `file.rename()` rather than calling
+`.batch_atomic_replace()`, because that helper hard-codes the `batch commit:` error
+prefix, which a standalone save must not emit, and is documented as the ONE place a
+commit temp becomes final. Its temp is `<basename(path)>.tmp<random>` and carries no
+dispatch attempt token, so `.batch_sweep_task_temps()` can never match it.
+
+Version is `26.7.29.1` rather than `26.7.30`: a same-day second release of a
+`YY.M.D` version needs a fourth component to express it.
+
+The version bump is the only `DESCRIPTION` change. New tests in
+`tests/testthat/test-write_qs2_atomically.R`.
+
 # batchit 26.7.29
 
 **New vignette: "Choosing a dispatch function"** (`vignettes/choosing-a-dispatch-function.Rmd`).
