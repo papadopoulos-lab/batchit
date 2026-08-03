@@ -7,7 +7,9 @@ back.
 
 This article walks through all four with worked examples, then covers
 the two ways to name the function you dispatch, and states exactly what
-the atomic-write guarantee covers.
+the atomic-write guarantee covers. It ends with
+[`write_qs2_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/write_qs2_atomically.md),
+the one exported function that is not a dispatch function at all.
 
 The examples below are shown rather than executed. Each one starts real
 worker processes, and one of them needs a function installed in your own
@@ -264,6 +266,12 @@ slot is not the same as an idle worker process: when every worker
 process is busy, roughly `n_workers` further items can already be
 produced and queued.
 
+The bound covers **produced item arguments only**. The `ids` vector, the
+`outputs` list and the accumulating result list all live in the parent R
+session for the whole call, and none of them is bounded by `n_workers`.
+Streaming solves the problem of items too large to hold all at once; it
+does not make the per-item bookkeeping free.
+
 ``` r
 
 # `write_one_slice()` must live in an INSTALLED package: this function loads it
@@ -471,6 +479,12 @@ On success, a worker process’s stdout and stderr are discarded. Warnings
 are the exception: up to the first 100 warnings per item are carried
 back and re-raised in the parent R session, labelled with the item id.
 
+**Only a completed item’s warnings reach you.** If an item warns and
+then fails, the error envelope carries no warnings, and the call raises
+the error alone. Those warnings are still in the worker’s captured
+output, which the three non-streaming functions print when they report
+the failure, so read that log rather than expecting a warning.
+
 `timeout` is 6 hours by default, per item. Pass `Inf` to disable it.
 
 Item ids come from the names of `items`, or from `ids` when streaming,
@@ -503,6 +517,36 @@ counts for you. If `fn` is itself multi-threaded, lower its thread count
 when running many worker processes, or they will compete for the same
 cores.
 
+## Writing one file atomically, with no dispatch
+
+`write_qs2_atomically(object, path, ...)` is the commit engine’s
+rename-into-place step, on its own. It writes to a uniquely-named
+temporary file in the destination’s own directory, then renames it over
+the destination. No workers, no items, no `fn`.
+
+``` r
+
+write_qs2_atomically(mtcars, file.path(tempdir(), "cars.qs2"))
+qs2::qs_read(file.path(tempdir(), "cars.qs2"))
+```
+
+Use it wherever an interrupted write would leave a truncated file that a
+later read halts on, which is the failure that makes a long pipeline
+restart from the beginning. The destination is left either absent or
+complete, never partial.
+
+It is independent of
+[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md):
+it writes no marker, its temporary file carries no dispatch attempt
+token, and that function’s failure cleanup does not sweep it. Three
+things it does **not** promise are worth reading in
+[`?write_qs2_atomically`](https://papadopoulos-lab.github.io/batchit/reference/write_qs2_atomically.md)
+before relying on it: it is not durability (a rename is not an `fsync`,
+so a power loss can still lose the file), it is not a lock (two
+concurrent writers each produce a complete file and the last rename
+wins), and a `SIGKILL` leaves the temporary file behind, since
+[`on.exit()`](https://rdrr.io/r/base/on.exit.html) cannot run.
+
 ## See also
 
 - [`?run`](https://papadopoulos-lab.github.io/batchit/reference/run.md),
@@ -514,3 +558,5 @@ cores.
   and
   [`?where_to_write_output`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md)
   for the two helpers.
+- [`?write_qs2_atomically`](https://papadopoulos-lab.github.io/batchit/reference/write_qs2_atomically.md)
+  for the standalone atomic writer.

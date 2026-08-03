@@ -23,9 +23,9 @@ package built by
 [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md).
 See that function's help page for when to prefer one over the other.
 
-For a runnable quick-start example and a fuller explanation of each
-function, see the README at
-<https://github.com/papadopoulos-lab/batchit>.
+For a worked example of each function, the rules an inline function must
+follow, and exactly what the atomic-write guarantee covers, see
+[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md).
 
 ## Advanced
 
@@ -53,7 +53,7 @@ CPU cores across `n_workers` yourself.
 
 Useful links:
 
-- <https://papadopoulos-lab.github.io/batchit>
+- <https://papadopoulos-lab.github.io/batchit/>
 
 - <https://github.com/papadopoulos-lab/batchit>
 

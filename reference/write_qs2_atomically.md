@@ -72,3 +72,31 @@ This is a standalone writer, independent of the
 [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
 commit engine: its temp carries no dispatch attempt token and is not
 swept by that engine's failure cleanup.
+
+## See also
+
+[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
+for the same guarantee applied to every output of a dispatched item.
+That function's commit engine is separate: this writer emits no marker,
+and its temporary file is not swept by that engine's failure cleanup.
+
+[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+for where this sits relative to the four dispatch functions.
+
+## Examples
+
+``` r
+path <- file.path(tempdir(), "cars.qs2")
+write_qs2_atomically(mtcars, path)
+nrow(qs2::qs_read(path))
+#> [1] 32
+
+# The destination is replaced only once the new file is complete, so a
+# reader never sees a truncated file, and an interrupted write leaves the
+# previous contents intact.
+write_qs2_atomically(mtcars[1:5, ], path)
+nrow(qs2::qs_read(path))
+#> [1] 5
+
+unlink(path)
+```

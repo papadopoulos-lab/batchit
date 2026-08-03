@@ -55,8 +55,8 @@ run_and_write_files_atomically(
   treated as a mistake, not "use the default"). A named entry keeps its
   name as that item's id; an unnamed entry is identified by its position
   instead (1, 2, 3, ...). Item ids must not contain `/` or `\` (they're
-  used to build an internal bookkeeping filename; see the Advanced
-  section of the package README).
+  used to build an internal bookkeeping filename; see
+  [`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)).
 
 - outputs:
 
@@ -197,15 +197,33 @@ of them when they do not. Don't create, read, or rely on a file with
 that name yourself; batchit manages it entirely, and overwrites it
 cleanly the next time that item id is committed.
 
+## See also
+
+[`where_to_write_output()`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md),
+which `fn` calls under `style = "staged_writer"`, and
+[`write_qs2_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/write_qs2_atomically.md)
+for the same rename-into-place guarantee on a single file with no
+dispatch.
+
+[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+states exactly what the atomic-write guarantee covers in each of its
+three phases.
+
+Other dispatch functions:
+[`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md),
+[`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md),
+[`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)
+
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
+# \donttest{
 # style = "return": fn returns a named list, and batchit saves each
 # value to its declared path (as qs2 files).
 make_two_values <- function(x) list(squared = x^2, doubled = x * 2)
 
-out_dir <- tempdir()
+out_dir <- file.path(tempdir(), "batchit-return-example")
+dir.create(out_dir)
 result <- run_and_write_files_atomically(
   fn = make_two_values,
   items = list(list(x = 2), list(x = 3)),
@@ -215,10 +233,38 @@ result <- run_and_write_files_atomically(
   ),
   n_workers = 2
 )
+#>   [0/2] dispatching workers...
+#>   [1/2] complete  18:01:10
+#>   [2/2] complete  18:01:10
 result
+#> $`1`
+#> $`1`$committed
+#>                                           squared 
+#> "/tmp/RtmpwNtORq/batchit-return-example/sq_1.qs2" 
+#>                                           doubled 
+#> "/tmp/RtmpwNtORq/batchit-return-example/db_1.qs2" 
+#> 
+#> $`1`$attempt
+#> [1] "1b9b697775ef"
+#> 
+#> 
+#> $`2`
+#> $`2`$committed
+#>                                           squared 
+#> "/tmp/RtmpwNtORq/batchit-return-example/sq_2.qs2" 
+#>                                           doubled 
+#> "/tmp/RtmpwNtORq/batchit-return-example/db_2.qs2" 
+#> 
+#> $`2`$attempt
+#> [1] "1b9b528cc4a6"
+#> 
+#> 
 qs2::qs_read(file.path(out_dir, "sq_1.qs2")) # 4
+#> [1] 4
 
 # style = "staged_writer": fn writes each output itself. See
 # ?where_to_write_output for a complete example.
-} # }
+
+unlink(out_dir, recursive = TRUE)
+# }
 ```

@@ -17,13 +17,13 @@ Source:
 [`DESCRIPTION`](https://github.com/papadopoulos-lab/batchit/blob/main/DESCRIPTION)
 
 White RA (2026). *batchit: Run One R Function Across Many Worker
-Processes*. R package version 26.7.30,
-<https://papadopoulos-lab.github.io/batchit>.
+Processes*. R package version 26.8.3,
+<https://papadopoulos-lab.github.io/batchit/>.
 
     @Manual{,
       title = {batchit: Run One R Function Across Many Worker Processes},
       author = {Richard Aubrey White},
       year = {2026},
-      note = {R package version 26.7.30},
-      url = {https://papadopoulos-lab.github.io/batchit},
+      note = {R package version 26.8.3},
+      url = {https://papadopoulos-lab.github.io/batchit/},
     }

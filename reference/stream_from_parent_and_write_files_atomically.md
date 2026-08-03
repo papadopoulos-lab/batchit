@@ -145,6 +145,16 @@ As with
 batchit does not set BLAS or `data.table` thread counts; divide your CPU
 cores across `n_workers` yourself if `fn` is itself multi-threaded.
 
+## See also
+
+[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+for a worked comparison of all four dispatch functions.
+
+Other dispatch functions:
+[`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md),
+[`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md),
+[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
+
 ## Examples
 
 ``` r

@@ -3,7 +3,7 @@ pkgdown: 2.2.1
 pkgdown_sha: ~
 articles:
   choosing-a-dispatch-function: choosing-a-dispatch-function.html
-last_built: 2026-07-30T19:58Z
+last_built: 2026-08-03T18:01Z
 urls:
   reference: https://papadopoulos-lab.github.io/batchit/reference
   article: https://papadopoulos-lab.github.io/batchit/articles

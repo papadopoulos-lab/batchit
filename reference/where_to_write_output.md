@@ -53,17 +53,28 @@ form, and `batchit` is not automatically attached. If your function
 instead lives in your own installed package, either import
 `where_to_write_output` or call it the same package-qualified way.
 
+## See also
+
+[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
+and
+[`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md),
+the two functions that establish the active run this reads from.
+
+[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+for the two rules that go with calling this inside `fn`.
+
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
+# \donttest{
 write_two_files <- function(x) {
   saveRDS(x^2, batchit::where_to_write_output("squared"))
   writeLines(as.character(x * 2), batchit::where_to_write_output("doubled"))
   invisible(NULL) # ignored by batchit for style = "staged_writer"
 }
 
-out_dir <- tempdir()
+out_dir <- file.path(tempdir(), "batchit-staged-example")
+dir.create(out_dir)
 run_and_write_files_atomically(
   fn = write_two_files,
   items = list(list(x = 2), list(x = 3)),
@@ -74,7 +85,36 @@ run_and_write_files_atomically(
   style = "staged_writer",
   n_workers = 2
 )
+#>   [0/2] dispatching workers...
+#>   [1/2] complete  18:01:11
+#>   [2/2] complete  18:01:11
+#> $`1`
+#> $`1`$committed
+#>                                           squared 
+#> "/tmp/RtmpwNtORq/batchit-staged-example/sq_1.rds" 
+#>                                           doubled 
+#> "/tmp/RtmpwNtORq/batchit-staged-example/db_1.txt" 
+#> 
+#> $`1`$attempt
+#> [1] "1b9b2e7c4742"
+#> 
+#> 
+#> $`2`
+#> $`2`$committed
+#>                                           squared 
+#> "/tmp/RtmpwNtORq/batchit-staged-example/sq_2.rds" 
+#>                                           doubled 
+#> "/tmp/RtmpwNtORq/batchit-staged-example/db_2.txt" 
+#> 
+#> $`2`$attempt
+#> [1] "1b9b487bb3e"
+#> 
+#> 
 readRDS(file.path(out_dir, "sq_1.rds")) # 4
+#> [1] 4
 readLines(file.path(out_dir, "db_1.txt")) # "4"
-} # }
+#> [1] "4"
+
+unlink(out_dir, recursive = TRUE)
+# }
 ```

@@ -6,6 +6,11 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Choosing a dispatch function • batchit</title>
+<!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="../favicon-96x96.png">
+<link rel="icon" type="”image/svg+xml”" href="../favicon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="icon" sizes="any" href="../favicon.ico">
+<link rel="manifest" href="../site.webmanifest">
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/Source_Sans_3-0.4.10/font.css" rel="stylesheet">
@@ -23,7 +28,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.7.30</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,8 +63,7 @@
 
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
-
-      <h1>Choosing a dispatch function</h1>
+      <img src="../logo.png" class="logo" alt=""><h1>Choosing a dispatch function</h1>
             
       
       <small class="dont-index">Source: <a href="https://github.com/papadopoulos-lab/batchit/blob/main/vignettes/choosing-a-dispatch-function.Rmd" class="external-link"><code>vignettes/choosing-a-dispatch-function.Rmd</code></a></small>
@@ -74,7 +78,9 @@ on two axes: how each call’s arguments reach the worker process, and
 what comes back.</p>
 <p>This article walks through all four with worked examples, then covers
 the two ways to name the function you dispatch, and states exactly what
-the atomic-write guarantee covers.</p>
+the atomic-write guarantee covers. It ends with
+<code><a href="../reference/write_qs2_atomically.html">write_qs2_atomically()</a></code>, the one exported function that is
+not a dispatch function at all.</p>
 <p>The examples below are shown rather than executed. Each one starts
 real worker processes, and one of them needs a function installed in
 your own package. Output appears as <code>#&gt;</code> comments
@@ -164,7 +170,7 @@ streaming function gives up.</p>
 </h2>
 <p>Use this when you need every item’s return value.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://papadopoulos-lab.github.io/batchit">batchit</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://papadopoulos-lab.github.io/batchit/">batchit</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">squares</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_and_collect.html">run_and_collect</a></span><span class="op">(</span></span>
 <span>  fn <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span><span class="op">^</span><span class="fl">2</span>,</span>
@@ -343,6 +349,12 @@ those slots is free. Note that a slot is not the same as an idle worker
 process: when every worker process is busy, roughly
 <code>n_workers</code> further items can already be produced and
 queued.</p>
+<p>The bound covers <strong>produced item arguments only</strong>. The
+<code>ids</code> vector, the <code>outputs</code> list and the
+accumulating result list all live in the parent R session for the whole
+call, and none of them is bounded by <code>n_workers</code>. Streaming
+solves the problem of items too large to hold all at once; it does not
+make the per-item bookkeeping free.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># `write_one_slice()` must live in an INSTALLED package: this function loads it</span></span>
 <span><span class="co"># by package name and function name, never by value. Put it in your own</span></span>
@@ -530,6 +542,12 @@ captured-log tail.</p>
 Warnings are the exception: up to the first 100 warnings per item are
 carried back and re-raised in the parent R session, labelled with the
 item id.</p>
+<p><strong>Only a completed item’s warnings reach you.</strong> If an
+item warns and then fails, the error envelope carries no warnings, and
+the call raises the error alone. Those warnings are still in the
+worker’s captured output, which the three non-streaming functions print
+when they report the failure, so read that log rather than expecting a
+warning.</p>
 <p><code>timeout</code> is 6 hours by default, per item. Pass
 <code>Inf</code> to disable it.</p>
 <p>Item ids come from the names of <code>items</code>, or from
@@ -563,6 +581,32 @@ itself multi-threaded, lower its thread count when running many worker
 processes, or they will compete for the same cores.</p>
 </div>
 <div class="section level2">
+<h2 id="writing-one-file-atomically-with-no-dispatch">Writing one file atomically, with no dispatch<a class="anchor" aria-label="anchor" href="#writing-one-file-atomically-with-no-dispatch"></a>
+</h2>
+<p><code>write_qs2_atomically(object, path, ...)</code> is the commit
+engine’s rename-into-place step, on its own. It writes to a
+uniquely-named temporary file in the destination’s own directory, then
+renames it over the destination. No workers, no items, no
+<code>fn</code>.</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/write_qs2_atomically.html">write_qs2_atomically</a></span><span class="op">(</span><span class="va">mtcars</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"cars.qs2"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu">qs2</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/qs2/man/qs_read.html" class="external-link">qs_read</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"cars.qs2"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p>Use it wherever an interrupted write would leave a truncated file
+that a later read halts on, which is the failure that makes a long
+pipeline restart from the beginning. The destination is left either
+absent or complete, never partial.</p>
+<p>It is independent of <code><a href="../reference/run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code>:
+it writes no marker, its temporary file carries no dispatch attempt
+token, and that function’s failure cleanup does not sweep it. Three
+things it does <strong>not</strong> promise are worth reading in
+<code><a href="../reference/write_qs2_atomically.html">?write_qs2_atomically</a></code> before relying on it: it is not
+durability (a rename is not an <code>fsync</code>, so a power loss can
+still lose the file), it is not a lock (two concurrent writers each
+produce a complete file and the last rename wins), and a
+<code>SIGKILL</code> leaves the temporary file behind, since
+<code><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit()</a></code> cannot run.</p>
+</div>
+<div class="section level2">
 <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a>
 </h2>
 <ul>
@@ -574,6 +618,9 @@ argument reference.</li>
 <li>
 <code><a href="../reference/package_function.html">?package_function</a></code> and
 <code><a href="../reference/where_to_write_output.html">?where_to_write_output</a></code> for the two helpers.</li>
+<li>
+<code><a href="../reference/write_qs2_atomically.html">?write_qs2_atomically</a></code> for the standalone atomic
+writer.</li>
 </ul>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
@@ -583,7 +630,9 @@ argument reference.</li>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Crafted by <a href="https://www.rwhite.no" class="external-link">Richard Aubrey White</a>.</p>
+  <p>Crafted by <a href="https://www.rwhite.no" class="external-link">Richard Aubrey White</a>.
+<nav class="rw-family" aria-label="package family"><a class="external-link rw-family-label" href="https://papadopoulos-lab.github.io/">packages ↗</a> <a href="https://papadopoulos-lab.github.io/batchit/">batchit</a> <a href="https://skalkidou-lab.github.io/mht/" class="external-link">mht</a> <a href="https://papadopoulos-lab.github.io/swereg/" class="external-link">swereg</a>
+</nav></p>
 </div>
 
 <div class="pkgdown-footer-right">

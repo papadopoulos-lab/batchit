@@ -128,11 +128,22 @@ batchit does not set BLAS or `data.table` thread counts. If `fn` is
 itself multi-threaded, reduce its thread count yourself when running
 several workers at once, to avoid oversubscribing your CPU cores.
 
+## See also
+
+[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+for a worked comparison of all four dispatch functions.
+
+Other dispatch functions:
+[`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md),
+[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md),
+[`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)
+
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
-out_dir <- tempdir()
+# \donttest{
+out_dir <- file.path(tempdir(), "batchit-run-example")
+dir.create(out_dir)
 run(
   fn = function(x, dir) saveRDS(x^2, file.path(dir, paste0(x, ".rds"))),
   items = list(
@@ -142,7 +153,15 @@ run(
   ),
   n_workers = 2
 )
+#>   [0/3] dispatching workers...
+#>   [1/3] complete  18:01:07
+#>   [2/3] complete  18:01:07
+#>   [3/3] complete  18:01:08
 list.files(out_dir)
+#> [1] "1.rds" "2.rds" "3.rds"
 readRDS(file.path(out_dir, "2.rds")) # 4
-} # }
+#> [1] 4
+
+unlink(out_dir, recursive = TRUE)
+# }
 ```

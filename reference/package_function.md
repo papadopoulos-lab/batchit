@@ -79,13 +79,24 @@ or from a
 [`devtools::load_all()`](https://devtools.r-lib.org/reference/load_all.html)
 source tree, which otherwise disagree on identical code.
 
+## See also
+
+[`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md),
+[`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md),
+[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
+and
+[`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md),
+which all accept the descriptor this returns as their `fn`.
+
+[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+for when to prefer this over an inline function.
+
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
 # `stats` ships with R, so this always works. In your own project, name
 # your own package and function here instead.
 t <- package_function("stats", "sd")
 t$formal_names
-} # }
+#> [1] "x"     "na.rm"
 ```

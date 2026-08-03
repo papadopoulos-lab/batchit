@@ -119,15 +119,38 @@ batchit does not set BLAS or `data.table` thread counts. If `fn` is
 itself multi-threaded, reduce its thread count yourself when running
 several workers at once, to avoid oversubscribing your CPU cores.
 
+## See also
+
+[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+for a worked comparison of all four dispatch functions.
+
+Other dispatch functions:
+[`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md),
+[`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md),
+[`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)
+
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
+# \donttest{
 squares <- run_and_collect(
   fn = function(x) x^2,
   items = list(list(x = 2), list(x = 3), list(x = 4)),
   n_workers = 2
 )
+#>   [0/3] dispatching workers...
+#>   [1/3] complete  18:01:09
+#>   [2/3] complete  18:01:09
+#>   [3/3] complete  18:01:09
 squares
-} # }
+#> [[1]]
+#> [1] 4
+#> 
+#> [[2]]
+#> [1] 9
+#> 
+#> [[3]]
+#> [1] 16
+#> 
+# }
 ```
