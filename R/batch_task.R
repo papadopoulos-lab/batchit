@@ -340,6 +340,25 @@
 #' @param path Destination path. Its parent directory must already exist.
 #' @param ... Passed to [qs2::qs_save()] (e.g. `nthreads`).
 #' @return `path`, invisibly.
+#' @examples
+#' path <- file.path(tempdir(), "cars.qs2")
+#' write_qs2_atomically(mtcars, path)
+#' nrow(qs2::qs_read(path))
+#'
+#' # The destination is replaced only once the new file is complete, so a
+#' # reader never sees a truncated file, and an interrupted write leaves the
+#' # previous contents intact.
+#' write_qs2_atomically(mtcars[1:5, ], path)
+#' nrow(qs2::qs_read(path))
+#'
+#' unlink(path)
+#' @seealso [run_and_write_files_atomically()] for the same guarantee applied
+#'   to every output of a dispatched item. That function's commit engine is
+#'   separate: this writer emits no marker, and its temporary file is not
+#'   swept by that engine's failure cleanup.
+#'
+#'   `vignette("choosing-a-dispatch-function")` for where this sits relative to
+#'   the four dispatch functions.
 #' @export
 write_qs2_atomically <- function(object, path, ...) {
   dir <- dirname(path)
@@ -467,14 +486,15 @@ write_qs2_atomically <- function(object, path, ...) {
 #'   back or move/rename it yourself. batchit renames it to the final
 #'   destination once every declared output has been staged.
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' write_two_files <- function(x) {
 #'   saveRDS(x^2, batchit::where_to_write_output("squared"))
 #'   writeLines(as.character(x * 2), batchit::where_to_write_output("doubled"))
 #'   invisible(NULL) # ignored by batchit for style = "staged_writer"
 #' }
 #'
-#' out_dir <- tempdir()
+#' out_dir <- file.path(tempdir(), "batchit-staged-example")
+#' dir.create(out_dir)
 #' run_and_write_files_atomically(
 #'   fn = write_two_files,
 #'   items = list(list(x = 2), list(x = 3)),
@@ -487,7 +507,15 @@ write_qs2_atomically <- function(object, path, ...) {
 #' )
 #' readRDS(file.path(out_dir, "sq_1.rds")) # 4
 #' readLines(file.path(out_dir, "db_1.txt")) # "4"
+#'
+#' unlink(out_dir, recursive = TRUE)
 #' }
+#' @seealso [run_and_write_files_atomically()] and
+#'   [stream_from_parent_and_write_files_atomically()], the two functions that
+#'   establish the active run this reads from.
+#'
+#'   `vignette("choosing-a-dispatch-function")` for the two rules that go with
+#'   calling this inside `fn`.
 #' @export
 where_to_write_output <- function(name) {
   if (!isTRUE(.batch_stage_env$active)) {
@@ -754,8 +782,8 @@ where_to_write_output <- function(name) {
 #'   argument is treated as a mistake, not "use the default"). A named entry
 #'   keeps its name as that item's id; an unnamed entry is identified by its
 #'   position instead (1, 2, 3, ...). Item ids must not contain `/` or `\`
-#'   (they're used to build an internal bookkeeping filename; see the
-#'   Advanced section of the package README).
+#'   (they're used to build an internal bookkeeping filename; see
+#'   `vignette("choosing-a-dispatch-function")`).
 #' @param outputs The files `fn` must produce for each item. One element per
 #'   item, in the same order as `items` (or, when `items` is named, you may
 #'   instead name `outputs` the same way, with the same names in any order).
@@ -783,12 +811,13 @@ where_to_write_output <- function(name) {
 #'   actually written>, attempt = <an internal per-item identifier; you can
 #'   ignore this>)`. Never `fn`'s raw return value.
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' # style = "return": fn returns a named list, and batchit saves each
 #' # value to its declared path (as qs2 files).
 #' make_two_values <- function(x) list(squared = x^2, doubled = x * 2)
 #'
-#' out_dir <- tempdir()
+#' out_dir <- file.path(tempdir(), "batchit-return-example")
+#' dir.create(out_dir)
 #' result <- run_and_write_files_atomically(
 #'   fn = make_two_values,
 #'   items = list(list(x = 2), list(x = 3)),
@@ -803,7 +832,16 @@ where_to_write_output <- function(name) {
 #'
 #' # style = "staged_writer": fn writes each output itself. See
 #' # ?where_to_write_output for a complete example.
+#'
+#' unlink(out_dir, recursive = TRUE)
 #' }
+#' @family dispatch functions
+#' @seealso [where_to_write_output()], which `fn` calls under
+#'   `style = "staged_writer"`, and [write_qs2_atomically()] for the same
+#'   rename-into-place guarantee on a single file with no dispatch.
+#'
+#'   `vignette("choosing-a-dispatch-function")` states exactly what the
+#'   atomic-write guarantee covers in each of its three phases.
 #' @section Advanced:
 #' Uses the same fresh-worker-per-item transport as [run()] and
 #' [run_and_collect()] (one `processx` subprocess per item), and the same

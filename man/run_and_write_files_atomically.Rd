@@ -33,8 +33,8 @@ named, including ones with a default value (an omitted optional
 argument is treated as a mistake, not "use the default"). A named entry
 keeps its name as that item's id; an unnamed entry is identified by its
 position instead (1, 2, 3, ...). Item ids must not contain \code{/} or \verb{\\}
-(they're used to build an internal bookkeeping filename; see the
-Advanced section of the package README).}
+(they're used to build an internal bookkeeping filename; see
+\code{vignette("choosing-a-dispatch-function")}).}
 
 \item{outputs}{The files \code{fn} must produce for each item. One element per
 item, in the same order as \code{items} (or, when \code{items} is named, you may
@@ -154,12 +154,13 @@ time that item id is committed.
 }
 
 \examples{
-\dontrun{
+\donttest{
 # style = "return": fn returns a named list, and batchit saves each
 # value to its declared path (as qs2 files).
 make_two_values <- function(x) list(squared = x^2, doubled = x * 2)
 
-out_dir <- tempdir()
+out_dir <- file.path(tempdir(), "batchit-return-example")
+dir.create(out_dir)
 result <- run_and_write_files_atomically(
   fn = make_two_values,
   items = list(list(x = 2), list(x = 3)),
@@ -174,5 +175,21 @@ qs2::qs_read(file.path(out_dir, "sq_1.qs2")) # 4
 
 # style = "staged_writer": fn writes each output itself. See
 # ?where_to_write_output for a complete example.
+
+unlink(out_dir, recursive = TRUE)
 }
 }
+\seealso{
+\code{\link[=where_to_write_output]{where_to_write_output()}}, which \code{fn} calls under
+\code{style = "staged_writer"}, and \code{\link[=write_qs2_atomically]{write_qs2_atomically()}} for the same
+rename-into-place guarantee on a single file with no dispatch.
+
+\code{vignette("choosing-a-dispatch-function")} states exactly what the
+atomic-write guarantee covers in each of its three phases.
+
+Other dispatch functions:
+\code{\link[=run]{run()}},
+\code{\link[=run_and_collect]{run_and_collect()}},
+\code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}
+}
+\concept{dispatch functions}

@@ -29,3 +29,5 @@ docs/
 /Meta/
 # NFS lock artifacts
 .nfs*
+# default graphics device output, left behind by dev/logo.R under Rscript
+Rplots.pdf

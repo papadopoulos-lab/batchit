@@ -28,9 +28,9 @@ in the call, or a reference to a function in an installed package built
 by \code{\link[=package_function]{package_function()}}. See that function's help page for when to
 prefer one over the other.
 
-For a runnable quick-start example and a fuller explanation of each
-function, see the README at
-\url{https://github.com/papadopoulos-lab/batchit}.
+For a worked example of each function, the rules an inline function must
+follow, and exactly what the atomic-write guarantee covers, see
+\code{vignette("choosing-a-dispatch-function")}.
 }
 \section{Advanced}{
 
@@ -53,7 +53,7 @@ multi-threaded, divide your CPU cores across \code{n_workers} yourself.
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://papadopoulos-lab.github.io/batchit}
+  \item \url{https://papadopoulos-lab.github.io/batchit/}
   \item \url{https://github.com/papadopoulos-lab/batchit}
   \item Report bugs at \url{https://github.com/papadopoulos-lab/batchit/issues}
 }

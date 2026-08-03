@@ -108,8 +108,9 @@ several workers at once, to avoid oversubscribing your CPU cores.
 }
 
 \examples{
-\dontrun{
-out_dir <- tempdir()
+\donttest{
+out_dir <- file.path(tempdir(), "batchit-run-example")
+dir.create(out_dir)
 run(
   fn = function(x, dir) saveRDS(x^2, file.path(dir, paste0(x, ".rds"))),
   items = list(
@@ -121,5 +122,17 @@ run(
 )
 list.files(out_dir)
 readRDS(file.path(out_dir, "2.rds")) # 4
+
+unlink(out_dir, recursive = TRUE)
 }
 }
+\seealso{
+\code{vignette("choosing-a-dispatch-function")} for a worked comparison
+of all four dispatch functions.
+
+Other dispatch functions:
+\code{\link[=run_and_collect]{run_and_collect()}},
+\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}},
+\code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}
+}
+\concept{dispatch functions}

@@ -58,3 +58,25 @@ This is a standalone writer, independent of the
 \code{run_and_write_files_atomically()} commit engine: its temp carries no
 dispatch attempt token and is not swept by that engine's failure cleanup.
 }
+\examples{
+path <- file.path(tempdir(), "cars.qs2")
+write_qs2_atomically(mtcars, path)
+nrow(qs2::qs_read(path))
+
+# The destination is replaced only once the new file is complete, so a
+# reader never sees a truncated file, and an interrupted write leaves the
+# previous contents intact.
+write_qs2_atomically(mtcars[1:5, ], path)
+nrow(qs2::qs_read(path))
+
+unlink(path)
+}
+\seealso{
+\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} for the same guarantee applied
+to every output of a dispatched item. That function's commit engine is
+separate: this writer emits no marker, and its temporary file is not
+swept by that engine's failure cleanup.
+
+\code{vignette("choosing-a-dispatch-function")} for where this sits relative to
+the four dispatch functions.
+}

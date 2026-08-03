@@ -135,3 +135,13 @@ stream_from_parent_and_write_files_atomically(
 )
 }
 }
+\seealso{
+\code{vignette("choosing-a-dispatch-function")} for a worked comparison
+of all four dispatch functions.
+
+Other dispatch functions:
+\code{\link[=run]{run()}},
+\code{\link[=run_and_collect]{run_and_collect()}},
+\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}
+}
+\concept{dispatch functions}

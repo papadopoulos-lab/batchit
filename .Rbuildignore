@@ -4,6 +4,10 @@
 ^\.github$
 ^docs$
 ^_pkgdown\.yml$
+^index\.md$
+^dev$
+^Rplots\.pdf$
+^pkgdown$
 ^PROJECT\.md$
 ^DESIGN\.md$
 ^\.git$

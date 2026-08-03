@@ -47,14 +47,15 @@ your function instead lives in your own installed package, either import
 \code{where_to_write_output} or call it the same package-qualified way.
 }
 \examples{
-\dontrun{
+\donttest{
 write_two_files <- function(x) {
   saveRDS(x^2, batchit::where_to_write_output("squared"))
   writeLines(as.character(x * 2), batchit::where_to_write_output("doubled"))
   invisible(NULL) # ignored by batchit for style = "staged_writer"
 }
 
-out_dir <- tempdir()
+out_dir <- file.path(tempdir(), "batchit-staged-example")
+dir.create(out_dir)
 run_and_write_files_atomically(
   fn = write_two_files,
   items = list(list(x = 2), list(x = 3)),
@@ -67,5 +68,15 @@ run_and_write_files_atomically(
 )
 readRDS(file.path(out_dir, "sq_1.rds")) # 4
 readLines(file.path(out_dir, "db_1.txt")) # "4"
+
+unlink(out_dir, recursive = TRUE)
 }
+}
+\seealso{
+\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} and
+\code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}, the two functions that
+establish the active run this reads from.
+
+\code{vignette("choosing-a-dispatch-function")} for the two rules that go with
+calling this inside \code{fn}.
 }

@@ -96,12 +96,16 @@
 #'   `formal_names` (the function's argument names). Pass the whole object
 #'   as `fn`.
 #' @examples
-#' \dontrun{
 #' # `stats` ships with R, so this always works. In your own project, name
 #' # your own package and function here instead.
 #' t <- package_function("stats", "sd")
 #' t$formal_names
-#' }
+#' @seealso [run()], [run_and_collect()], [run_and_write_files_atomically()]
+#'   and [stream_from_parent_and_write_files_atomically()], which all accept
+#'   the descriptor this returns as their `fn`.
+#'
+#'   `vignette("choosing-a-dispatch-function")` for when to prefer this over
+#'   an inline function.
 #' @section Advanced:
 #' The code hash is deliberately narrow: it covers only the function's own
 #' body and its own argument list. A changed helper function it calls, a
@@ -1537,8 +1541,9 @@ print.batch_envelope <- function(x, ...) {
 #' @return Nothing useful (`invisible(NULL)`). Use [run_and_collect()] if you
 #'   need each item's return value.
 #' @examples
-#' \dontrun{
-#' out_dir <- tempdir()
+#' \donttest{
+#' out_dir <- file.path(tempdir(), "batchit-run-example")
+#' dir.create(out_dir)
 #' run(
 #'   fn = function(x, dir) saveRDS(x^2, file.path(dir, paste0(x, ".rds"))),
 #'   items = list(
@@ -1550,7 +1555,12 @@ print.batch_envelope <- function(x, ...) {
 #' )
 #' list.files(out_dir)
 #' readRDS(file.path(out_dir, "2.rds")) # 4
+#'
+#' unlink(out_dir, recursive = TRUE)
 #' }
+#' @family dispatch functions
+#' @seealso `vignette("choosing-a-dispatch-function")` for a worked comparison
+#'   of all four dispatch functions.
 #' @section Advanced:
 #' Accepted and rejected inline functions:
 #' ```r
@@ -1650,7 +1660,7 @@ run <- function(
 #'   was named, unlike [run_and_write_files_atomically()] and
 #'   [stream_from_parent_and_write_files_atomically()], whose results are.
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' squares <- run_and_collect(
 #'   fn = function(x) x^2,
 #'   items = list(list(x = 2), list(x = 3), list(x = 4)),
@@ -1658,6 +1668,9 @@ run <- function(
 #' )
 #' squares
 #' }
+#' @family dispatch functions
+#' @seealso `vignette("choosing-a-dispatch-function")` for a worked comparison
+#'   of all four dispatch functions.
 #' @section Advanced:
 #' Fresh worker processes are not just a convenience here. They are the
 #' memory strategy for memory-heavy work. When one item's analysis peaks at,
@@ -1807,6 +1820,9 @@ run_and_collect <- function(
 #'   n_workers = 2
 #' )
 #' }
+#' @family dispatch functions
+#' @seealso `vignette("choosing-a-dispatch-function")` for a worked comparison
+#'   of all four dispatch functions.
 #' @section Advanced:
 #' This function runs its workers as persistent `mirai` daemons, in a
 #' private compute profile it creates and tears down for this call only.

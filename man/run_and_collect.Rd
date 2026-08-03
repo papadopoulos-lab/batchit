@@ -96,7 +96,7 @@ several workers at once, to avoid oversubscribing your CPU cores.
 }
 
 \examples{
-\dontrun{
+\donttest{
 squares <- run_and_collect(
   fn = function(x) x^2,
   items = list(list(x = 2), list(x = 3), list(x = 4)),
@@ -105,3 +105,13 @@ squares <- run_and_collect(
 squares
 }
 }
+\seealso{
+\code{vignette("choosing-a-dispatch-function")} for a worked comparison
+of all four dispatch functions.
+
+Other dispatch functions:
+\code{\link[=run]{run()}},
+\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}},
+\code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}
+}
+\concept{dispatch functions}

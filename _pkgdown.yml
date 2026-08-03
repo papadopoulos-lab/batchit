@@ -3,8 +3,12 @@ url: https://papadopoulos-lab.github.io/batchit/
 # House style shared with the other papadopoulos-lab packages (swereg et al).
 # The template package supplies bootstrap 5, the typography, the palette, and
 # the navbar/footer structure. Everything under `params: hero:` is this
-# package's own copy for the home-page hero band. Without a logo the hero's
-# art column collapses and the band renders text-only, which is intended here.
+# package's own copy for the home-page hero band. The template picks up
+# man/figures/logo.png by itself for the hero's art column; regenerate that
+# file with `Rscript dev/logo.R`.
+#
+# The hero sits above the home-page body, which pkgdown fills from index.md
+# (NOT README.md, which is the GitHub landing page and is deliberately thinner).
 template:
   package: pkgdowntemplate
   params:

@@ -66,10 +66,16 @@ on identical code.
 }
 
 \examples{
-\dontrun{
 # `stats` ships with R, so this always works. In your own project, name
 # your own package and function here instead.
 t <- package_function("stats", "sd")
 t$formal_names
 }
+\seealso{
+\code{\link[=run]{run()}}, \code{\link[=run_and_collect]{run_and_collect()}}, \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}
+and \code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}, which all accept
+the descriptor this returns as their \code{fn}.
+
+\code{vignette("choosing-a-dispatch-function")} for when to prefer this over
+an inline function.
 }

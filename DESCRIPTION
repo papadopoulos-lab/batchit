@@ -1,6 +1,6 @@
 Package: batchit
 Title: Run One R Function Across Many Worker Processes
-Version: 26.7.30
+Version: 26.8.3
 Authors@R: person(c("Richard","Aubrey"), "White", email = "hello@rwhite.no", role = c("aut", "cre"),
     comment = c(ORCID = "0000-0002-6747-1726"))
 Description: Runs one R function once per item in a list of inputs, each call in
@@ -8,18 +8,18 @@ Description: Runs one R function once per item in a list of inputs, each call in
     when the function is called for a side effect, or the function's declared
     output files are written for it. Naming the function by package and symbol
     rather than passing it by value lets a worker hash what it loaded and refuse
-    code that differs
-    from what was dispatched. Every item's arguments are checked against the
-    function's formals in both the calling session and the worker, and every
-    result comes back in a structured envelope carrying the status, the value or
-    the error, and any captured warnings. Output files are staged beside their
-    destinations and renamed into place, so a failed item leaves no half-written
-    file. Two transports are available: a fresh process per item via 'processx',
+    code that differs from what was dispatched. Every item's arguments are
+    checked against the function's formals in both the calling session and the
+    worker. Warnings raised by an item that completes are carried back and
+    re-raised in the calling session, labelled with that item, while an item
+    that fails stops the call rather than returning a partial result. Output files are staged
+    beside their destinations and renamed into place, so a failed item leaves no
+    half-written file. Two transports are available: a fresh process per item via 'processx',
     where process exit is what reclaims memory, and a lazy producer with bounded
     backpressure via 'mirai' daemons for items that must be generated on demand.
 Depends: R (>= 4.1.0)
 License: MIT + file LICENSE
-URL: https://papadopoulos-lab.github.io/batchit, https://github.com/papadopoulos-lab/batchit
+URL: https://papadopoulos-lab.github.io/batchit/, https://github.com/papadopoulos-lab/batchit
 BugReports: https://github.com/papadopoulos-lab/batchit/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

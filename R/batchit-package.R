@@ -19,9 +19,9 @@
 #' by [package_function()]. See that function's help page for when to
 #' prefer one over the other.
 #'
-#' For a runnable quick-start example and a fuller explanation of each
-#' function, see the README at
-#' <https://github.com/papadopoulos-lab/batchit>.
+#' For a worked example of each function, the rules an inline function must
+#' follow, and exactly what the atomic-write guarantee covers, see
+#' `vignette("choosing-a-dispatch-function")`.
 #'
 #' @section Advanced:
 #' `run()`, `run_and_collect()`, and `run_and_write_files_atomically()` each
