@@ -60,7 +60,7 @@ and
 [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md),
 the two functions that establish the active run this reads from.
 
-[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+[`vignette("batchit")`](https://papadopoulos-lab.github.io/batchit/articles/batchit.md)
 for the two rules that go with calling this inside `fn`.
 
 ## Examples
@@ -86,28 +86,28 @@ run_and_write_files_atomically(
   n_workers = 2
 )
 #>   [0/2] dispatching workers...
-#>   [1/2] complete  08:07:00
-#>   [2/2] complete  08:07:00
+#>   [1/2] complete  08:49:54
+#>   [2/2] complete  08:49:54
 #> $`1`
 #> $`1`$committed
 #>                                           squared 
-#> "/tmp/RtmpkRwYyJ/batchit-staged-example/sq_1.rds" 
+#> "/tmp/RtmpMPAmpS/batchit-staged-example/sq_1.rds" 
 #>                                           doubled 
-#> "/tmp/RtmpkRwYyJ/batchit-staged-example/db_1.txt" 
+#> "/tmp/RtmpMPAmpS/batchit-staged-example/db_1.txt" 
 #> 
 #> $`1`$attempt
-#> [1] "1b60160b221a"
+#> [1] "1b29455a63f"
 #> 
 #> 
 #> $`2`
 #> $`2`$committed
 #>                                           squared 
-#> "/tmp/RtmpkRwYyJ/batchit-staged-example/sq_2.rds" 
+#> "/tmp/RtmpMPAmpS/batchit-staged-example/sq_2.rds" 
 #>                                           doubled 
-#> "/tmp/RtmpkRwYyJ/batchit-staged-example/db_2.txt" 
+#> "/tmp/RtmpMPAmpS/batchit-staged-example/db_2.txt" 
 #> 
 #> $`2`$attempt
-#> [1] "1b605009302b"
+#> [1] "1b291484cc13"
 #> 
 #> 
 readRDS(file.path(out_dir, "sq_1.rds")) # 4

@@ -24,7 +24,7 @@ package, built by
 See that function's help page for when to prefer one over the other.
 
 See
-[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+[`vignette("batchit")`](https://papadopoulos-lab.github.io/batchit/articles/batchit.md)
 for a worked example of each function. It also gives the rules an inline
 function must follow, and exactly what the atomic-write guarantee
 covers.

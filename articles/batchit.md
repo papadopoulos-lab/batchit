@@ -1,33 +1,87 @@
-# Choosing a dispatch function
+# Get started with batchit
 
-batchit runs one R function many times, each call in a separate worker
-process. Four functions do that. They share one shape and differ on two
-axes: how each call’s arguments reach the worker process, and what comes
-back.
+## The problem batchit solves
 
-This article walks through all four with worked examples. It then covers
-the two ways to name the function you dispatch. It states exactly what
-the atomic-write guarantee covers. It ends with
-[`write_qs2_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/write_qs2_atomically.md),
-the one exported function that is not a dispatch function at all.
+A long loop in one R session can accumulate memory that it never gives
+back. R may keep a large allocation after the objects that used it are
+gone. The loop then carries that memory to the end of the run. Letting a
+process exit is the reliable way to reclaim it.
 
-The examples below are shown rather than executed. Each one starts real
-worker processes, and one of them needs a function installed in your own
-package. Output appears as `#>` comments instead.
+batchit runs one R function once per item, and gives each call its own
+worker process. The worker process exits when its item finishes, and its
+memory goes back to the operating system. This matters when one item
+peaks at many gigabytes.
 
-## The shape all four share
+Four functions do that dispatch. They share one shape. They differ on
+two axes: how each call’s arguments reach the worker process, and what
+comes back.
 
-Three ideas appear in every one of the four functions.
+Most examples in this article run when R builds the article, and show
+their real output. Two kinds do not run. The streaming example needs a
+package that you install yourself. The self-containedness fragments are
+there to be read.
+
+## Your first dispatch
+
+Square three numbers, in separate R processes, two at a time.
+
+``` r
+
+library(batchit)
+
+results <- run_and_collect(
+  fn = function(x) list(value = x^2, worker_pid = Sys.getpid()),
+  items = list(list(x = 2), list(x = 3), list(x = 4)),
+  n_workers = 2
+)
+#>   [0/3] dispatching workers...
+#>   [1/3] complete  08:49:57
+#>   [2/3] complete  08:49:57
+#>   [3/3] complete  08:49:57
+
+results[[1]]
+#> $value
+#> [1] 4
+#> 
+#> $worker_pid
+#> [1] 7709
+```
+
+batchit prints one dispatch line, and then one progress line per
+completed item. Most later examples in this article hide those lines, to
+keep the output short.
+
+Each item also reported the process id it ran in. Compare those three
+ids with this session’s id:
+
+``` r
+
+worker_pids <- vapply(results, function(r) r$worker_pid, integer(1))
+worker_pids
+#> [1] 7709 7715 7739
+
+Sys.getpid()
+#> [1] 7679
+Sys.getpid() %in% worker_pids
+#> [1] FALSE
+```
+
+batchit started a fresh R process for each of the three items, and none
+of them was this session.
+
+## What just happened
+
+Five terms carry through every batchit call.
 
 **`fn`** is the function to run once per item.
 
 **An item is one call’s arguments, as a named list.** `list(x = 2)`
-means “call `fn` with `x = 2`”. Three of the four take a list of items,
-as `items`.
+means “call `fn` with `x = 2`”. Three of the four dispatch functions
+take a list of items, as `items`.
 
 **`n_workers`** is how many items run at the same time.
 
-A **worker process** is a separate R process.
+**A worker process is a separate R process.**
 [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md),
 [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
 and
@@ -37,25 +91,22 @@ start a fresh one for every item.
 instead reuses a small pool of persistent worker processes (`mirai`
 daemons).
 
-A fresh process per item is a memory strategy, not a convenience. R may
-keep a large allocation after the objects that used it are gone. Letting
-the process exit is the reliable way to reclaim that memory. This
-matters when one item peaks at many gigabytes.
+**The parent R session** is the session you call batchit from. This
+article uses that term throughout.
 
-Throughout this article, the **parent R session** is the session you
-call batchit from.
+## Which of the four do I want?
 
-## Which one do I want?
+Two questions decide it.
 
-Two things decide it.
+**What do you want back?** Pick one of three answers:
 
-**What do you want back?** Each item’s return value; nothing, because
-`fn` has an external side effect; or output files that batchit writes
-and guards for you.
+- each item’s return value;
+- nothing, because `fn` has a side effect outside R;
+- output files that batchit writes and guards for you.
 
 **Can you hold every item in memory at once?** Usually yes. Say no when
-one item’s arguments are a large data slice, or when there are far too
-many items to keep as one list.
+one item’s arguments are a large data slice. Say no when there are far
+too many items to keep as one list.
 
 | What you want back | Items | Use |
 |----|----|----|
@@ -68,8 +119,8 @@ Lazy production is available only in combination with batchit-managed
 output files. There is no streaming function that hands back raw return
 values.
 
-Before you reach for the streaming function, consider the simpler
-alternative. Put a small identifier or file path in each item. Have `fn`
+Consider the simpler alternative before you reach for the streaming
+function. Put a small identifier or file path in each item. Have `fn`
 load the large data itself, inside its worker process. That keeps the
 fresh-process-per-item memory behaviour, which the streaming function
 gives up.
@@ -80,29 +131,50 @@ Use this when you need every item’s return value.
 
 ``` r
 
-library(batchit)
-
 squares <- run_and_collect(
   fn = function(x) x^2,
-  items = list(list(x = 2), list(x = 3), list(x = 4)),
+  items = list(small = list(x = 2), medium = list(x = 3), large = list(x = 4)),
   n_workers = 2
 )
 
 squares
 #> [[1]]
 #> [1] 4
-#>
+#> 
 #> [[2]]
 #> [1] 9
-#>
+#> 
 #> [[3]]
 #> [1] 16
 ```
 
-Results come back **in the order of `items`**, not the order the worker
-processes happened to finish. The returned list is never named by item
-id, even when `items` was named. The two file-writing functions below do
-name theirs, so this asymmetry is worth remembering.
+The returned list carries no names, even though `items` was named
+`small`, `medium` and `large` here. The two file-writing functions below
+do name their result, so this difference is worth remembering.
+
+Results also come back **in the order of `items`**, not in the order the
+worker processes finished. The first item below sleeps for a second and
+still lands first:
+
+``` r
+
+run_and_collect(
+  fn = function(label, seconds) {
+    Sys.sleep(seconds)
+    label
+  },
+  items = list(
+    list(label = "slow", seconds = 1),
+    list(label = "fast", seconds = 0)
+  ),
+  n_workers = 2
+)
+#> [[1]]
+#> [1] "slow"
+#> 
+#> [[2]]
+#> [1] "fast"
+```
 
 Every return value travels from the worker process back to the parent R
 session. A small object can also travel into a worker process as part of
@@ -111,8 +183,8 @@ from disk itself.
 
 ## `run()`: run items and discard the return values
 
-Use this when `fn` is called for an effect outside R: it writes its own
-files, or updates a database. It works exactly like
+Use this when `fn` is called for an effect outside R. It writes its own
+files, or it updates a database. It works like
 [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
 and returns `invisible(NULL)`.
 
@@ -122,25 +194,28 @@ process, not the parent R session.
 
 ``` r
 
-out_dir <- tempdir()
+run_dir <- file.path(tempdir(), "batchit-run")
+dir.create(run_dir, showWarnings = FALSE)
 
 run(
   fn = function(x, dir) qs2::qs_save(x^2, file.path(dir, paste0(x, ".qs2"))),
   items = list(
-    list(x = 1, dir = out_dir),
-    list(x = 2, dir = out_dir),
-    list(x = 3, dir = out_dir)
+    list(x = 1, dir = run_dir),
+    list(x = 2, dir = run_dir),
+    list(x = 3, dir = run_dir)
   ),
   n_workers = 2
 )
 
-qs2::qs_read(file.path(out_dir, "2.qs2"))
+list.files(run_dir)
+#> [1] "1.qs2" "2.qs2" "3.qs2"
+qs2::qs_read(file.path(run_dir, "2.qs2"))
 #> [1] 4
 ```
 
 Files that `fn` writes on its own, as here, get no protection from
-batchit. If this `fn` were interrupted partway through writing `2.qs2`,
-a half-written `2.qs2` would be left at that path.
+batchit. An interruption partway through writing `2.qs2` leaves a
+half-written `2.qs2` at that path.
 [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
 is what prevents that.
 
@@ -152,86 +227,103 @@ its destination. It replaces the final files only after every one of
 that item’s outputs is written successfully.
 
 `outputs` is one named character vector per item, in the same order as
-`items`. When `items` is named, `outputs` may carry the same names
-instead, in any order. Every path must be absolute, its parent directory
-must already exist, and every path across the whole call must be unique.
-A destination may already exist as a plain file, in which case it is
-replaced; a directory or a symlink there is rejected. (Base R cannot
-portably reject a FIFO, socket or device file, so those are not caught.)
+`items`. When `items` is named, `outputs` MAY carry the same names
+instead, in any order.
+
+Three rules apply to every declared path:
+
+- the path MUST be absolute;
+- its parent directory MUST already exist;
+- the path MUST be unique across the whole call.
+
+A destination MAY already exist as a plain file, and batchit then
+replaces it. batchit rejects a directory or a symlink at a destination.
+Base R cannot portably reject a FIFO, socket or device file, so batchit
+does not catch those.
 
 ### `style = "return"` (the default)
 
 `fn` returns a named list, one element per declared output. Its names
-must be the same set as the declared output names, in any order, with no
-duplicates and none missing or extra. batchit saves each value to its
-path in the `qs2` format.
+MUST be the same set as the declared output names, in any order. A
+duplicate name, a missing name and an extra name are all errors. batchit
+saves each value to its path in the `qs2` format.
 
 ``` r
 
-out_dir <- tempdir()
+write_dir <- file.path(tempdir(), "batchit-write")
+dir.create(write_dir, showWarnings = FALSE)
 
-result <- run_and_write_files_atomically(
+record <- run_and_write_files_atomically(
   fn = function(x) list(squared = x^2, doubled = x * 2),
-  items = list(list(x = 2), list(x = 3)),
+  items = list(two = list(x = 2), three = list(x = 3)),
   outputs = list(
-    c(squared = file.path(out_dir, "sq_1.qs2"),
-      doubled = file.path(out_dir, "db_1.qs2")),
-    c(squared = file.path(out_dir, "sq_2.qs2"),
-      doubled = file.path(out_dir, "db_2.qs2"))
+    two = c(
+      squared = file.path(write_dir, "sq_two.qs2"),
+      doubled = file.path(write_dir, "db_two.qs2")
+    ),
+    three = c(
+      squared = file.path(write_dir, "sq_three.qs2"),
+      doubled = file.path(write_dir, "db_three.qs2")
+    )
   ),
   n_workers = 2
 )
 
-qs2::qs_read(file.path(out_dir, "sq_1.qs2"))
-#> [1] 4
+qs2::qs_read(file.path(write_dir, "sq_three.qs2"))
+#> [1] 9
 ```
 
-The return value is not `fn`’s return value. It is a record of what was
-written, one element per item, in the order of `items` and named by item
-id:
+The return value is not `fn`’s return value. It is a record of what
+batchit wrote. The record holds one element per item, in the order of
+`items`, named by item id:
 
 ``` r
 
-str(result[[1]])
+str(record)
 #> List of 2
-#>  $ committed: Named chr [1:2] "/tmp/.../sq_1.qs2" "/tmp/.../db_1.qs2"
-#>   ..- attr(*, "names")= chr [1:2] "squared" "doubled"
-#>  $ attempt  : chr "..."
+#>  $ two  :List of 2
+#>   ..$ committed: Named chr [1:2] "/tmp/Rtmp84GpQD/batchit-write/sq_two.qs2" "/tmp/Rtmp84GpQD/batchit-write/db_two.qs2"
+#>   .. ..- attr(*, "names")= chr [1:2] "squared" "doubled"
+#>   ..$ attempt  : chr "1dff2843885f"
+#>  $ three:List of 2
+#>   ..$ committed: Named chr [1:2] "/tmp/Rtmp84GpQD/batchit-write/sq_three.qs2" "/tmp/Rtmp84GpQD/batchit-write/db_three.qs2"
+#>   .. ..- attr(*, "names")= chr [1:2] "squared" "doubled"
+#>   ..$ attempt  : chr "1dff5ef08286"
 ```
 
-`committed` maps each declared output name to the final path actually
-written. `attempt` is an internal per-item identifier; ignore it.
+`committed` maps each declared output name to the final path batchit
+wrote. `attempt` is an internal per-item identifier; ignore it.
 
 ### `style = "staged_writer"`: `fn` writes the files itself
 
 Ask `where_to_write_output(name)` for the path to write each declared
-output to, and write there. `fn`’s return value is discarded without
-being examined.
+output to, and write there. batchit discards `fn`’s return value without
+examining it.
 
 ``` r
 
-write_two_files <- function(x) {
-  qs2::qs_save(x^2, batchit::where_to_write_output("squared"))
-  writeLines(as.character(x * 2), batchit::where_to_write_output("doubled"))
-  invisible(NULL)
-}
-
-out_dir <- tempdir()
-
-run_and_write_files_atomically(
-  fn = write_two_files,
-  items = list(list(x = 2), list(x = 3)),
+staged <- run_and_write_files_atomically(
+  fn = function(x) {
+    qs2::qs_save(x^2, batchit::where_to_write_output("squared"))
+    writeLines(as.character(x * 2), batchit::where_to_write_output("doubled"))
+    invisible(NULL)
+  },
+  items = list(two = list(x = 2), three = list(x = 3)),
   outputs = list(
-    c(squared = file.path(out_dir, "sq_1.qs2"),
-      doubled = file.path(out_dir, "db_1.txt")),
-    c(squared = file.path(out_dir, "sq_2.qs2"),
-      doubled = file.path(out_dir, "db_2.txt"))
+    two = c(
+      squared = file.path(write_dir, "sq2.qs2"),
+      doubled = file.path(write_dir, "db2.txt")
+    ),
+    three = c(
+      squared = file.path(write_dir, "sq3.qs2"),
+      doubled = file.path(write_dir, "db3.txt")
+    )
   ),
   style = "staged_writer",
   n_workers = 2
 )
 
-readLines(file.path(out_dir, "db_1.txt"))
+readLines(file.path(write_dir, "db2.txt"))
 #> [1] "4"
 ```
 
@@ -240,19 +332,21 @@ Before it commits, batchit checks that every declared output now exists
 at its staging path, as a plain, non-symlink file. It errors and names
 the output that is missing.
 
-Two rules for
-[`where_to_write_output()`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md).
-Write to the path it returns and leave it alone otherwise, because
-batchit moves it into place itself. And call it as
-[`batchit::where_to_write_output()`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md)
-from an inline function, because an inline function may only call other
-packages in package-qualified form.
+Two rules go with
+[`where_to_write_output()`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md):
 
-Pick `"staged_writer"` when `fn` already writes files on its own, in a
-format other than `qs2` or through another package’s writer. It then
-writes each file directly, instead of building the whole object in
-memory to hand back for batchit to serialize. Pick `"return"` the rest
-of the time, which is most of the time.
+1.  Write to the path it returns, and otherwise leave that path alone.
+    batchit moves the file into place itself.
+2.  Call it as
+    [`batchit::where_to_write_output()`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md)
+    from an inline function. An inline function MAY only call another
+    package in package-qualified form.
+
+Pick `"staged_writer"` when `fn` already writes files on its own. That
+covers a format other than `qs2`, and another package’s writer. `fn`
+then writes each file directly, instead of building the whole object in
+memory for batchit to serialize. Pick `"return"` the rest of the time,
+which is most of the time.
 
 ## `stream_from_parent_and_write_files_atomically()`: build items lazily
 
@@ -269,8 +363,11 @@ queued.
 The bound covers **produced item arguments only**. The `ids` vector, the
 `outputs` list and the accumulating result list live in the parent R
 session for the whole call. `n_workers` bounds none of those three.
-Streaming solves the problem of items too large to hold all at once; it
+Streaming solves the problem of items too large to hold all at once. It
 does not make the per-item bookkeeping free.
+
+This example does not run here, because it needs a function inside a
+package that you install yourself.
 
 ``` r
 
@@ -280,7 +377,8 @@ does not make the per-item bookkeeping free.
 #
 #   write_one_slice <- function(slice) list(main = slice)
 
-out_dir <- tempdir()
+stream_dir <- file.path(tempdir(), "batchit-stream")
+dir.create(stream_dir, showWarnings = FALSE)
 ids <- c("a", "b", "c")
 
 stream_from_parent_and_write_files_atomically(
@@ -288,8 +386,8 @@ stream_from_parent_and_write_files_atomically(
   ids = ids,
   # Replace this with your own loader; it runs in the parent R session.
   producer = function(id) list(slice = toupper(id)),
-  outputs = setNames(
-    lapply(ids, function(id) c(main = file.path(out_dir, paste0(id, ".qs2")))),
+  outputs = stats::setNames(
+    lapply(ids, function(id) c(main = file.path(stream_dir, paste0(id, ".qs2")))),
     ids
   ),
   n_workers = 2
@@ -298,8 +396,8 @@ stream_from_parent_and_write_files_atomically(
 
 `producer()` runs in the parent R session, never in a worker process, so
 it is an ordinary function. The self-containedness rules below apply to
-`fn`, not to it. Load or build each item’s data inside `producer()`;
-doing it beforehand defeats the point.
+`fn`, not to it. Load or build each item’s data inside `producer()`.
+Doing it beforehand defeats the point.
 
 Once `producer()` returns an item, batchit applies the same `outputs`
 validation, the same two `style`s and the same commit record as
@@ -307,7 +405,7 @@ validation, the same two `style`s and the same commit record as
 
 Three differences from the other three functions.
 
-1.  `fn` must come from
+1.  `fn` MUST come from
     [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md).
     An inline function is not accepted.
 2.  It needs the `mirai` package: `pak::pak("mirai")`.
@@ -323,13 +421,12 @@ configuration you set up yourself.
 ## Naming the function: inline or `package_function()`
 
 An **inline function** is an ordinary R function, passed by value. Write
-it directly in the call, or assign it to a variable first, as the
-`write_two_files` example under `style = "staged_writer"` does. It is
-the quick option, and every example here except the streaming one uses
-it.
+it directly in the call, or assign it to a variable first. It is the
+quick option, and every example above uses it, except the streaming one.
 
-It must be self-contained: it may use only its own arguments, base R,
-and `pkg::fun()`-qualified calls to other packages.
+It must be self-contained. It may use only its own arguments, base R,
+and `pkg::fun()`-qualified calls to other packages. The four fragments
+below are there to be read, so they do not run:
 
 ``` r
 
@@ -356,54 +453,71 @@ indirect lookups. They fail because batchit replaces the function’s
 environment before it sends the function. Keep to the rule even where
 the check lets something through.
 
-If `fn` needs something from outside its own arguments, pass it in as
-another argument, reference it as `pkg::fun()`, or move it into a
-package.
+If `fn` needs something from outside its own arguments, you have three
+options. Pass it in as another argument, reference it as `pkg::fun()`,
+or move it into a package.
 
 **`package_function(package, symbol)`** names a function in an installed
-package instead. It records a hash of that function’s code, and a worker
+package instead. It records a hash of that function’s code. A worker
 process refuses to run if the definition it loads does not match. Use it
 for production runs.
 
 ``` r
 
-fn <- package_function("yourpkg", "fit_one_model")
+fn <- package_function("batchit", "where_to_write_output")
+
+names(fn)
+#> [1] "package"      "symbol"       "version"      "hash"         "formal_names"
 fn$formal_names
-#> [1] "id" "n_iter"
+#> [1] "name"
 ```
 
 The hash is deliberately narrow. It covers the target function’s own
 body and formals, and nothing else. A changed helper it calls, a changed
 constant, and a different dependency version are all outside it. A match
-proves the body and formals are the definition the parent R session
-hashed, not that behaviour is identical. It ignores comments and
-whitespace, so an installed package and a
+proves that the body and the formals are the definition the parent R
+session hashed. It does not prove that behaviour is identical. The hash
+ignores comments and whitespace, so an installed package and a
 [`devtools::load_all()`](https://devtools.r-lib.org/reference/load_all.html)
 tree agree on identical code.
 
-`symbol` may name an internal function; it does not have to be exported.
+`symbol` may name an internal function. It does not have to be exported.
 
 ## Name every argument, every time
 
 For every item, batchit checks that you named **every** formal `fn` has,
 including ones with a default, and nothing else. It checks in the parent
-R session before dispatching, and again in the worker process.
+R session before dispatching, and again in the worker process. Leaving
+out `scale` here is an error, even though `scale` has a default:
 
 ``` r
 
-fn <- function(x, scale = 1) x * scale
-
-# Rejected, `scale` has a default but it still must be named:
-items <- list(list(x = 2))
-
-# Correct:
-items <- list(list(x = 2, scale = 1))
+run_and_collect(
+  fn = function(x, scale = 1) x * scale,
+  items = list(list(x = 2)),
+  n_workers = 1
+)
+#> Error:
+#> ! .batch parent-validation [item '1']: <adhoc fn> -- formal(s) not supplied: scale. Every formal must be named explicitly, including optional ones -- that is what catches a silently-defaulted argument (the shape of a real dropped-argument bug).
 ```
 
-Requiring defaults to be named is what makes a forgotten argument
-visible. An argument you meant to set but left out otherwise looks
-exactly like one you deliberately left at its default. For the same
-reason, `fn` must not take `...`.
+Name `scale` in the item and the same call succeeds:
+
+``` r
+
+run_and_collect(
+  fn = function(x, scale = 1) x * scale,
+  items = list(list(x = 2, scale = 10)),
+  n_workers = 1
+)
+#> [[1]]
+#> [1] 20
+```
+
+A named default is what makes a forgotten argument visible. An argument
+you meant to set, but left out, otherwise looks exactly like one you
+left at its default deliberately. For the same reason, `fn` MUST NOT
+take `...`.
 
 ## What the atomic-write guarantee covers
 
@@ -444,15 +558,15 @@ worker process’s whole lifetime, so it can land in any of the three
 phases. batchit’s own source notes that a timeout can kill a worker
 mid-commit. Do not read “timeout” as a pre-replacement failure.
 
-The marker is what tells a complete commit from a torn one: a small file
-named `.batchit__<item id>`, written only after every replacement has
-succeeded. A torn set has no valid marker vouching for it. batchit
-places one per item, in the directory of the item’s lexicographically
-first declared output path. That is beside the outputs when they share a
-directory, and in one of them when they do not. Do not create, read or
-depend on that file yourself; batchit manages it. Because the name is
-built from the item id, an id used with either file-writing function
-must not contain `/` or `\`.
+The marker is what tells a complete commit from a torn one. It is a
+small file named `.batchit__<item id>`, written only after every
+replacement has succeeded. A torn set has no valid marker vouching for
+it. batchit places one per item, in the directory of the item’s
+lexicographically first declared output path. That is beside the outputs
+when they share a directory, and in one of them when they do not. Do not
+create, read or depend on that file yourself; batchit manages it.
+Because the name is built from the item id, an id used with either
+file-writing function MUST NOT contain `/` or `\`.
 
 **Not a skip mechanism.** batchit never treats an existing output file
 as a reason to skip an item. It schedules every item, subject only to
@@ -466,9 +580,26 @@ them.
 
 If an item’s worker process raises an error, exits unexpectedly, or runs
 past `timeout`, the call stops with an R error. It does not continue
-past the failure, and it never returns a partial result with an error
-object in the failed slot. Work already running may finish before the
-call unwinds.
+past the failure. It never returns a partial result with an error object
+in the failed slot. Work already running may finish before the call
+unwinds.
+
+``` r
+
+run_and_collect(
+  fn = function(x) stop("this item cannot run"),
+  items = list(fit_03 = list(x = 1)),
+  n_workers = 1
+)
+#>   [0/1] dispatching workers...
+#> Error:
+#> ! run_and_collect(): item 'fit_03' returned an error: this item cannot run
+```
+
+Item ids come from the names of `items`, or from `ids` when streaming.
+They label progress and error messages. Name your items, so that a
+message reads `item 'fit_03' exceeded the timeout` rather than
+`item '3'`.
 
 [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md),
 [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
@@ -478,13 +609,30 @@ print the failing worker process’s combined stdout and stderr first, so
 the cause is visible. That log tail is the last 64,000 bytes, and at
 most 100 lines.
 [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)
-reports the error that came back through `mirai`; it has no equivalent
+reports the error that came back through `mirai`. It has no equivalent
 captured-log tail.
 
 On success, a worker process’s stdout and stderr are discarded. Warnings
 are the exception. batchit carries back up to the first 100 warnings per
 item. It re-raises them in the parent R session, labelled with the item
-id.
+id:
+
+``` r
+
+run_and_collect(
+  fn = function(x) {
+    warning("value looks unusual")
+    x
+  },
+  items = list(fit_01 = list(x = 1)),
+  n_workers = 1
+)
+#>   [0/1] dispatching workers...
+#> Warning: [batch item 'fit_01'] value looks unusual
+#>   [1/1] complete  08:50:03
+#> [[1]]
+#> [1] 1
+```
 
 **Only a completed item’s warnings reach you.** If an item warns and
 then fails, the error envelope carries no warnings, and the call raises
@@ -493,11 +641,6 @@ The three non-streaming functions print that output when they report the
 failure. Read that log; do not wait for an R warning.
 
 `timeout` is 6 hours by default, per item. Pass `Inf` to disable it.
-
-Item ids come from the names of `items`, or from `ids` when streaming,
-and they label progress and error messages. Name your items, so that a
-message reads `item 'fit_03' exceeded the timeout` rather than
-`item '3'`.
 
 ## Two settings worth knowing
 
@@ -513,7 +656,7 @@ on `fn`:
   records then matches the code the worker process loads.
 - with an inline function, there is no consumer package to load, and
   `dev_path` can only name batchit’s own source tree. It is useful when
-  developing batchit itself.
+  you develop batchit itself.
 
 Leave it `NULL` to use installed packages. A path that does not exist,
 or that does not hold the expected package, is an error. It never falls
@@ -521,7 +664,7 @@ back to the installed version quietly.
 
 **Thread counts.** batchit does not set BLAS or `data.table` thread
 counts for you. If `fn` is itself multi-threaded, lower its thread count
-when running many worker processes, or they will compete for the same
+when you run many worker processes. Otherwise they compete for the same
 cores.
 
 ## Writing one file atomically, with no dispatch
@@ -529,12 +672,17 @@ cores.
 `write_qs2_atomically(object, path, ...)` is the commit engine’s
 rename-into-place step, on its own. It writes to a uniquely-named
 temporary file in the destination’s own directory, then renames it over
-the destination. No workers, no items, no `fn`.
+the destination. No workers, no items, no `fn`. It returns the
+destination path, invisibly.
 
 ``` r
 
-write_qs2_atomically(mtcars, file.path(tempdir(), "cars.qs2"))
-qs2::qs_read(file.path(tempdir(), "cars.qs2"))
+cars_path <- write_qs2_atomically(mtcars, file.path(tempdir(), "cars.qs2"))
+
+basename(cars_path)
+#> [1] "cars.qs2"
+nrow(qs2::qs_read(cars_path))
+#> [1] 32
 ```
 
 Use it wherever an interrupted write would leave a truncated file. A
@@ -557,16 +705,20 @@ before you rely on it:
 - a `SIGKILL` leaves the temporary file behind, since
   [`on.exit()`](https://rdrr.io/r/base/on.exit.html) cannot run.
 
-## See also
+## Where to go next
 
 - [`?run`](https://papadopoulos-lab.github.io/batchit/reference/run.md),
   [`?run_and_collect`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md),
-  [`?run_and_write_files_atomically`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md),
+  [`?run_and_write_files_atomically`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
+  and
   [`?stream_from_parent_and_write_files_atomically`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)
-  for the full argument reference.
+  document every argument.
 - [`?package_function`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
   and
   [`?where_to_write_output`](https://papadopoulos-lab.github.io/batchit/reference/where_to_write_output.md)
-  for the two helpers.
+  document the two helpers.
 - [`?write_qs2_atomically`](https://papadopoulos-lab.github.io/batchit/reference/write_qs2_atomically.md)
-  for the standalone atomic writer.
+  documents the standalone atomic writer.
+- The [reference
+  index](https://papadopoulos-lab.github.io/batchit/reference/index.html)
+  lists every exported function on one page.

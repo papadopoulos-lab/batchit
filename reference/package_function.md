@@ -97,7 +97,7 @@ and
 [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md),
 which all accept the descriptor this returns as their `fn`.
 
-[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+[`vignette("batchit")`](https://papadopoulos-lab.github.io/batchit/articles/batchit.md)
 for when to prefer this over an inline function.
 
 ## Examples

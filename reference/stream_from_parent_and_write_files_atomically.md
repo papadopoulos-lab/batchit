@@ -147,7 +147,7 @@ cores across `n_workers` yourself if `fn` is itself multi-threaded.
 
 ## See also
 
-[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+[`vignette("batchit")`](https://papadopoulos-lab.github.io/batchit/articles/batchit.md)
 for a worked comparison of all four dispatch functions.
 
 Other dispatch functions:

@@ -57,7 +57,7 @@ run_and_write_files_atomically(
   position instead (1, 2, 3, and so on). An item id MUST NOT contain `/`
   or `\`, because batchit builds an internal bookkeeping filename from
   it; see
-  [`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md).
+  [`vignette("batchit")`](https://papadopoulos-lab.github.io/batchit/articles/batchit.md).
 
 - outputs:
 
@@ -215,7 +215,7 @@ which `fn` calls under `style = "staged_writer"`, and
 for the same rename-into-place guarantee on a single file with no
 dispatch.
 
-[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+[`vignette("batchit")`](https://papadopoulos-lab.github.io/batchit/articles/batchit.md)
 states exactly what the atomic-write guarantee covers in each of its
 three phases.
 
@@ -244,29 +244,29 @@ result <- run_and_write_files_atomically(
   n_workers = 2
 )
 #>   [0/2] dispatching workers...
-#>   [1/2] complete  08:06:59
-#>   [2/2] complete  08:06:59
+#>   [1/2] complete  08:49:53
+#>   [2/2] complete  08:49:53
 result
 #> $`1`
 #> $`1`$committed
 #>                                           squared 
-#> "/tmp/RtmpkRwYyJ/batchit-return-example/sq_1.qs2" 
+#> "/tmp/RtmpMPAmpS/batchit-return-example/sq_1.qs2" 
 #>                                           doubled 
-#> "/tmp/RtmpkRwYyJ/batchit-return-example/db_1.qs2" 
+#> "/tmp/RtmpMPAmpS/batchit-return-example/db_1.qs2" 
 #> 
 #> $`1`$attempt
-#> [1] "1b6063a659"
+#> [1] "1b29e4a0299"
 #> 
 #> 
 #> $`2`
 #> $`2`$committed
 #>                                           squared 
-#> "/tmp/RtmpkRwYyJ/batchit-return-example/sq_2.qs2" 
+#> "/tmp/RtmpMPAmpS/batchit-return-example/sq_2.qs2" 
 #>                                           doubled 
-#> "/tmp/RtmpkRwYyJ/batchit-return-example/db_2.qs2" 
+#> "/tmp/RtmpMPAmpS/batchit-return-example/db_2.qs2" 
 #> 
 #> $`2`$attempt
-#> [1] "1b60d364da9"
+#> [1] "1b2953560a97"
 #> 
 #> 
 qs2::qs_read(file.path(out_dir, "sq_1.qs2")) # 4

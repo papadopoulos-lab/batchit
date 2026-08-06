@@ -129,7 +129,7 @@ several workers at once, to avoid oversubscribing your CPU cores.
 
 ## See also
 
-[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+[`vignette("batchit")`](https://papadopoulos-lab.github.io/batchit/articles/batchit.md)
 for a worked comparison of all four dispatch functions.
 
 Other dispatch functions:
@@ -153,9 +153,9 @@ run(
   n_workers = 2
 )
 #>   [0/3] dispatching workers...
-#>   [1/3] complete  08:06:57
-#>   [2/3] complete  08:06:57
-#>   [3/3] complete  08:06:57
+#>   [1/3] complete  08:49:51
+#>   [2/3] complete  08:49:51
+#>   [3/3] complete  08:49:51
 list.files(out_dir)
 #> [1] "1.rds" "2.rds" "3.rds"
 readRDS(file.path(out_dir, "2.rds")) # 4

@@ -120,7 +120,7 @@ several workers at once, to avoid oversubscribing your CPU cores.
 
 ## See also
 
-[`vignette("choosing-a-dispatch-function")`](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.md)
+[`vignette("batchit")`](https://papadopoulos-lab.github.io/batchit/articles/batchit.md)
 for a worked comparison of all four dispatch functions.
 
 Other dispatch functions:
@@ -138,9 +138,9 @@ squares <- run_and_collect(
   n_workers = 2
 )
 #>   [0/3] dispatching workers...
-#>   [1/3] complete  08:06:58
-#>   [2/3] complete  08:06:58
-#>   [3/3] complete  08:06:58
+#>   [1/3] complete  08:49:52
+#>   [2/3] complete  08:49:52
+#>   [3/3] complete  08:49:53
 squares
 #> [[1]]
 #> [1] 4
