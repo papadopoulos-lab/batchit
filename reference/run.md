@@ -1,19 +1,18 @@
 # Run a function once per item, in a fresh worker process, discarding the results
 
-Use this as a parallel `for` loop: `fn` runs once per item, each call in
-its own, brand-new R process (a worker), with up to `n_workers` running
-at the same time. Use this specifically when you don't need anything
-back in your R session, for example when `fn` writes its own files, or
-is called purely for a side effect. If you want each call's return value
-back, use
+Use this as a parallel `for` loop. `fn` runs once per item, each call in
+its own, brand-new R process (a worker). Up to `n_workers` calls run at
+the same time. Use this specifically when you don't need anything back
+in your R session. For example, `fn` writes its own files, or is called
+purely for a side effect. If you want each call's return value back, use
 [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
 instead; it works identically otherwise. If you want batchit itself to
-manage output files safely (so a failed item never leaves a half-written
-file), use
+manage output files safely, so a failed item never leaves a half-written
+file, use
 [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
 instead. Files that `fn` writes on its own here get none of that
-protection: if `fn` is interrupted partway through writing one, whatever
-it already wrote is left exactly as it is.
+protection. If `fn` is interrupted partway through one of those writes,
+whatever it already wrote is left exactly as it is.
 
 ## Usage
 
@@ -45,13 +44,13 @@ run(
 - items:
 
   One entry per call. Each entry is a named list holding the arguments
-  for that one call to `fn`. Every argument `fn` takes must be named,
-  including ones with a default value (an omitted optional argument is
-  treated as a mistake, not "use the default", so a silently dropped
-  argument is caught rather than passed through unnoticed). A named
-  entry keeps its name as that item's id (used in progress messages and
-  error messages); an unnamed entry is identified by its position
-  instead (1, 2, 3, ...).
+  for that one call to `fn`. Every argument `fn` takes MUST be named,
+  including one that has a default value. An omitted optional argument
+  is treated as a mistake, not as "use the default". A silently dropped
+  argument is therefore caught, rather than passed through unnoticed. A
+  named entry keeps its name as that item's id, used in progress
+  messages and error messages. An unnamed entry is identified by its
+  position instead (1, 2, 3, and so on).
 
 - n_workers:
 
@@ -111,18 +110,18 @@ Accepted and rejected inline functions:
 
 When `fn` is a
 [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
-reference, each worker re-checks a hash of its code before running it,
-and refuses to run if that code has changed since you called
+reference, each worker re-checks a hash of its code before it runs. The
+worker refuses to run if that code changed since you called
 [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md).
 See that function's help page for what the hash does and does not cover.
 
 `dev_path` names a package source tree to load in the worker with
 [`devtools::load_all()`](https://devtools.r-lib.org/reference/load_all.html),
-instead of using the installed package: the package named in your
+instead of the installed package. Name the package from your
 [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
-reference, or (for an inline `fn`) batchit's own source tree. A path
-that doesn't exist, or doesn't match the expected package, is an error
-rather than a silent fall-back to the installed version.
+reference. For an inline `fn`, name batchit's own source tree instead. A
+path that doesn't exist, or doesn't match the expected package, is an
+error rather than a silent fall-back to the installed version.
 
 batchit does not set BLAS or `data.table` thread counts. If `fn` is
 itself multi-threaded, reduce its thread count yourself when running
@@ -154,9 +153,9 @@ run(
   n_workers = 2
 )
 #>   [0/3] dispatching workers...
-#>   [1/3] complete  18:21:58
-#>   [2/3] complete  18:21:58
-#>   [3/3] complete  18:21:58
+#>   [1/3] complete  08:06:57
+#>   [2/3] complete  08:06:57
+#>   [3/3] complete  08:06:57
 list.files(out_dir)
 #> [1] "1.rds" "2.rds" "3.rds"
 readRDS(file.path(out_dir, "2.rds")) # 4

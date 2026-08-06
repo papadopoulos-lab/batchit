@@ -2,10 +2,10 @@
 
 Writes to a uniquely-named temporary file in the same directory as
 `path`, then renames it into place. Rename-into-place is atomic on POSIX
-filesystems (and server-side atomic on SMB/CIFS), so an interrupted
-write, whether from a `SIGKILL`, a crash, or a dropped mount, leaves the
-destination either absent or complete, never a truncated file that a
-later read would halt on. `...` is forwarded to
+filesystems, and server-side atomic on SMB/CIFS. So an interrupted write
+leaves the destination either absent or complete. It is never a
+truncated file that a later read would halt on. An interruption here
+means a `SIGKILL`, a crash, or a dropped mount. `...` is forwarded to
 [`qs2::qs_save()`](https://rdrr.io/pkg/qs2/man/qs_save.html).
 
 ## Usage
@@ -52,7 +52,7 @@ wrong:
   torn file, but nothing here decides *which* writer should have won.
 
 - **It does not always clean up after itself.** The partial temp file is
-  removed on an R-level error, but
+  removed on an R-level error. But
   [`on.exit()`](https://rdrr.io/r/base/on.exit.html) cannot run after a
   `SIGKILL`, so a hard-killed worker leaves its randomly-named `.tmp`
   behind. The *destination* is still absent-or-complete, which is the
@@ -61,17 +61,17 @@ wrong:
 The temporary file is created with
 [`tempfile()`](https://rdrr.io/r/base/tempfile.html) in the destination
 directory rather than `paste0(path, ".tmp", Sys.getpid())`. A PID suffix
-is not collision-proof: PIDs are unique only among *live processes on
-one host*, and data of this kind commonly lives on a share that two
-hosts mount at once, so the same PID on two machines could pick the same
+is not collision-proof. PIDs are unique only among *live processes on
+one host*. Data of this kind commonly lives on a share that two hosts
+mount at once. The same PID on two machines could then pick the same
 temp path for the same target. Same directory is required:
 [`file.rename()`](https://rdrr.io/r/base/files.html) is not atomic
 across filesystems.
 
 This is a standalone writer, independent of the
 [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
-commit engine: its temp carries no dispatch attempt token and is not
-swept by that engine's failure cleanup.
+commit engine. Its temp carries no dispatch attempt token, and that
+engine's failure cleanup does not sweep it.
 
 ## See also
 

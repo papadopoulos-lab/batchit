@@ -1,19 +1,20 @@
 # Identify a function in an installed package, so a worker can run it
 
-Builds a small object that names a function in an installed package, for
-passing as the `fn` argument to
+Builds a small object that names a function in an installed package.
+Pass that object as the `fn` argument to
 [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md),
 [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md),
 [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md),
 or
 [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md).
-This is the alternative to writing an inline function directly in one of
+It is the alternative to an inline function, written directly in one of
 those calls (see their help pages). `package_function()` is required for
-[`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md),
-and recommended for the others whenever you want a production run to
-verify that every worker really is running the code you tested, not just
-whatever happens to be installed. For a quick one-off run, an inline
-function is simpler and needs no setup.
+[`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md).
+It is recommended for the other three, whenever you want a production
+run to verify what every worker runs. Each worker then checks that it is
+running the code you tested, not just whatever happens to be installed.
+For a quick one-off run, an inline function is simpler and needs no
+setup.
 
 ## Usage
 
@@ -42,42 +43,50 @@ package_function(package, symbol, version = NULL)
 
 ## Value
 
-An object of class `"package_function"`: a list with elements `package`,
-`symbol`, `version`, `hash` (a hash of the function's code, used to
-verify the worker loaded the same definition), and `formal_names` (the
-function's argument names). Pass the whole object as `fn`.
+An object of class `"package_function"`. It is a list with elements
+`package`, `symbol`, `version`, `hash` and `formal_names`. `hash` is a
+hash of the function's code, used to verify the worker loaded the same
+definition. `formal_names` holds the function's argument names. Pass the
+whole object as `fn`.
 
 ## Details
 
 The object this function returns always identifies a function by package
 name + function name + a hash of its code. It is never the function
-itself, a bare function name, or a closure. This is different from
-passing your function directly as `fn`, which
+itself, a bare function name, or a closure. You can also pass your
+function directly as `fn`, which is a different thing.
 [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md),
-[`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md),
+[`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)
 and
 [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)
-also accept (see their `fn` argument); only
+accept a function that way (see their `fn` argument). Only
 [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)
-requires the form built by this function.
+requires the form this function builds.
 
-A function that takes `...` is rejected: batchit checks every item's
-argument names against the function's own fixed argument list, and `...`
+A function that takes `...` is rejected. batchit checks every item's
+argument names against the function's own fixed argument list. `...`
 would make a mistyped or missing argument impossible to catch reliably.
 
 ## Advanced
 
 The code hash is deliberately narrow: it covers only the function's own
-body and its own argument list. A changed helper function it calls, a
-constant it refers to elsewhere, an S4/R6 method table, or a
-dependency's version are all outside it, so a matching hash proves "the
-same function definition", not "provably identical behaviour". The hash
-is also computed after stripping comments and whitespace
-([`utils::removeSource()`](https://rdrr.io/r/utils/removeSource.html)),
-so it agrees whether the function was loaded from an installed package
-or from a
+body and its own argument list. Four things lie outside it:
+
+- a changed helper function it calls;
+
+- a constant it refers to elsewhere;
+
+- an S4/R6 method table;
+
+- a dependency's version.
+
+So a matching hash proves "the same function definition", not "provably
+identical behaviour". batchit also strips comments and whitespace before
+it computes the hash, with
+[`utils::removeSource()`](https://rdrr.io/r/utils/removeSource.html).
+The hash then agrees across an installed package and a
 [`devtools::load_all()`](https://devtools.r-lib.org/reference/load_all.html)
-source tree, which otherwise disagree on identical code.
+source tree. Those two otherwise disagree on identical code.
 
 ## See also
 

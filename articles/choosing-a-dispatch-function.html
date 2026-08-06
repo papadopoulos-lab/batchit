@@ -28,7 +28,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -76,9 +76,9 @@
 worker process. Four functions do that. They share one shape and differ
 on two axes: how each call’s arguments reach the worker process, and
 what comes back.</p>
-<p>This article walks through all four with worked examples, then covers
-the two ways to name the function you dispatch, and states exactly what
-the atomic-write guarantee covers. It ends with
+<p>This article walks through all four with worked examples. It then
+covers the two ways to name the function you dispatch. It states exactly
+what the atomic-write guarantee covers. It ends with
 <code><a href="../reference/write_qs2_atomically.html">write_qs2_atomically()</a></code>, the one exported function that is
 not a dispatch function at all.</p>
 <p>The examples below are shown rather than executed. Each one starts
@@ -104,9 +104,9 @@ every item. <code><a href="../reference/stream_from_parent_and_write_files_atomi
 instead reuses a small pool of persistent worker processes
 (<code>mirai</code> daemons).</p>
 <p>A fresh process per item is a memory strategy, not a convenience. R
-may hold on to a large allocation after the objects using it are gone,
-so letting the process exit is the reliable way to reclaim it. This
-matters when one item peaks at many gigabytes.</p>
+may keep a large allocation after the objects that used it are gone.
+Letting the process exit is the reliable way to reclaim that memory.
+This matters when one item peaks at many gigabytes.</p>
 <p>Throughout this article, the <strong>parent R session</strong> is the
 session you call batchit from.</p>
 </div>
@@ -157,8 +157,8 @@ there are far too many items to keep as one list.</p>
 <p>Lazy production is available only in combination with batchit-managed
 output files. There is no streaming function that hands back raw return
 values.</p>
-<p>Before reaching for the streaming function, consider the simpler
-alternative: put a small identifier or file path in each item and have
+<p>Before you reach for the streaming function, consider the simpler
+alternative. Put a small identifier or file path in each item. Have
 <code>fn</code> load the large data itself, inside its worker process.
 That keeps the fresh-process-per-item memory behaviour, which the
 streaming function gives up.</p>
@@ -194,7 +194,7 @@ to finish. The returned list is never named by item id, even when
 name theirs, so this asymmetry is worth remembering.</p>
 <p>Every return value travels from the worker process back to the parent
 R session. A small object can also travel into a worker process as part
-of an item, but for a large one it is usually better to have
+of an item. For a large object, it is usually better to have
 <code>fn</code> read it from disk itself.</p>
 </div>
 <div class="section level2">
@@ -206,8 +206,8 @@ writes its own files, or updates a database. It works exactly like
 <code><a href="../reference/run_and_collect.html">run_and_collect()</a></code> and returns
 <code>invisible(NULL)</code>.</p>
 <p>The effect has to be external. Each item runs in a separate R
-process, so assigning to a global variable inside <code>fn</code>
-changes that worker process and not the parent R session.</p>
+process. An assignment to a global variable inside <code>fn</code>
+changes that worker process, not the parent R session.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">out_dir</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
@@ -235,9 +235,9 @@ partway through writing <code>2.qs2</code>, a half-written
 files<a class="anchor" aria-label="anchor" href="#run_and_write_files_atomically-batchit-writes-the-files"></a>
 </h2>
 <p>Declare, per item, the final path of every file that item must
-produce. batchit writes each one to a temporary file in the same
-directory as its destination, and replaces the final files only after
-every one of that item’s outputs has been written successfully.</p>
+produce. batchit writes each one to a temporary file, in the same
+directory as its destination. It replaces the final files only after
+every one of that item’s outputs is written successfully.</p>
 <p><code>outputs</code> is one named character vector per item, in the
 same order as <code>items</code>. When <code>items</code> is named,
 <code>outputs</code> may carry the same names instead, in any order.
@@ -316,10 +316,10 @@ is discarded without being examined.</p>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/readLines.html" class="external-link">readLines</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">out_dir</span>, <span class="st">"db_1.txt"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] "4"</span></span></code></pre></div>
-<p>Discarding the return value does not mean batchit takes your word for
-it. Before committing, it checks that every declared output now exists
-at its staging path as a plain, non-symlink file, and errors naming the
-output that is missing.</p>
+<p>A discarded return value does not mean batchit takes your word for
+it. Before it commits, batchit checks that every declared output now
+exists at its staging path, as a plain, non-symlink file. It errors and
+names the output that is missing.</p>
 <p>Two rules for <code><a href="../reference/where_to_write_output.html">where_to_write_output()</a></code>. Write to the path
 it returns and leave it alone otherwise, because batchit moves it into
 place itself. And call it as
@@ -345,14 +345,13 @@ use too much memory. Instead of <code>items</code>, give an
 builds one item.</p>
 <p>batchit keeps at most <code>min(2 * n_workers, length(ids))</code>
 items in flight, and calls <code>producer()</code> only when one of
-those slots is free. Note that a slot is not the same as an idle worker
-process: when every worker process is busy, roughly
-<code>n_workers</code> further items can already be produced and
-queued.</p>
+those slots is free. A slot is not the same as an idle worker process.
+When every worker process is busy, roughly <code>n_workers</code>
+further items can already be produced and queued.</p>
 <p>The bound covers <strong>produced item arguments only</strong>. The
 <code>ids</code> vector, the <code>outputs</code> list and the
-accumulating result list all live in the parent R session for the whole
-call, and none of them is bounded by <code>n_workers</code>. Streaming
+accumulating result list live in the parent R session for the whole
+call. <code>n_workers</code> bounds none of those three. Streaming
 solves the problem of items too large to hold all at once; it does not
 make the per-item bookkeeping free.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
@@ -392,9 +391,9 @@ and the same commit record as
 inline function is not accepted.</li>
 <li>It needs the <code>mirai</code> package:
 <code>pak::pak("mirai")</code>.</li>
-<li>Its worker processes are persistent <code>mirai</code> daemons. A
-worker process’s memory is <strong>not</strong> reclaimed between items
-the way process exit reclaims it elsewhere, so this suits many
+<li>Its worker processes are persistent <code>mirai</code> daemons.
+Their memory is <strong>not</strong> reclaimed between items, the way
+process exit reclaims it elsewhere. So this function suits many
 small-to-medium items better than a few huge ones.</li>
 </ol>
 <p>Those daemons live in a private compute profile that batchit creates
@@ -404,9 +403,10 @@ daemon configuration you set up yourself.</p>
 <div class="section level2">
 <h2 id="naming-the-function-inline-or-package_function">Naming the function: inline or <code>package_function()</code><a class="anchor" aria-label="anchor" href="#naming-the-function-inline-or-package_function"></a>
 </h2>
-<p>An <strong>inline function</strong> is an ordinary R function passed
-by value, written directly in the call, or assigned to a variable first,
-as <code>write_two_files</code> was above. It is the quick option, and
+<p>An <strong>inline function</strong> is an ordinary R function, passed
+by value. Write it directly in the call, or assign it to a variable
+first, as the <code>write_two_files</code> example under
+<code>style = "staged_writer"</code> does. It is the quick option, and
 every example here except the streaming one uses it.</p>
 <p>It must be self-contained: it may use only its own arguments, base R,
 and <code>pkg::fun()</code>-qualified calls to other packages.</p>
@@ -424,12 +424,13 @@ and <code>pkg::fun()</code>-qualified calls to other packages.</p>
 <span><span class="co"># NOT allowed, `my_helper` is a plain call to a function defined outside:</span></span>
 <span><span class="va">my_helper</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span> <span class="op">*</span> <span class="fl">2</span></span>
 <span><span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="fu">my_helper</span><span class="op">(</span><span class="va">x</span><span class="op">)</span></span></code></pre></div>
-<p>batchit checks this with a best-effort static scan, not a proof.
-Indirect lookups such as <code><a href="https://rdrr.io/r/base/get.html" class="external-link">get()</a></code>, <code>eval(parse())</code>
-or a string-based <code><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call()</a></code> can pass the check and still
-fail in the worker process, because the function’s environment is
-replaced before it is sent. Keep to the rule even where the check lets
-something through.</p>
+<p>batchit checks this with a best-effort static scan, not a proof. An
+indirect lookup can pass the check and still fail in the worker process.
+<code><a href="https://rdrr.io/r/base/get.html" class="external-link">get()</a></code>, <code>eval(parse())</code> and a string-based
+<code><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call()</a></code> are all indirect lookups. They fail because
+batchit replaces the function’s environment before it sends the
+function. Keep to the rule even where the check lets something
+through.</p>
 <p>If <code>fn</code> needs something from outside its own arguments,
 pass it in as another argument, reference it as <code>pkg::fun()</code>,
 or move it into a package.</p>
@@ -479,32 +480,37 @@ replaces any final file. It then replaces the final files one at a time,
 each by a rename within the destination directory. Last, it writes a
 marker recording the commit. The guarantee is different in each of those
 three phases.</p>
-<p><strong>Before the first replacement: fully covered.</strong> Suppose
-the item fails here, with an error in <code>fn</code>, a
-<code>"return"</code> value whose names do not match the declared
-outputs, a declared output a <code>"staged_writer"</code> never wrote,
-or a failure serializing one of the staged files. Then <strong>no
-declared output</strong> is touched. Whatever was at those paths stays
-exactly as it was, and if nothing was there, nothing appears. The item’s
-own previous marker is removed before the first replacement, so that one
-does not survive even here.</p>
-<p><strong>During the replacement loop: not transactional.</strong> If
-the worker process is killed, or a rename fails, partway through the
-loop, some of the item’s outputs can be new while others are still old.
-batchit never rolls back a file it has already renamed. An individual
+<p><strong>Before the first replacement: fully covered.</strong> The
+item can fail here in four ways:</p>
+<ul>
+<li>an error in <code>fn</code>;</li>
+<li>a <code>"return"</code> value whose names do not match the declared
+outputs;</li>
+<li>a declared output a <code>"staged_writer"</code> never wrote;</li>
+<li>a failure serializing one of the staged files.</li>
+</ul>
+<p>After any of those four, <strong>no declared output</strong> is
+touched. Whatever was at those paths stays exactly as it was, and if
+nothing was there, nothing appears. batchit removes the item’s own
+previous marker before the first replacement, so that marker does not
+survive even here.</p>
+<p><strong>During the replacement loop: not transactional.</strong> The
+worker process can be killed partway through the loop, or a rename can
+fail. Some of the item’s outputs are then new while others are still
+old. batchit never rolls back a file it already renamed. An individual
 file is not left half-written, since rename replacement is atomic under
 the filesystem semantics batchit supports, but the <em>set</em> can be
 torn.</p>
 <p><strong>After the marker is written: committed, but the call may
 still report failure.</strong> The worker serializes its result envelope
-only after committing. If that fails, or the worker is killed in that
-window, every final file and the marker are correctly in place while the
-call reports the item as failed.</p>
+only after it commits. That serialization can fail, or the worker can be
+killed in that window. Every final file and the marker are then
+correctly in place, while the call reports the item as failed.</p>
 <p><strong>A timeout is not confined to one phase.</strong>
 <code>timeout</code> measures the worker process’s whole lifetime, so it
-can land in any of the three. batchit’s own source notes that a timeout
-can kill a worker mid-commit. Do not read “timeout” as a pre-replacement
-failure.</p>
+can land in any of the three phases. batchit’s own source notes that a
+timeout can kill a worker mid-commit. Do not read “timeout” as a
+pre-replacement failure.</p>
 <p>The marker is what tells a complete commit from a torn one: a small
 file named <code>.batchit__&lt;item id&gt;</code>, written only after
 every replacement has succeeded. A torn set has no valid marker vouching
@@ -533,20 +539,20 @@ with an error object in the failed slot. Work already running may finish
 before the call unwinds.</p>
 <p><code><a href="../reference/run.html">run()</a></code>, <code><a href="../reference/run_and_collect.html">run_and_collect()</a></code> and
 <code><a href="../reference/run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code> print the failing worker
-process’s combined stdout and stderr first (the last 64,000 bytes, and
-at most 100 lines) so the cause is visible.
+process’s combined stdout and stderr first, so the cause is visible.
+That log tail is the last 64,000 bytes, and at most 100 lines.
 <code><a href="../reference/stream_from_parent_and_write_files_atomically.html">stream_from_parent_and_write_files_atomically()</a></code> reports the
 error that came back through <code>mirai</code>; it has no equivalent
 captured-log tail.</p>
 <p>On success, a worker process’s stdout and stderr are discarded.
-Warnings are the exception: up to the first 100 warnings per item are
-carried back and re-raised in the parent R session, labelled with the
-item id.</p>
+Warnings are the exception. batchit carries back up to the first 100
+warnings per item. It re-raises them in the parent R session, labelled
+with the item id.</p>
 <p><strong>Only a completed item’s warnings reach you.</strong> If an
 item warns and then fails, the error envelope carries no warnings, and
-the call raises the error alone. Those warnings are still in the
-worker’s captured output, which the three non-streaming functions print
-when they report the failure, so read that log rather than expecting a
+the call raises the error alone. Those warnings stay in the worker’s
+captured output. The three non-streaming functions print that output
+when they report the failure. Read that log; do not wait for an R
 warning.</p>
 <p><code>timeout</code> is 6 hours by default, per item. Pass
 <code>Inf</code> to disable it.</p>
@@ -565,8 +571,8 @@ using the installed package. Which tree it must name depends on
 <code>fn</code>:</p>
 <ul>
 <li>with a <code><a href="../reference/package_function.html">package_function()</a></code> target, it is that package’s
-source tree. Load the same tree in the parent R session before building
-the descriptor, so the hash the parent records matches the code the
+source tree. Load the same tree in the parent R session before you build
+the descriptor. The hash the parent records then matches the code the
 worker process loads.</li>
 <li>with an inline function, there is no consumer package to load, and
 <code>dev_path</code> can only name batchit’s own source tree. It is
@@ -591,20 +597,23 @@ renames it over the destination. No workers, no items, no
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/write_qs2_atomically.html">write_qs2_atomically</a></span><span class="op">(</span><span class="va">mtcars</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"cars.qs2"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu">qs2</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/qs2/man/qs_read.html" class="external-link">qs_read</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"cars.qs2"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p>Use it wherever an interrupted write would leave a truncated file
-that a later read halts on, which is the failure that makes a long
-pipeline restart from the beginning. The destination is left either
-absent or complete, never partial.</p>
-<p>It is independent of <code><a href="../reference/run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code>:
-it writes no marker, its temporary file carries no dispatch attempt
-token, and that function’s failure cleanup does not sweep it. Three
-things it does <strong>not</strong> promise are worth reading in
-<code><a href="../reference/write_qs2_atomically.html">?write_qs2_atomically</a></code> before relying on it: it is not
-durability (a rename is not an <code>fsync</code>, so a power loss can
-still lose the file), it is not a lock (two concurrent writers each
-produce a complete file and the last rename wins), and a
-<code>SIGKILL</code> leaves the temporary file behind, since
-<code><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit()</a></code> cannot run.</p>
+<p>Use it wherever an interrupted write would leave a truncated file. A
+later read halts on that file, and a long pipeline then restarts from
+the beginning. The destination is left either absent or complete, never
+partial.</p>
+<p>It is independent of <code><a href="../reference/run_and_write_files_atomically.html">run_and_write_files_atomically()</a></code>.
+It writes no marker. Its temporary file carries no dispatch attempt
+token, and that function’s failure cleanup does not sweep it. Read the
+three things it does <strong>not</strong> promise in
+<code><a href="../reference/write_qs2_atomically.html">?write_qs2_atomically</a></code> before you rely on it:</p>
+<ul>
+<li>it is not durability, because a rename is not an <code>fsync</code>,
+so a power loss can still lose the file;</li>
+<li>it is not a lock, because two concurrent writers each produce a
+complete file and the last rename wins;</li>
+<li>a <code>SIGKILL</code> leaves the temporary file behind, since
+<code><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit()</a></code> cannot run.</li>
+</ul>
 </div>
 <div class="section level2">
 <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a>

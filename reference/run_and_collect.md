@@ -1,9 +1,9 @@
 # Run a function once per item, in a fresh worker process, and collect the results
 
 Use this as a parallel version of
-[`lapply()`](https://rdrr.io/r/base/lapply.html): `fn` runs once per
-item, each call in its own, brand-new R process (a worker), with up to
-`n_workers` running at the same time, and you get back a list of each
+[`lapply()`](https://rdrr.io/r/base/lapply.html). `fn` runs once per
+item, each call in its own, brand-new R process (a worker). Up to
+`n_workers` calls run at the same time. You get back a list of each
 call's return value. If you don't need the return values, because `fn`
 writes its own output or is called for a side effect, use
 [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)
@@ -40,13 +40,13 @@ run_and_collect(
 - items:
 
   One entry per call. Each entry is a named list holding the arguments
-  for that one call to `fn`. Every argument `fn` takes must be named,
-  including ones with a default value (an omitted optional argument is
-  treated as a mistake, not "use the default", so a silently dropped
-  argument is caught rather than passed through unnoticed). A named
-  entry keeps its name as that item's id (used in progress messages and
-  error messages); an unnamed entry is identified by its position
-  instead (1, 2, 3, ...).
+  for that one call to `fn`. Every argument `fn` takes MUST be named,
+  including one that has a default value. An omitted optional argument
+  is treated as a mistake, not as "use the default". A silently dropped
+  argument is therefore caught, rather than passed through unnoticed. A
+  named entry keeps its name as that item's id, used in progress
+  messages and error messages. An unnamed entry is identified by its
+  position instead (1, 2, 3, and so on).
 
 - n_workers:
 
@@ -87,11 +87,10 @@ whose results are.
 
 ## Details
 
-A small object can be included directly in an item's arguments (it
-travels to the worker with the rest of that item), but for a large
-object it is usually better to have `fn` load it itself inside the
-worker (for example, read it from disk) rather than pass it through
-`items`.
+A small object can go directly in an item's arguments. It then travels
+to the worker with the rest of that item. For a large object, prefer a
+different route. Have `fn` load it itself inside the worker, for example
+from disk, rather than pass it through `items`.
 
 If any item's worker errors, exits unexpectedly, or exceeds `timeout`,
 the whole call stops immediately with an R error (printing that worker's
@@ -103,14 +102,14 @@ puts an error object in a failed item's slot.
 Fresh worker processes are not just a convenience here. They are the
 memory strategy for memory-heavy work. When one item's analysis peaks
 at, say, tens of gigabytes, R does not hand that memory back to the
-operating system on its own; exiting the worker process is what reclaims
+operating system on its own. The worker process's exit is what reclaims
 it. This is why batchit starts a new worker per item instead of reusing
 one across items.
 
 When `fn` is a
 [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md)
-reference, each worker re-checks a hash of its code before running it,
-and refuses to run if that code has changed since you called
+reference, each worker re-checks a hash of its code before it runs. The
+worker refuses to run if that code changed since you called
 [`package_function()`](https://papadopoulos-lab.github.io/batchit/reference/package_function.md).
 Any warning `fn` raises is captured and re-raised in your R session once
 that item finishes, labelled with its item id.
@@ -139,9 +138,9 @@ squares <- run_and_collect(
   n_workers = 2
 )
 #>   [0/3] dispatching workers...
-#>   [1/3] complete  18:21:59
-#>   [2/3] complete  18:21:59
-#>   [3/3] complete  18:21:59
+#>   [1/3] complete  08:06:58
+#>   [2/3] complete  08:06:58
+#>   [3/3] complete  08:06:58
 squares
 #> [[1]]
 #> [1] 4

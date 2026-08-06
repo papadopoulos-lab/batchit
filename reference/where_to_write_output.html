@@ -21,7 +21,7 @@ function returns successfully.'><meta property="og:image" content="https://papad
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -84,11 +84,11 @@ destination once every declared output has been staged.</p>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Use <code>style = "return"</code> instead when it's simpler for your function to
-just build R objects and return them in a named list; batchit then
-serializes each one to its final path for you. Use <code>"staged_writer"</code> when
-your function already writes files itself, for example in a format
-other than <code>qs2</code>, or via another package's own writer, so it doesn't
-have to build the whole object in memory just to hand it to batchit to
+build R objects and return them in a named list. batchit then serializes
+each one to its final path for you. Use <code>"staged_writer"</code> when your
+function already writes files itself, for example in a format other than
+<code>qs2</code>, or via another package's own writer. Your function then does not
+have to build the whole object in memory, just to hand it to batchit to
 save again.</p>
 <p>This only works while your function is actually running inside a batchit
 worker, during a <code>style = "staged_writer"</code> item. Calling it at any other
@@ -132,28 +132,28 @@ calling this inside <code>fn</code>.</p></div>
 <span class="r-in"><span>  n_workers <span class="op">=</span> <span class="fl">2</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   [0/2] dispatching workers...</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   [1/2] complete  18:22:01</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   [2/2] complete  18:22:01</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   [1/2] complete  08:07:00</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   [2/2] complete  08:07:00</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $`1`</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $`1`$committed</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>                                           squared </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> "/tmp/RtmpkNdNX4/batchit-staged-example/sq_1.rds" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> "/tmp/RtmpkRwYyJ/batchit-staged-example/sq_1.rds" </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>                                           doubled </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> "/tmp/RtmpkNdNX4/batchit-staged-example/db_1.txt" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> "/tmp/RtmpkRwYyJ/batchit-staged-example/db_1.txt" </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $`1`$attempt</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "1b7458535e15"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "1b60160b221a"</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $`2`</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $`2`$committed</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>                                           squared </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> "/tmp/RtmpkNdNX4/batchit-staged-example/sq_2.rds" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> "/tmp/RtmpkRwYyJ/batchit-staged-example/sq_2.rds" </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>                                           doubled </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> "/tmp/RtmpkNdNX4/batchit-staged-example/db_2.txt" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> "/tmp/RtmpkRwYyJ/batchit-staged-example/db_2.txt" </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $`2`$attempt</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "1b741e952c82"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "1b605009302b"</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">out_dir</span>, <span class="st">"sq_1.rds"</span><span class="op">)</span><span class="op">)</span> <span class="co"># 4</span></span></span>

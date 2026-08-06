@@ -33,11 +33,11 @@ once every declared output has been staged.
 ## Details
 
 Use `style = "return"` instead when it's simpler for your function to
-just build R objects and return them in a named list; batchit then
-serializes each one to its final path for you. Use `"staged_writer"`
-when your function already writes files itself, for example in a format
-other than `qs2`, or via another package's own writer, so it doesn't
-have to build the whole object in memory just to hand it to batchit to
+build R objects and return them in a named list. batchit then serializes
+each one to its final path for you. Use `"staged_writer"` when your
+function already writes files itself, for example in a format other than
+`qs2`, or via another package's own writer. Your function then does not
+have to build the whole object in memory, just to hand it to batchit to
 save again.
 
 This only works while your function is actually running inside a batchit
@@ -86,28 +86,28 @@ run_and_write_files_atomically(
   n_workers = 2
 )
 #>   [0/2] dispatching workers...
-#>   [1/2] complete  18:22:01
-#>   [2/2] complete  18:22:01
+#>   [1/2] complete  08:07:00
+#>   [2/2] complete  08:07:00
 #> $`1`
 #> $`1`$committed
 #>                                           squared 
-#> "/tmp/RtmpkNdNX4/batchit-staged-example/sq_1.rds" 
+#> "/tmp/RtmpkRwYyJ/batchit-staged-example/sq_1.rds" 
 #>                                           doubled 
-#> "/tmp/RtmpkNdNX4/batchit-staged-example/db_1.txt" 
+#> "/tmp/RtmpkRwYyJ/batchit-staged-example/db_1.txt" 
 #> 
 #> $`1`$attempt
-#> [1] "1b7458535e15"
+#> [1] "1b60160b221a"
 #> 
 #> 
 #> $`2`
 #> $`2`$committed
 #>                                           squared 
-#> "/tmp/RtmpkNdNX4/batchit-staged-example/sq_2.rds" 
+#> "/tmp/RtmpkRwYyJ/batchit-staged-example/sq_2.rds" 
 #>                                           doubled 
-#> "/tmp/RtmpkNdNX4/batchit-staged-example/db_2.txt" 
+#> "/tmp/RtmpkRwYyJ/batchit-staged-example/db_2.txt" 
 #> 
 #> $`2`$attempt
-#> [1] "1b741e952c82"
+#> [1] "1b605009302b"
 #> 
 #> 
 readRDS(file.path(out_dir, "sq_1.rds")) # 4
