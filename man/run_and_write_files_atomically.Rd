@@ -23,27 +23,27 @@ written directly in this call, or an object from \code{\link[=package_function]{
 naming a function in an installed package. An inline function must be
 self-contained: it may only use its own arguments, base R
 functions/operators, and \code{pkg::fun()}-qualified calls to other
-packages (including a call to \code{\link[=where_to_write_output]{where_to_write_output()}}, which must be
-written as \code{batchit::where_to_write_output()}). See \code{\link[=run]{run()}}'s
+packages. That includes a call to \code{\link[=where_to_write_output]{where_to_write_output()}}, which MUST
+be written as \code{batchit::where_to_write_output()}. See \code{\link[=run]{run()}}'s
 Advanced section for accepted and rejected examples.}
 
 \item{items}{One entry per call. Each entry is a named list holding the
-arguments for that one call to \code{fn}. Every argument \code{fn} takes must be
-named, including ones with a default value (an omitted optional
-argument is treated as a mistake, not "use the default"). A named entry
+arguments for that one call to \code{fn}. Every argument \code{fn} takes MUST be
+named, including one that has a default value. An omitted optional
+argument is treated as a mistake, not as "use the default". A named entry
 keeps its name as that item's id; an unnamed entry is identified by its
-position instead (1, 2, 3, ...). Item ids must not contain \code{/} or \verb{\\}
-(they're used to build an internal bookkeeping filename; see
-\code{vignette("choosing-a-dispatch-function")}).}
+position instead (1, 2, 3, and so on). An item id MUST NOT contain \code{/} or
+\verb{\\}, because batchit builds an internal bookkeeping filename from it; see
+\code{vignette("choosing-a-dispatch-function")}.}
 
 \item{outputs}{The files \code{fn} must produce for each item. One element per
-item, in the same order as \code{items} (or, when \code{items} is named, you may
-instead name \code{outputs} the same way, with the same names in any order).
+item, in the same order as \code{items}. When \code{items} is named, you may
+instead name \code{outputs} the same way, with the same names in any order.
 Each element is a named character vector giving the FINAL path for each
-declared output, e.g. \code{c(main = "/path/to/result.qs2")}. Every path
-must be absolute; every destination must either not exist yet, or
-already be an ordinary file (not a directory or a symlink); and every
-path, across every item in this one call, must be unique.}
+declared output, e.g. \code{c(main = "/path/to/result.qs2")}. Every path MUST
+be absolute. Every destination MUST either not exist yet, or already be
+an ordinary file, not a directory and not a symlink. Every path, across
+every item in this one call, MUST be unique.}
 
 \item{style}{\code{"return"} (the default) or \code{"staged_writer"}. See the
 description above for what each means for \code{fn}. Any other value
@@ -67,71 +67,78 @@ before killing it and reporting it as failed; see \code{\link[=run]{run()}}.}
 }
 \value{
 A list, one element per item, \strong{in the same order as \code{items}},
-named by item id. Each element describes what was written, as
+named by item id. Each element describes what was written. Its shape is
 \verb{list(committed = <named character vector: output name -> final path actually written>, attempt = <an internal per-item identifier; you can ignore this>)}. Never \code{fn}'s raw return value.
 }
 \description{
-Use this when each item's job is to produce one or more files, and you
-want a guarantee that a failed or interrupted item never leaves a
-half-written file at its final path. Each item runs \code{fn} in its own,
-brand-new R process (a worker), with up to \code{n_workers} running at the
-same time, like \code{\link[=run]{run()}} and \code{\link[=run_and_collect]{run_and_collect()}}. But instead of \code{fn}'s
-return value crossing back to you, batchit writes the files you declared
-in \code{outputs} and hands back a small record of what it wrote.
+Use this when each item's job is to produce one or more files. You get a
+guarantee that a failed or interrupted item never leaves a half-written
+file at its final path. Each item runs \code{fn} in its own, brand-new R process
+(a worker), with up to \code{n_workers} running at the same time, like \code{\link[=run]{run()}}
+and \code{\link[=run_and_collect]{run_and_collect()}}. But \code{fn}'s return value does not cross back to
+you. batchit writes the files you declared in \code{outputs}, and hands back a
+small record of what it wrote.
 }
 \details{
 \strong{The guarantee, and its boundary.} batchit stages every one of an item's
-declared outputs, each to a temporary file in its final destination's own
-directory, before it replaces any final file. It then replaces the final
-files one at a time, by rename, and writes the commit marker last.
+declared outputs before it replaces any final file. Each staged file goes
+to a temporary file in its final destination's own directory. batchit then
+replaces the final files one at a time, by rename, and writes the commit
+marker last.
 
 The guarantee differs across those three phases.
 
-BEFORE THE FIRST REPLACEMENT: fully covered. Take an error in \code{fn}, a
-\code{"return"} value whose names do not match the declared outputs, a declared
-output a \code{"staged_writer"} never wrote, or a failure serializing a staged
-file. In each case NO declared output is touched, and whatever was already at
+BEFORE THE FIRST REPLACEMENT: fully covered. The item can fail here in four
+ways:
+\itemize{
+\item an error in \code{fn};
+\item a \code{"return"} value whose names do not match the declared outputs;
+\item a declared output a \code{"staged_writer"} never wrote;
+\item a failure serializing a staged file.
+}
+
+In each case NO declared output is touched, and whatever was already at
 those paths (or nothing, if they didn't exist) is left untouched. The
 item's own previous marker is removed before the first replacement, so it
 does not survive even here.
 
-DURING THE REPLACEMENT LOOP: not transactional. A kill or a rename
-failure partway through it can leave some of the item's outputs replaced
-and others not; batchit never rolls back a final it has already renamed. An
-individual file is not left half-written, since rename replacement is atomic
-under the filesystem semantics batchit supports, but the SET can be torn,
-and a torn set has no valid marker vouching for it.
+DURING THE REPLACEMENT LOOP: not transactional. A kill or a rename failure
+partway through it can leave some of the item's outputs replaced and others
+not. batchit never rolls back a final it already renamed. An individual
+file is not left half-written, since rename replacement is atomic under the
+filesystem semantics batchit supports. But the SET can be torn, and a torn
+set has no valid marker vouching for it.
 
 AFTER THE MARKER IS WRITTEN: committed, even if the call reports failure.
-The worker serializes its result envelope only after committing, so a
-failure in that window leaves every final and the marker correctly in place
-while the item is reported as failed.
+The worker serializes its result envelope only after it commits. A failure
+in that window leaves every final and the marker correctly in place, while
+the item is reported as failed.
 
 A \code{timeout} is NOT confined to one phase: it measures the worker's whole
 lifetime and can land in any of the three, including mid-commit.
 
-batchit never treats an existing output file as a reason to skip an item;
-it schedules every item, subject to validation or an earlier failure
+batchit never treats an existing output file as a reason to skip an item.
+It schedules every item, subject only to validation or an earlier failure
 stopping the call first.
 
 There are two ways for \code{fn} to produce its declared outputs, chosen with
 \code{style}:
 \itemize{
 \item \code{style = "return"} (the default): \code{fn} returns a named list, one
-element per declared output, with names matching \code{outputs} exactly;
+element per declared output, with names matching \code{outputs} exactly.
 batchit saves each value to its file, in the \code{qs2} format. Read it
 back with \code{qs2::qs_read()}.
 \item \code{style = "staged_writer"}: \code{fn} writes each output itself, to the path
 given by \code{\link[=where_to_write_output]{where_to_write_output()}}\verb{(<name>)}; its return value is
-ignored. Use this when \code{fn} already writes files on its own (for
-example, in a format other than \code{qs2}, or via another package's own
-writer), so it doesn't have to build the whole object in memory just
-to hand it back for batchit to save again.
+ignored. Use this when \code{fn} already writes files on its own, for
+example in a format other than \code{qs2}, or via another package's own
+writer. \code{fn} then does not have to build the whole object in memory,
+just to hand it back for batchit to save again.
 }
 
-Use \code{\link[=run]{run()}} or \code{\link[=run_and_collect]{run_and_collect()}} instead if you're happy managing your
-own output files without this guarantee, or want a value back in R
-rather than files on disk. Use
+Use \code{\link[=run]{run()}} or \code{\link[=run_and_collect]{run_and_collect()}} instead if you are happy to manage your
+own output files without this guarantee. Use them also if you want a value
+back in R rather than files on disk. Use
 \code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}} instead if building
 every item up front (as a plain list, the way \code{items} works here) would
 use too much memory.
@@ -139,8 +146,8 @@ use too much memory.
 \section{Advanced}{
 
 Uses the same fresh-worker-per-item transport as \code{\link[=run]{run()}} and
-\code{\link[=run_and_collect]{run_and_collect()}} (one \code{processx} subprocess per item), and the same
-code-identity check when \code{fn} is a \code{\link[=package_function]{package_function()}} reference. See
+\code{\link[=run_and_collect]{run_and_collect()}}, one \code{processx} subprocess per item. It also uses the
+same code-identity check when \code{fn} is a \code{\link[=package_function]{package_function()}} reference. See
 \code{\link[=run]{run()}}'s Advanced section for both.
 
 After an item commits successfully, batchit leaves a small bookkeeping
@@ -148,8 +155,8 @@ file named \verb{.batchit__<item id>}, as its own record that this run finished
 writing every declared file. There is ONE marker per item, in the
 directory of that item's lexicographically first declared output path. That
 is beside the outputs when they share a directory, and in one of them when
-they do not. Don't create, read, or rely on a file with that name
-yourself; batchit manages it entirely, and overwrites it cleanly the next
+they do not. Do not create, read, or rely on a file with that name
+yourself. batchit manages it entirely, and overwrites it cleanly the next
 time that item id is committed.
 }
 

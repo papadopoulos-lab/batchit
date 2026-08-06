@@ -1,6 +1,6 @@
 Package: batchit
 Title: Run One R Function Across Many Worker Processes
-Version: 26.8.3
+Version: 26.8.6
 Authors@R: person(c("Richard","Aubrey"), "White", email = "hello@rwhite.no", role = c("aut", "cre"),
     comment = c(ORCID = "0000-0002-6747-1726"))
 Description: Runs one R function once per item in a list of inputs, each call in

@@ -25,9 +25,9 @@ installed package. An inline function is not accepted here.}
 Must be unique, non-missing values (coerced to character).}
 
 \item{producer}{A function of one argument, an item's id, that builds
-and returns that one item: a named list holding all of \code{fn}'s
-arguments, exactly as one element of \code{items} would be for
-\code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}. Called once per id, in your R
+and returns that one item. The item is a named list holding all of
+\code{fn}'s arguments. It has exactly the shape one element of \code{items} has
+for \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}. Called once per id, in your R
 session (never on a worker), only when one of the
 \code{min(2 * n_workers, length(ids))} in-flight slots is free. So load or
 build each item's data inside this function, rather than before calling
@@ -35,11 +35,11 @@ build each item's data inside this function, rather than before calling
 
 \item{outputs}{A list aligned to \code{ids}: \code{outputs[[i]]} is item \code{i}'s
 output map, a named character vector \verb{c(<name> = <final path>)}. May
-instead be named by item id (same name set as \code{ids}, any order). Same
-rules as \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}'s \code{outputs}: every path
-absolute; every destination absent or an existing plain file (not a
-directory or a symlink); every output path, across every item in this
-one call, unique.}
+instead be named by item id (same name set as \code{ids}, any order). The
+rules are the same as for \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}'s
+\code{outputs}. Every path MUST be absolute. Every destination MUST be absent
+or an existing plain file, not a directory and not a symlink. Every
+output path, across every item in this one call, MUST be unique.}
 
 \item{style}{\code{"return"} (the target returns a named list) or
 \code{"staged_writer"} (the target writes each output via
@@ -64,22 +64,22 @@ even when there turn out to be no items to run.}
 treated as failed (6 hours by default; \code{Inf} disables the limit).}
 }
 \value{
-A list, named by id, \strong{in the same order as \code{ids}}: each element
-describes what that item wrote, as \verb{list(committed = <named character vector: output name -> final path written>, attempt = <an internal per-item identifier; you can ignore this>)}. Never \code{fn}'s raw return
-value.
+A list, named by id, \strong{in the same order as \code{ids}}. Each element
+describes what that item wrote. Its shape is
+\verb{list(committed = <named character vector: output name -> final path written>, attempt = <an internal per-item identifier; you can ignore this>)}. Never \code{fn}'s raw return value.
 }
 \description{
-Use this when building the full \code{items} list up front (the way \code{\link[=run]{run()}},
-\code{\link[=run_and_collect]{run_and_collect()}}, and \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} all require)
-would itself use too much memory, for example when each item is a
-large data slice, or there are far too many items to hold as a list at
-once. Instead of an \code{items} list, you give an \code{ids} vector and a
+\code{\link[=run]{run()}}, \code{\link[=run_and_collect]{run_and_collect()}} and \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} all
+require the full \code{items} list up front. Use this function when that list
+would itself use too much memory. For example, each item is a large data
+slice, or there are far too many items to hold as a list at once. Instead
+of an \code{items} list, you give an \code{ids} vector and a
 \code{producer(id)} function that builds one item's arguments at a time.
-batchit keeps at most \code{min(2 * n_workers, length(ids))} items in flight
-and calls \code{producer()} only when one of those slots is free, which is what
-bounds how many produced items exist at once. A free slot is not the same
-as an idle worker: when every worker is busy, roughly \code{n_workers} further
-items may already be produced and queued. Everything else works like
+batchit keeps at most \code{min(2 * n_workers, length(ids))} items in flight,
+and calls \code{producer()} only when one of those slots is free. That bounds
+how many produced items exist at once. A free slot is not the same as an
+idle worker. When every worker is busy, roughly \code{n_workers} further items
+may already be produced and queued. Everything else works like
 \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}: each item's function runs on a
 background worker, and its declared output files are written safely. See
 that function's help page for the atomic-write guarantee and the two
@@ -102,7 +102,7 @@ outside this call. A background worker loads the package named in \code{fn}
 once, when it starts (not once per item).
 
 At most \code{2 * n_workers} items are in flight at once, each carrying its
-own \code{timeout}: \code{producer()} is not called again until an in-flight slot
+own \code{timeout}. \code{producer()} is not called again until an in-flight slot
 frees up, which is what keeps memory bounded. An item that hangs past
 its timeout resolves as an error instead of blocking the others forever.
 

@@ -24,13 +24,13 @@ packages. See the Advanced section below for accepted and rejected
 examples.}
 
 \item{items}{One entry per call. Each entry is a named list holding the
-arguments for that one call to \code{fn}. Every argument \code{fn} takes must be
-named, including ones with a default value (an omitted optional
-argument is treated as a mistake, not "use the default", so a silently
-dropped argument is caught rather than passed through unnoticed). A
-named entry keeps its name as that item's id (used in progress messages
-and error messages); an unnamed entry is identified by its position
-instead (1, 2, 3, ...).}
+arguments for that one call to \code{fn}. Every argument \code{fn} takes MUST be
+named, including one that has a default value. An omitted optional
+argument is treated as a mistake, not as "use the default". A silently
+dropped argument is therefore caught, rather than passed through
+unnoticed. A named entry keeps its name as that item's id, used in
+progress messages and error messages. An unnamed entry is identified by
+its position instead (1, 2, 3, and so on).}
 
 \item{n_workers}{How many items to run at the same time (a whole number,
 1 or more).}
@@ -53,17 +53,17 @@ Nothing useful (\code{invisible(NULL)}). Use \code{\link[=run_and_collect]{run_a
 need each item's return value.
 }
 \description{
-Use this as a parallel \code{for} loop: \code{fn} runs once per item, each call in
-its own, brand-new R process (a worker), with up to \code{n_workers} running at
-the same time. Use this specifically when you don't need anything back in
-your R session, for example when \code{fn} writes its own files, or is called
-purely for a side effect. If you want each call's return value back, use
+Use this as a parallel \code{for} loop. \code{fn} runs once per item, each call in
+its own, brand-new R process (a worker). Up to \code{n_workers} calls run at the
+same time. Use this specifically when you don't need anything back in your
+R session. For example, \code{fn} writes its own files, or is called purely for
+a side effect. If you want each call's return value back, use
 \code{\link[=run_and_collect]{run_and_collect()}} instead; it works identically otherwise. If you want
-batchit itself to manage output files safely (so a failed item never
-leaves a half-written file), use \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}
-instead. Files that \code{fn} writes on its own here get none of that
-protection: if \code{fn} is interrupted partway through writing one, whatever
-it already wrote is left exactly as it is.
+batchit itself to manage output files safely, so a failed item never leaves
+a half-written file, use \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}} instead. Files
+that \code{fn} writes on its own here get none of that protection. If \code{fn} is
+interrupted partway through one of those writes, whatever it already wrote
+is left exactly as it is.
 }
 \details{
 If any item's worker errors, exits unexpectedly, or exceeds \code{timeout}, the
@@ -91,14 +91,14 @@ function(x) my_helper(x)
 }\if{html}{\out{</div>}}
 
 When \code{fn} is a \code{\link[=package_function]{package_function()}} reference, each worker re-checks a
-hash of its code before running it, and refuses to run if that code has
+hash of its code before it runs. The worker refuses to run if that code
 changed since you called \code{package_function()}. See that function's help
 page for what the hash does and does not cover.
 
 \code{dev_path} names a package source tree to load in the worker with
-\code{devtools::load_all()}, instead of using the installed package: the
-package named in your \code{package_function()} reference, or (for an inline
-\code{fn}) batchit's own source tree. A path that doesn't exist, or doesn't
+\code{devtools::load_all()}, instead of the installed package. Name the package
+from your \code{package_function()} reference. For an inline \code{fn}, name
+batchit's own source tree instead. A path that doesn't exist, or doesn't
 match the expected package, is an error rather than a silent fall-back to
 the installed version.
 

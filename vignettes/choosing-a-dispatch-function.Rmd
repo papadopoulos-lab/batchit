@@ -15,8 +15,8 @@ batchit runs one R function many times, each call in a separate worker process.
 Four functions do that. They share one shape and differ on two axes: how each
 call's arguments reach the worker process, and what comes back.
 
-This article walks through all four with worked examples, then covers the two
-ways to name the function you dispatch, and states exactly what the atomic-write
+This article walks through all four with worked examples. It then covers the two
+ways to name the function you dispatch. It states exactly what the atomic-write
 guarantee covers. It ends with `write_qs2_atomically()`, the one exported
 function that is not a dispatch function at all.
 
@@ -40,10 +40,10 @@ A **worker process** is a separate R process. `run()`, `run_and_collect()` and
 `stream_from_parent_and_write_files_atomically()` instead reuses a small pool of
 persistent worker processes (`mirai` daemons).
 
-A fresh process per item is a memory strategy, not a convenience. R may hold on to
-a large allocation after the objects using it are gone, so letting the process exit
-is the reliable way to reclaim it. This matters when one item peaks at many
-gigabytes.
+A fresh process per item is a memory strategy, not a convenience. R may keep a
+large allocation after the objects that used it are gone. Letting the process exit
+is the reliable way to reclaim that memory. This matters when one item peaks at
+many gigabytes.
 
 Throughout this article, the **parent R session** is the session you call batchit
 from.
@@ -69,10 +69,10 @@ one list.
 Lazy production is available only in combination with batchit-managed output
 files. There is no streaming function that hands back raw return values.
 
-Before reaching for the streaming function, consider the simpler alternative: put
-a small identifier or file path in each item and have `fn` load the large data
-itself, inside its worker process. That keeps the fresh-process-per-item memory
-behaviour, which the streaming function gives up.
+Before you reach for the streaming function, consider the simpler alternative. Put
+a small identifier or file path in each item. Have `fn` load the large data itself,
+inside its worker process. That keeps the fresh-process-per-item memory behaviour,
+which the streaming function gives up.
 
 ## `run_and_collect()`: a parallel `lapply()`
 
@@ -104,8 +104,8 @@ was named. The two file-writing functions below do name theirs, so this asymmetr
 is worth remembering.
 
 Every return value travels from the worker process back to the parent R session. A
-small object can also travel into a worker process as part of an item, but for a
-large one it is usually better to have `fn` read it from disk itself.
+small object can also travel into a worker process as part of an item. For a large
+object, it is usually better to have `fn` read it from disk itself.
 
 ## `run()`: run items and discard the return values
 
@@ -113,8 +113,8 @@ Use this when `fn` is called for an effect outside R: it writes its own files, o
 updates a database. It works exactly like `run_and_collect()` and returns
 `invisible(NULL)`.
 
-The effect has to be external. Each item runs in a separate R process, so
-assigning to a global variable inside `fn` changes that worker process and not the
+The effect has to be external. Each item runs in a separate R process. An
+assignment to a global variable inside `fn` changes that worker process, not the
 parent R session.
 
 ```{r}
@@ -142,9 +142,9 @@ this `fn` were interrupted partway through writing `2.qs2`, a half-written
 ## `run_and_write_files_atomically()`: batchit writes the files
 
 Declare, per item, the final path of every file that item must produce. batchit
-writes each one to a temporary file in the same directory as its destination, and
-replaces the final files only after every one of that item's outputs has been
-written successfully.
+writes each one to a temporary file, in the same directory as its destination. It
+replaces the final files only after every one of that item's outputs is written
+successfully.
 
 `outputs` is one named character vector per item, in the same order as `items`. When
 `items` is named, `outputs` may carry the same names instead, in any order.
@@ -224,9 +224,9 @@ readLines(file.path(out_dir, "db_1.txt"))
 #> [1] "4"
 ```
 
-Discarding the return value does not mean batchit takes your word for it. Before
-committing, it checks that every declared output now exists at its staging path as
-a plain, non-symlink file, and errors naming the output that is missing.
+A discarded return value does not mean batchit takes your word for it. Before it
+commits, batchit checks that every declared output now exists at its staging path,
+as a plain, non-symlink file. It errors and names the output that is missing.
 
 Two rules for `where_to_write_output()`. Write to the path it returns and leave it
 alone otherwise, because batchit moves it into place itself. And call it as
@@ -245,14 +245,14 @@ Instead of `items`, give an `ids` vector and a `producer(id)` function that buil
 one item.
 
 batchit keeps at most `min(2 * n_workers, length(ids))` items in flight, and calls
-`producer()` only when one of those slots is free. Note that a slot is not the same
-as an idle worker process: when every worker process is busy, roughly `n_workers`
-further items can already be produced and queued.
+`producer()` only when one of those slots is free. A slot is not the same as an idle
+worker process. When every worker process is busy, roughly `n_workers` further items
+can already be produced and queued.
 
 The bound covers **produced item arguments only**. The `ids` vector, the `outputs`
-list and the accumulating result list all live in the parent R session for the whole
-call, and none of them is bounded by `n_workers`. Streaming solves the problem of
-items too large to hold all at once; it does not make the per-item bookkeeping free.
+list and the accumulating result list live in the parent R session for the whole
+call. `n_workers` bounds none of those three. Streaming solves the problem of items
+too large to hold all at once; it does not make the per-item bookkeeping free.
 
 ```{r}
 # `write_one_slice()` must live in an INSTALLED package: this function loads it
@@ -290,9 +290,9 @@ Three differences from the other three functions.
 
 1. `fn` must come from `package_function()`. An inline function is not accepted.
 2. It needs the `mirai` package: `pak::pak("mirai")`.
-3. Its worker processes are persistent `mirai` daemons. A worker process's memory
-   is **not** reclaimed between items the way process exit reclaims it elsewhere,
-   so this suits many small-to-medium items better than a few huge ones.
+3. Its worker processes are persistent `mirai` daemons. Their memory is **not**
+   reclaimed between items, the way process exit reclaims it elsewhere. So this
+   function suits many small-to-medium items better than a few huge ones.
 
 Those daemons live in a private compute profile that batchit creates and tears
 down for the one call. It never touches a `mirai` daemon configuration you set up
@@ -300,9 +300,10 @@ yourself.
 
 ## Naming the function: inline or `package_function()`
 
-An **inline function** is an ordinary R function passed by value, written directly
-in the call, or assigned to a variable first, as `write_two_files` was above. It is
-the quick option, and every example here except the streaming one uses it.
+An **inline function** is an ordinary R function, passed by value. Write it directly
+in the call, or assign it to a variable first, as the `write_two_files` example
+under `style = "staged_writer"` does. It is the quick option, and every example here
+except the streaming one uses it.
 
 It must be self-contained: it may use only its own arguments, base R, and
 `pkg::fun()`-qualified calls to other packages.
@@ -323,11 +324,11 @@ my_helper <- function(x) x * 2
 function(x) my_helper(x)
 ```
 
-batchit checks this with a best-effort static scan, not a proof. Indirect lookups
-such as `get()`, `eval(parse())` or a string-based `do.call()` can pass the check
-and still fail in the worker process, because the function's environment is
-replaced before it is sent. Keep to the rule even where the check lets something
-through.
+batchit checks this with a best-effort static scan, not a proof. An indirect lookup
+can pass the check and still fail in the worker process. `get()`, `eval(parse())`
+and a string-based `do.call()` are all indirect lookups. They fail because batchit
+replaces the function's environment before it sends the function. Keep to the rule
+even where the check lets something through.
 
 If `fn` needs something from outside its own arguments, pass it in as another
 argument, reference it as `pkg::fun()`, or move it into a package.
@@ -378,29 +379,34 @@ file. It then replaces the final files one at a time, each by a rename within th
 destination directory. Last, it writes a marker recording the commit. The guarantee
 is different in each of those three phases.
 
-**Before the first replacement: fully covered.** Suppose the item fails here, with
-an error in `fn`, a `"return"` value whose names do not match the declared outputs,
-a declared output a `"staged_writer"` never wrote, or a failure serializing one of
-the staged files. Then **no declared output** is touched. Whatever was at those
-paths stays exactly as it was, and if nothing was there, nothing appears. The item's own
-previous marker is removed before the first replacement, so that one does not
-survive even here.
+**Before the first replacement: fully covered.** The item can fail here in four
+ways:
 
-**During the replacement loop: not transactional.** If the worker process is
-killed, or a rename fails, partway through the loop, some of the item's outputs can
-be new while others are still old. batchit never rolls back a file it has already
+- an error in `fn`;
+- a `"return"` value whose names do not match the declared outputs;
+- a declared output a `"staged_writer"` never wrote;
+- a failure serializing one of the staged files.
+
+After any of those four, **no declared output** is touched. Whatever was at those
+paths stays exactly as it was, and if nothing was there, nothing appears. batchit
+removes the item's own previous marker before the first replacement, so that marker
+does not survive even here.
+
+**During the replacement loop: not transactional.** The worker process can be
+killed partway through the loop, or a rename can fail. Some of the item's outputs
+are then new while others are still old. batchit never rolls back a file it already
 renamed. An individual file is not left half-written, since rename replacement is
 atomic under the filesystem semantics batchit supports, but the *set* can be torn.
 
 **After the marker is written: committed, but the call may still report failure.**
-The worker serializes its result envelope only after committing. If that fails, or
-the worker is killed in that window, every final file and the marker are correctly
-in place while the call reports the item as failed.
+The worker serializes its result envelope only after it commits. That serialization
+can fail, or the worker can be killed in that window. Every final file and the
+marker are then correctly in place, while the call reports the item as failed.
 
 **A timeout is not confined to one phase.** `timeout` measures the worker process's
-whole lifetime, so it can land in any of the three. batchit's own source notes that
-a timeout can kill a worker mid-commit. Do not read "timeout" as a pre-replacement
-failure.
+whole lifetime, so it can land in any of the three phases. batchit's own source
+notes that a timeout can kill a worker mid-commit. Do not read "timeout" as a
+pre-replacement failure.
 
 The marker is what tells a complete commit from a torn one: a small file named
 `.batchit__<item id>`, written only after every replacement has succeeded. A torn
@@ -426,20 +432,20 @@ and it never returns a partial result with an error object in the failed slot. W
 already running may finish before the call unwinds.
 
 `run()`, `run_and_collect()` and `run_and_write_files_atomically()` print the
-failing worker process's combined stdout and stderr first (the last 64,000 bytes,
-and at most 100 lines) so the cause is visible.
+failing worker process's combined stdout and stderr first, so the cause is visible.
+That log tail is the last 64,000 bytes, and at most 100 lines.
 `stream_from_parent_and_write_files_atomically()` reports the error that came back
 through `mirai`; it has no equivalent captured-log tail.
 
 On success, a worker process's stdout and stderr are discarded. Warnings are the
-exception: up to the first 100 warnings per item are carried back and re-raised in
-the parent R session, labelled with the item id.
+exception. batchit carries back up to the first 100 warnings per item. It re-raises
+them in the parent R session, labelled with the item id.
 
 **Only a completed item's warnings reach you.** If an item warns and then fails,
 the error envelope carries no warnings, and the call raises the error alone. Those
-warnings are still in the worker's captured output, which the three non-streaming
-functions print when they report the failure, so read that log rather than expecting
-a warning.
+warnings stay in the worker's captured output. The three non-streaming functions
+print that output when they report the failure. Read that log; do not wait for an R
+warning.
 
 `timeout` is 6 hours by default, per item. Pass `Inf` to disable it.
 
@@ -454,8 +460,8 @@ label progress and error messages. Name your items, so that a message reads
 name depends on `fn`:
 
 - with a `package_function()` target, it is that package's source tree. Load the
-  same tree in the parent R session before building the descriptor, so the hash the
-  parent records matches the code the worker process loads.
+  same tree in the parent R session before you build the descriptor. The hash the
+  parent records then matches the code the worker process loads.
 - with an inline function, there is no consumer package to load, and `dev_path` can
   only name batchit's own source tree. It is useful when developing batchit itself.
 
@@ -479,17 +485,20 @@ write_qs2_atomically(mtcars, file.path(tempdir(), "cars.qs2"))
 qs2::qs_read(file.path(tempdir(), "cars.qs2"))
 ```
 
-Use it wherever an interrupted write would leave a truncated file that a later
-read halts on, which is the failure that makes a long pipeline restart from the
-beginning. The destination is left either absent or complete, never partial.
+Use it wherever an interrupted write would leave a truncated file. A later read
+halts on that file, and a long pipeline then restarts from the beginning. The
+destination is left either absent or complete, never partial.
 
-It is independent of `run_and_write_files_atomically()`: it writes no marker, its
+It is independent of `run_and_write_files_atomically()`. It writes no marker. Its
 temporary file carries no dispatch attempt token, and that function's failure
-cleanup does not sweep it. Three things it does **not** promise are worth reading
-in `?write_qs2_atomically` before relying on it: it is not durability (a rename is
-not an `fsync`, so a power loss can still lose the file), it is not a lock (two
-concurrent writers each produce a complete file and the last rename wins), and a
-`SIGKILL` leaves the temporary file behind, since `on.exit()` cannot run.
+cleanup does not sweep it. Read the three things it does **not** promise in
+`?write_qs2_atomically` before you rely on it:
+
+- it is not durability, because a rename is not an `fsync`, so a power loss can
+  still lose the file;
+- it is not a lock, because two concurrent writers each produce a complete file and
+  the last rename wins;
+- a `SIGKILL` leaves the temporary file behind, since `on.exit()` cannot run.
 
 ## See also
 

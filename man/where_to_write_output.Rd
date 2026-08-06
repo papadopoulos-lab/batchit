@@ -27,11 +27,11 @@ function returns successfully.
 }
 \details{
 Use \code{style = "return"} instead when it's simpler for your function to
-just build R objects and return them in a named list; batchit then
-serializes each one to its final path for you. Use \code{"staged_writer"} when
-your function already writes files itself, for example in a format
-other than \code{qs2}, or via another package's own writer, so it doesn't
-have to build the whole object in memory just to hand it to batchit to
+build R objects and return them in a named list. batchit then serializes
+each one to its final path for you. Use \code{"staged_writer"} when your
+function already writes files itself, for example in a format other than
+\code{qs2}, or via another package's own writer. Your function then does not
+have to build the whole object in memory, just to hand it to batchit to
 save again.
 
 This only works while your function is actually running inside a batchit

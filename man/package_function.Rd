@@ -20,49 +20,55 @@ only: what a worker actually checks before running is the code hash
 below, not this version string.}
 }
 \value{
-An object of class \code{"package_function"}: a list with elements
-\code{package}, \code{symbol}, \code{version}, \code{hash} (a hash of the function's code,
-used to verify the worker loaded the same definition), and
-\code{formal_names} (the function's argument names). Pass the whole object
-as \code{fn}.
+An object of class \code{"package_function"}. It is a list with
+elements \code{package}, \code{symbol}, \code{version}, \code{hash} and \code{formal_names}.
+\code{hash} is a hash of the function's code, used to verify the worker
+loaded the same definition. \code{formal_names} holds the function's argument
+names. Pass the whole object as \code{fn}.
 }
 \description{
-Builds a small object that names a function in an installed package, for
-passing as the \code{fn} argument to \code{\link[=run]{run()}}, \code{\link[=run_and_collect]{run_and_collect()}},
+Builds a small object that names a function in an installed package. Pass
+that object as the \code{fn} argument to \code{\link[=run]{run()}}, \code{\link[=run_and_collect]{run_and_collect()}},
 \code{\link[=run_and_write_files_atomically]{run_and_write_files_atomically()}}, or
-\code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}. This is the
-alternative to writing an inline function directly in one of those calls
-(see their help pages). \code{package_function()} is required for
-\code{stream_from_parent_and_write_files_atomically()}, and recommended for the
-others whenever you want a production run to verify that every worker
-really is running the code you tested, not just whatever happens to be
-installed. For a quick one-off run, an inline function is simpler and
-needs no setup.
+\code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}. It is the alternative
+to an inline function, written directly in one of those calls (see their
+help pages). \code{package_function()} is required for
+\code{stream_from_parent_and_write_files_atomically()}. It is recommended for
+the other three, whenever you want a production run to verify what every
+worker runs. Each worker then checks that it is running the code you
+tested, not just whatever happens to be installed. For a quick one-off
+run, an inline function is simpler and needs no setup.
 }
 \details{
 The object this function returns always identifies a function by package
 name + function name + a hash of its code. It is never the function
-itself, a bare function name, or a closure. This is different from
-passing your function directly as \code{fn}, which \code{run()}, \code{run_and_collect()},
-and \code{run_and_write_files_atomically()} also accept (see their \code{fn}
-argument); only \code{stream_from_parent_and_write_files_atomically()}
-requires the form built by this function.
+itself, a bare function name, or a closure. You can also pass your
+function directly as \code{fn}, which is a different thing. \code{run()},
+\code{run_and_collect()} and \code{run_and_write_files_atomically()} accept a
+function that way (see their \code{fn} argument). Only
+\code{stream_from_parent_and_write_files_atomically()} requires the form this
+function builds.
 
-A function that takes \code{...} is rejected: batchit checks every item's
-argument names against the function's own fixed argument list, and \code{...}
-would make a mistyped or missing argument impossible to catch reliably.
+A function that takes \code{...} is rejected. batchit checks every item's
+argument names against the function's own fixed argument list. \code{...} would
+make a mistyped or missing argument impossible to catch reliably.
 }
 \section{Advanced}{
 
 The code hash is deliberately narrow: it covers only the function's own
-body and its own argument list. A changed helper function it calls, a
-constant it refers to elsewhere, an S4/R6 method table, or a dependency's
-version are all outside it, so a matching hash proves "the same
-function definition", not "provably identical behaviour". The hash is
-also computed after stripping comments and whitespace (\code{utils::removeSource()}),
-so it agrees whether the function was loaded from an installed package
-or from a \code{devtools::load_all()} source tree, which otherwise disagree
-on identical code.
+body and its own argument list. Four things lie outside it:
+\itemize{
+\item a changed helper function it calls;
+\item a constant it refers to elsewhere;
+\item an S4/R6 method table;
+\item a dependency's version.
+}
+
+So a matching hash proves "the same function definition", not "provably
+identical behaviour". batchit also strips comments and whitespace before
+it computes the hash, with \code{utils::removeSource()}. The hash then agrees
+across an installed package and a \code{devtools::load_all()} source tree.
+Those two otherwise disagree on identical code.
 }
 
 \examples{

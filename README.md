@@ -1,8 +1,8 @@
 # batchit
 
 `batchit` runs one R function many times in parallel, each call in its own
-worker process, and then either gives you the return values back or writes
-each call's output files for you.
+worker process. It then either gives you the return values back, or writes each
+call's output files for you.
 
 Full documentation: <https://papadopoulos-lab.github.io/batchit/>
 
@@ -61,14 +61,14 @@ Three things happened:
 
 The first four take an `fn` argument: the function to run once per item. The
 first three accept an inline function, or a function named in an installed
-package with `package_function()`, in which case each worker hashes the
-definition it loaded and refuses to run code that differs from what you
+package with `package_function()`. With `package_function()`, each worker hashes
+the definition it loaded, and refuses to run code that differs from what you
 dispatched. `stream_from_parent_and_write_files_atomically()` accepts only the
 `package_function()` form.
 
 The first three also start a brand-new R process for each item, which is the
 memory strategy: process exit is what reclaims a large allocation. The streaming
-function instead reuses a small pool of persistent `mirai` workers, so it trades
+function instead reuses a small pool of persistent `mirai` workers. It trades
 that reclamation away for the ability to build items lazily.
 
 The two file-writing functions guarantee that **a failed or interrupted item
@@ -79,9 +79,9 @@ marker is written last.
 ## Documentation
 
 - [**Choosing a dispatch function**](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.html)
-  — all four functions with worked examples, the rules an inline `fn` must
-  follow, and exactly what the atomic-write guarantee does and does not cover.
-  Also available as `vignette("choosing-a-dispatch-function")`.
+  — all four functions with worked examples, and the rules an inline `fn` must
+  follow. It states exactly what the atomic-write guarantee does and does not
+  cover. Also available as `vignette("choosing-a-dispatch-function")`.
 - [**Reference**](https://papadopoulos-lab.github.io/batchit/reference/index.html)
   — every argument of every exported function.
 - [**Changelog**](https://papadopoulos-lab.github.io/batchit/news/index.html)

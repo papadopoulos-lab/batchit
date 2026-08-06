@@ -7,8 +7,8 @@
 \title{batchit: run one R function across many parallel worker processes}
 \description{
 \code{batchit} runs one R function once per item in a list of inputs, each
-call in its own worker process, and either collects the return values or
-has the worker write output files for you. Pick one of four functions,
+call in its own worker process. It then either collects the return values,
+or has the worker write output files for you. Pick one of four functions,
 depending on what you need:
 }
 \details{
@@ -21,33 +21,34 @@ depending on what you need:
 }
 
 
-Each item is a named list holding the arguments for one call to your
-function (every argument must be named, including ones with a default
-value). Your function can be either an inline function you write directly
-in the call, or a reference to a function in an installed package built
-by \code{\link[=package_function]{package_function()}}. See that function's help page for when to
+Each item is a named list. It holds the arguments for one call to your
+function. Every argument must be named, including one that has a default
+value. Your function can be an inline function you write directly in the
+call. It can instead be a reference to a function in an installed package,
+built by \code{\link[=package_function]{package_function()}}. See that function's help page for when to
 prefer one over the other.
 
-For a worked example of each function, the rules an inline function must
-follow, and exactly what the atomic-write guarantee covers, see
-\code{vignette("choosing-a-dispatch-function")}.
+See \code{vignette("choosing-a-dispatch-function")} for a worked example of each
+function. It also gives the rules an inline function must follow, and
+exactly what the atomic-write guarantee covers.
 }
 \section{Advanced}{
 
 \code{run()}, \code{run_and_collect()}, and \code{run_and_write_files_atomically()} each
 run their items in a fresh \code{processx} subprocess, one per item.
 \code{stream_from_parent_and_write_files_atomically()} instead runs its items
-on persistent \code{mirai} background workers, so items can be produced
-lazily, under a bounded amount of in-flight memory, instead of being
-built into a list up front.
+on persistent \code{mirai} background workers. Items can then be produced
+lazily, under a bounded amount of in-flight memory, rather than built
+into one list up front.
 
 When \code{fn} is a \code{\link[=package_function]{package_function()}} reference, batchit checks that each
-worker loaded the exact same function definition your R session did
-(via a hash of the function's body and arguments), and validates every
-item's argument names against the function's own arguments, in both
-your R session and the worker, before anything runs. batchit does not
-change BLAS or \code{data.table} thread settings; if your function is itself
-multi-threaded, divide your CPU cores across \code{n_workers} yourself.
+worker loaded the exact same function definition your R session did. That
+check is a hash of the function's body and arguments. batchit also
+validates every item's argument names against the function's own
+arguments, in both your R session and the worker, before anything runs.
+batchit does not change BLAS or \code{data.table} thread settings. If your
+function is itself multi-threaded, divide your CPU cores across
+\code{n_workers} yourself.
 }
 
 \seealso{

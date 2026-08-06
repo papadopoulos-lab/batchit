@@ -15,11 +15,12 @@
 #' Stable-across-sessions identity hash of a function's body and formals
 #'
 #' Hashes exactly `list(body(fn), formals(fn))` -- deliberately NOT the whole
-#' function object, whose enclosing environment varies across R sessions and
-#' would make the hash non-deterministic. This is the identity used by
-#' [package_function()]: an edit to a target's body or formals moves the hash, while
-#' a comment or whitespace change does not (provided the caller has stripped
-#' srcref first via `utils::removeSource()`; see [package_function()]).
+#' function object. A function object's enclosing environment varies across R
+#' sessions, which would make the hash non-deterministic. This is the identity
+#' [package_function()] uses. An edit to a target's body or formals moves the
+#' hash; a comment or whitespace change does not. That holds only if the caller
+#' stripped srcref first, with `utils::removeSource()`; see
+#' [package_function()].
 #'
 #' @param fn A function.
 #' @return A single xxhash64 digest string.
@@ -36,8 +37,8 @@
 #'
 #' [parallel::detectCores()] is documented to return `NA` when it cannot
 #' determine the core count. An unguarded use feeds that `NA` into a division
-#' (`floor(NA / n_workers)`) or a thread count, where it only surfaces much later
-#' and a long way from the cause. One helper, so there is one place to be wrong.
+#' (`floor(NA / n_workers)`) or a thread count. There it only surfaces much
+#' later, and a long way from the cause. One helper, so there is one place to be wrong.
 #' Carried from the originating pipeline for consumers that want a safe core
 #' count; batchit itself sets no thread counts.
 #'
@@ -70,14 +71,19 @@
   # be rejected BEFORE coercion, like every other bad value, to keep the "a
   # rejected count changes nothing" invariant true.
   if (
-    !is.numeric(n_workers) || length(n_workers) != 1L || is.na(n_workers) ||
-      !is.finite(n_workers) || n_workers < 1L ||
+    !is.numeric(n_workers) ||
+      length(n_workers) != 1L ||
+      is.na(n_workers) ||
+      !is.finite(n_workers) ||
+      n_workers < 1L ||
       !isTRUE(n_workers == floor(n_workers)) ||
       n_workers > .Machine$integer.max
   ) {
     stop(
-      what, ": n_workers must be a single whole number in [1, ",
-      .Machine$integer.max, "], got: ",
+      what,
+      ": n_workers must be a single whole number in [1, ",
+      .Machine$integer.max,
+      "], got: ",
       paste(utils::capture.output(utils::str(n_workers)), collapse = " "),
       call. = FALSE
     )
