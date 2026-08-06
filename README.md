@@ -78,10 +78,10 @@ marker is written last.
 
 ## Documentation
 
-- [**Choosing a dispatch function**](https://papadopoulos-lab.github.io/batchit/articles/choosing-a-dispatch-function.html)
-  — all four functions with worked examples, and the rules an inline `fn` must
+- [**Get started with batchit**](https://papadopoulos-lab.github.io/batchit/articles/batchit.html):
+  all four functions with worked examples, and the rules an inline `fn` must
   follow. It states exactly what the atomic-write guarantee does and does not
-  cover. Also available as `vignette("choosing-a-dispatch-function")`.
+  cover. Also available as `vignette("batchit")`.
 - [**Reference**](https://papadopoulos-lab.github.io/batchit/reference/index.html)
   — every argument of every exported function.
 - [**Changelog**](https://papadopoulos-lab.github.io/batchit/news/index.html)

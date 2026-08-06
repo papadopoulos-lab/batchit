@@ -105,7 +105,7 @@
 #'   and [stream_from_parent_and_write_files_atomically()], which all accept
 #'   the descriptor this returns as their `fn`.
 #'
-#'   `vignette("choosing-a-dispatch-function")` for when to prefer this over
+#'   `vignette("batchit")` for when to prefer this over
 #'   an inline function.
 #' @section Advanced:
 #' The code hash is deliberately narrow: it covers only the function's own
@@ -2090,7 +2090,7 @@ print.batch_envelope <- function(x, ...) {
 #' unlink(out_dir, recursive = TRUE)
 #' }
 #' @family dispatch functions
-#' @seealso `vignette("choosing-a-dispatch-function")` for a worked comparison
+#' @seealso `vignette("batchit")` for a worked comparison
 #'   of all four dispatch functions.
 #' @section Advanced:
 #' Accepted and rejected inline functions:
@@ -2208,7 +2208,7 @@ run <- function(
 #' squares
 #' }
 #' @family dispatch functions
-#' @seealso `vignette("choosing-a-dispatch-function")` for a worked comparison
+#' @seealso `vignette("batchit")` for a worked comparison
 #'   of all four dispatch functions.
 #' @section Advanced:
 #' Fresh worker processes are not just a convenience here. They are the
@@ -2369,7 +2369,7 @@ run_and_collect <- function(
 #' )
 #' }
 #' @family dispatch functions
-#' @seealso `vignette("choosing-a-dispatch-function")` for a worked comparison
+#' @seealso `vignette("batchit")` for a worked comparison
 #'   of all four dispatch functions.
 #' @section Advanced:
 #' This function runs its workers as persistent `mirai` daemons, in a

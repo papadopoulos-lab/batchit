@@ -19,7 +19,7 @@
 #' built by [package_function()]. See that function's help page for when to
 #' prefer one over the other.
 #'
-#' See `vignette("choosing-a-dispatch-function")` for a worked example of each
+#' See `vignette("batchit")` for a worked example of each
 #' function. It also gives the rules an inline function must follow, and
 #' exactly what the atomic-write guarantee covers.
 #'

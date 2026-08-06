@@ -28,7 +28,7 @@ call. It can instead be a reference to a function in an installed package,
 built by \code{\link[=package_function]{package_function()}}. See that function's help page for when to
 prefer one over the other.
 
-See \code{vignette("choosing-a-dispatch-function")} for a worked example of each
+See \code{vignette("batchit")} for a worked example of each
 function. It also gives the rules an inline function must follow, and
 exactly what the atomic-write guarantee covers.
 }

@@ -435,7 +435,7 @@
 #'   separate: this writer emits no marker, and its temporary file is not
 #'   swept by that engine's failure cleanup.
 #'
-#'   `vignette("choosing-a-dispatch-function")` for where this sits relative to
+#'   `vignette("batchit")` for where this sits relative to
 #'   the four dispatch functions.
 #' @export
 write_qs2_atomically <- function(object, path, ...) {
@@ -602,7 +602,7 @@ write_qs2_atomically <- function(object, path, ...) {
 #'   [stream_from_parent_and_write_files_atomically()], the two functions that
 #'   establish the active run this reads from.
 #'
-#'   `vignette("choosing-a-dispatch-function")` for the two rules that go with
+#'   `vignette("batchit")` for the two rules that go with
 #'   calling this inside `fn`.
 #' @export
 where_to_write_output <- function(name) {
@@ -939,7 +939,7 @@ where_to_write_output <- function(name) {
 #'   keeps its name as that item's id; an unnamed entry is identified by its
 #'   position instead (1, 2, 3, and so on). An item id MUST NOT contain `/` or
 #'   `\`, because batchit builds an internal bookkeeping filename from it; see
-#'   `vignette("choosing-a-dispatch-function")`.
+#'   `vignette("batchit")`.
 #' @param outputs The files `fn` must produce for each item. One element per
 #'   item, in the same order as `items`. When `items` is named, you may
 #'   instead name `outputs` the same way, with the same names in any order.
@@ -996,7 +996,7 @@ where_to_write_output <- function(name) {
 #'   `style = "staged_writer"`, and [write_qs2_atomically()] for the same
 #'   rename-into-place guarantee on a single file with no dispatch.
 #'
-#'   `vignette("choosing-a-dispatch-function")` states exactly what the
+#'   `vignette("batchit")` states exactly what the
 #'   atomic-write guarantee covers in each of its three phases.
 #' @section Advanced:
 #' Uses the same fresh-worker-per-item transport as [run()] and

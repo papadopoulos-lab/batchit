@@ -82,6 +82,6 @@ t$formal_names
 and \code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}, which all accept
 the descriptor this returns as their \code{fn}.
 
-\code{vignette("choosing-a-dispatch-function")} for when to prefer this over
+\code{vignette("batchit")} for when to prefer this over
 an inline function.
 }

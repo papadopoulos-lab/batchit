@@ -114,7 +114,7 @@
           "are neither base R nor `pkg::`-qualified: %s. Every value the closure ",
           "needs must be a base function/operator/constant, a declared formal, ",
           "or referenced via an explicit `pkg::fun()` call. (This is a ",
-          "best-effort static lint; see the \"Choosing a dispatch function\" ",
+          "best-effort static lint; see the \"Get started with batchit\" ",
           "vignette for its documented blind spots. It does not prove ",
           "behavioural closure.)"
         ),

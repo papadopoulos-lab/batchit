@@ -23,7 +23,7 @@ template:
       cta:
         primary:
           text: "Get started"
-          href: "articles/choosing-a-dispatch-function.html"
+          href: "articles/batchit.html"
         secondary:
           text: "Browse the reference →"
           href: "reference/index.html"

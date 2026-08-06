@@ -127,7 +127,7 @@ unlink(out_dir, recursive = TRUE)
 }
 }
 \seealso{
-\code{vignette("choosing-a-dispatch-function")} for a worked comparison
+\code{vignette("batchit")} for a worked comparison
 of all four dispatch functions.
 
 Other dispatch functions:

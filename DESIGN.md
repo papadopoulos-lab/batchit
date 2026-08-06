@@ -1,7 +1,7 @@
 # batchit design
 
 Why batchit is built the way it is. This is the maintainer's document. Users want
-`README.md`, the "Choosing a dispatch function" vignette, and the help pages.
+`README.md`, the "Get started with batchit" vignette, and the help pages.
 
 It replaces the two documents that used to sit here, `PHASE6_DESIGN.md` and
 `PUBLIC_API.md`. Those described the work while it was being planned, so they used

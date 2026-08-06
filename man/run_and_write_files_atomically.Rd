@@ -34,7 +34,7 @@ argument is treated as a mistake, not as "use the default". A named entry
 keeps its name as that item's id; an unnamed entry is identified by its
 position instead (1, 2, 3, and so on). An item id MUST NOT contain \code{/} or
 \verb{\\}, because batchit builds an internal bookkeeping filename from it; see
-\code{vignette("choosing-a-dispatch-function")}.}
+\code{vignette("batchit")}.}
 
 \item{outputs}{The files \code{fn} must produce for each item. One element per
 item, in the same order as \code{items}. When \code{items} is named, you may
@@ -191,7 +191,7 @@ unlink(out_dir, recursive = TRUE)
 \code{style = "staged_writer"}, and \code{\link[=write_qs2_atomically]{write_qs2_atomically()}} for the same
 rename-into-place guarantee on a single file with no dispatch.
 
-\code{vignette("choosing-a-dispatch-function")} states exactly what the
+\code{vignette("batchit")} states exactly what the
 atomic-write guarantee covers in each of its three phases.
 
 Other dispatch functions:

@@ -1,10 +1,14 @@
 # batchit 26.8.6
 
-**Prose pass against the house standard (ASD-STE100). No claim changed, no
-behaviour changed, and no runtime message, warning or error string changed.**
-Every edit under `R/` is a `#'` line. The rest is `vignettes/`, `README.md`,
-`index.md` and this changelog. Sentences and paragraphs were split; no section was
-reordered and no vignette was restructured.
+**Prose pass against the house standard (ASD-STE100). No claim changed and no
+behaviour changed.** Every edit under `R/` in the prose pass is a `#'` line. The
+rest is `vignettes/`, `README.md`, `index.md` and this changelog. Sentences and
+paragraphs were split; no section was reordered and no vignette was restructured.
+
+One runtime string did change, in the separate vignette rename below. The
+self-containedness lint in `run_and_collect()` named the vignette by its old
+title, so after the rename it pointed a reader at an article that no longer
+exists. It now names "Get started with batchit". No test asserts on that string.
 
 **The rule the pass enforces is a measured one: at most 25 words in a
 description, and at most 20 in an instruction.** batchit is the reference
@@ -51,6 +55,51 @@ marker".
 record reads as its own statement. The record itself is unchanged.
 
 `man/` is regenerated with roxygen2 8.0.0, the version `DESCRIPTION` declares.
+
+**The vignette is renamed and rewritten, as a change separate from the prose pass
+above.** `vignettes/choosing-a-dispatch-function.Rmd` becomes
+`vignettes/batchit.Rmd`. pkgdown promotes a vignette named after the package to
+"Get started" in the navbar. batchit still ships exactly one vignette. No claim
+changed, no behaviour changed, and no runtime message, warning or error string
+changed.
+
+**The article now opens on the problem, not on the choice.** The old first
+section asked which of the four dispatch functions to pick. That question assumes
+a reader who already knows there are four. The new first section states the
+memory problem instead: a long loop in one R session can accumulate memory that
+it never gives back. A worked dispatch follows it, then the four functions, then
+the choice.
+
+**Every distinction the old article drew is still in the new one.** No condition,
+no qualifier and no caveat was dropped. That covers the three-phase atomic-write
+guarantee, the streaming backpressure bound, and the narrow scope of the
+`package_function()` code hash.
+
+**Fourteen of the sixteen code blocks in the rendered article now run and print
+real output.** The old article ran none of them. It set `eval = FALSE` for every
+chunk and carried the output as `#>` comments instead. Two blocks still do not
+run. The streaming example needs a consumer package that the reader installs, and
+the self-containedness fragments are there to be read.
+
+Four of the running blocks are new demonstrations:
+
+- three worker process ids, and none of them is the calling session's id;
+- results returned in the order of `items`, while the first item sleeps longest;
+- the error a missing `scale` argument raises, even though `scale` has a default;
+- a warning from a worker, re-raised in the calling session and labelled
+  `[batch item 'fit_01']`.
+
+Four files carry the new vignette name:
+
+- `README.md`, in the documentation list;
+- `_pkgdown.yml`, in the hero band's "Get started" link;
+- `DESIGN.md`, in the pointer to what a user reads;
+- `NEWS.md`, in this entry.
+
+Nine `vignette()` references in roxygen blocks carry it too. They sit in
+`R/batch.R`, `R/batch_task.R` and `R/batchit-package.R`. `man/` is regenerated
+for those nine. Older entries in this changelog keep the old name, because they
+record what was true at the time.
 
 # batchit 26.8.3
 

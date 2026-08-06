@@ -77,6 +77,6 @@ to every output of a dispatched item. That function's commit engine is
 separate: this writer emits no marker, and its temporary file is not
 swept by that engine's failure cleanup.
 
-\code{vignette("choosing-a-dispatch-function")} for where this sits relative to
+\code{vignette("batchit")} for where this sits relative to
 the four dispatch functions.
 }

@@ -136,7 +136,7 @@ stream_from_parent_and_write_files_atomically(
 }
 }
 \seealso{
-\code{vignette("choosing-a-dispatch-function")} for a worked comparison
+\code{vignette("batchit")} for a worked comparison
 of all four dispatch functions.
 
 Other dispatch functions:

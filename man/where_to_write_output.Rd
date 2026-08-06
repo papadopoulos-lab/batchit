@@ -77,6 +77,6 @@ unlink(out_dir, recursive = TRUE)
 \code{\link[=stream_from_parent_and_write_files_atomically]{stream_from_parent_and_write_files_atomically()}}, the two functions that
 establish the active run this reads from.
 
-\code{vignette("choosing-a-dispatch-function")} for the two rules that go with
+\code{vignette("batchit")} for the two rules that go with
 calling this inside \code{fn}.
 }
