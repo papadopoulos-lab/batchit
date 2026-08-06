@@ -2,6 +2,16 @@
 
 ## batchit 26.8.6
 
+### Licensing
+
+- `DESCRIPTION` `Authors@R` now declares **Richard Aubrey White** as the
+  copyright holder, with `role = "cph"`. It declared none at all, and
+  neither did any other package in the fleet. Nothing in `R CMD check`
+  reports that.
+- The copyright year is unchanged at 2026, and is now confirmed correct.
+- `CLAUDE.md` now carries a Licensing section, so the year gets checked
+  rather than silently ageing.
+
 **Prose pass against the house standard (ASD-STE100). No claim changed
 and no behaviour changed.** Every edit under `R/` in the prose pass is a
 `#'` line. The rest is `vignettes/`, `README.md`, `index.md` and this

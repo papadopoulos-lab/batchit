@@ -34,7 +34,14 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="26.8.6" id="batchit-2686">batchit 26.8.6<a class="anchor" aria-label="anchor" href="#batchit-2686"></a></h2>
-<p><strong>Prose pass against the house standard (ASD-STE100). No claim changed and no behaviour changed.</strong> Every edit under <code>R/</code> in the prose pass is a <code>#'</code> line. The rest is <code>vignettes/</code>, <code>README.md</code>, <code>index.md</code> and this changelog. Sentences and paragraphs were split; no section was reordered and no vignette was restructured.</p>
+<div class="section level3">
+<h3 id="licensing-26-8-6">Licensing<a class="anchor" aria-label="anchor" href="#licensing-26-8-6"></a></h3>
+<ul><li>
+<code>DESCRIPTION</code> <code>Authors@R</code> now declares <strong>Richard Aubrey White</strong> as the copyright holder, with <code>role = "cph"</code>. It declared none at all, and neither did any other package in the fleet. Nothing in <code>R CMD check</code> reports that.</li>
+<li>The copyright year is unchanged at 2026, and is now confirmed correct.</li>
+<li>
+<code>CLAUDE.md</code> now carries a Licensing section, so the year gets checked rather than silently ageing.</li>
+</ul><p><strong>Prose pass against the house standard (ASD-STE100). No claim changed and no behaviour changed.</strong> Every edit under <code>R/</code> in the prose pass is a <code>#'</code> line. The rest is <code>vignettes/</code>, <code>README.md</code>, <code>index.md</code> and this changelog. Sentences and paragraphs were split; no section was reordered and no vignette was restructured.</p>
 <p>One runtime string did change, in the separate vignette rename below. The self-containedness lint in <code><a href="../reference/run_and_collect.html">run_and_collect()</a></code> named the vignette by its old title, so after the rename it pointed a reader at an article that no longer exists. It now names “Get started with batchit”. No test asserts on that string.</p>
 <p><strong>The rule the pass enforces is a measured one: at most 25 words in a description, and at most 20 in an instruction.</strong> batchit is the reference implementation the rest of the package family is told to copy. Its prose is therefore the most-read in the family, and a 99-word sentence is least excusable here.</p>
 <p><strong>Counts before and after, for prose sentences over 25 words.</strong> roxygen2 prose in <code>R/</code> went from 115 sentences to 0, and its longest sentence from 144 words to 25. Vignette prose went from 22 to 0, longest 64 to 25. <code>NEWS.md</code> went from 42 to 0, longest 63 to 25. <code>README.md</code> went from 3 to 0, longest 38 to 25. <code>index.md</code> went from 3 to 0, longest 29 to 20.</p>
@@ -72,6 +79,7 @@
 <li>
 <code>NEWS.md</code>, in this entry.</li>
 </ul><p>Nine <code><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette()</a></code> references in roxygen blocks carry it too. They sit in <code>R/batch.R</code>, <code>R/batch_task.R</code> and <code>R/batchit-package.R</code>. <code>man/</code> is regenerated for those nine. Older entries in this changelog keep the old name, because they record what was true at the time.</p>
+</div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="26.8.3" id="batchit-2683">batchit 26.8.3<a class="anchor" aria-label="anchor" href="#batchit-2683"></a></h2>
