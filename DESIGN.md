@@ -92,19 +92,19 @@ process exit is what reclaims that item’s memory. The streaming function
 reuses a small pool of persistent `mirai` daemons instead, and gives
 that property up.
 
-| Function | Delivery |
-|----|----|
-| `run(fn, items, n_workers, ...)` | runs each item, returns nothing |
-| `run_and_collect(fn, items, n_workers, ...)` | returns a list of values, in item order, NULL-safe |
-| `run_and_write_files_atomically(fn, items, outputs, style, n_workers, ...)` | each item commits its output files |
+| Function                                                                    | Delivery                                           |
+|-----------------------------------------------------------------------------|----------------------------------------------------|
+| `run(fn, items, n_workers, ...)`                                            | runs each item, returns nothing                    |
+| `run_and_collect(fn, items, n_workers, ...)`                                | returns a list of values, in item order, NULL-safe |
+| `run_and_write_files_atomically(fn, items, outputs, style, n_workers, ...)` | each item commits its output files                 |
 
 **One reader produces the data.** This is the specialist, for a single
 sequential source too large for each worker to read independently. The
 55 GB `LMED` file is the case it exists for, and `save_rawbatch` is its
 only consumer.
 
-| Function |
-|----|
+| Function                                                                                           |
+|----------------------------------------------------------------------------------------------------|
 | `stream_from_parent_and_write_files_atomically(fn, ids, producer, outputs, style, n_workers, ...)` |
 
 `producer` is a callback, `function(id)` returning that item’s argument
@@ -179,9 +179,9 @@ between validation and rename is a documented boundary.
 `style` is required exactly when `outputs` is present, and forbidden
 otherwise.
 
-| style | the target does | the worker does |
-|----|----|----|
-| `return` | returns `list(<name> = <value>, ...)`, whose names are exactly the declared names | serializes each value with qs2 to a unique temp in the destination directory, in declaration order |
+| style           | the target does                                                                         | the worker does                                                                                                                                       |
+|-----------------|-----------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `return`        | returns `list(<name> = <value>, ...)`, whose names are exactly the declared names       | serializes each value with qs2 to a unique temp in the destination directory, in declaration order                                                    |
 | `staged_writer` | writes each output to `where_to_write_output(<name>)` and returns nothing worth keeping | computes each output’s attempt-scoped staging temp before `do.call`, enters scope so the accessor can answer, then treats the staged file as the temp |
 
 The `return` codec is always qs2. The spec has no arbitrary writer
@@ -291,7 +291,6 @@ of names in any order.
 The marker path is derived deterministically per item:
 
 ``` r
-
 file.path(dirname(sort(output_paths)[1]), paste0(".batchit__", item_id))
 ```
 

@@ -7,12 +7,12 @@ functions, depending on what you need:
 
 ## Details
 
-|  |  |
-|----|----|
-| Your situation | Use |
-| Items already exist; run for side effects, ignore the return values | [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md) |
-| Items already exist; collect the return values | [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md) |
-| Items already exist; let batchit write output files atomically | [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md) |
+|                                                                               |                                                                                                                                                            |
+|-------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Your situation                                                                | Use                                                                                                                                                        |
+| Items already exist; run for side effects, ignore the return values           | [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)                                                                                     |
+| Items already exist; collect the return values                                | [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)                                                             |
+| Items already exist; let batchit write output files atomically                | [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)                               |
 | Too many/too-large items to build up front; build them lazily and write files | [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md) |
 
 Each item is a named list. It holds the arguments for one call to your

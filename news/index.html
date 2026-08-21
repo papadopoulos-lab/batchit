@@ -36,6 +36,8 @@
 <h2 class="pkg-version" data-toc-text="26.8.21" id="batchit-26821">batchit 26.8.21<a class="anchor" aria-label="anchor" href="#batchit-26821"></a></h2>
 <ul><li>
 <strong>The pkgdown template package is renamed to <code>pptemplate</code>.</strong> <code>DESCRIPTION</code> <code>Config/Needs/website</code> and <code>_pkgdown.yml</code> <code>template: package:</code> both name <code>papadopoulos-lab/pptemplate</code> now. The house style itself is unchanged.</li>
+<li>
+<strong>A caller of the shared <code>papadopoulos-lab/pptemplate</code> workflow replaces <code>.github/workflows/R-CMD-check.yaml</code> and <code>.github/workflows/pkgdown.yaml</code>.</strong> The shared workflow runs <code>loc-limit</code>, then <code>R-CMD-check</code>, then <code>pkgdown</code>. The caller’s <code>loc-allowlist</code> names <code>R/batch.R</code>, the one file in <code>R/</code> over 1000 code lines.</li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="26.8.6" id="batchit-2686">batchit 26.8.6<a class="anchor" aria-label="anchor" href="#batchit-2686"></a></h2>

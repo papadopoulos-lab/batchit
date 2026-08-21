@@ -26,7 +26,6 @@ there to be read.
 Square three numbers, in separate R processes, two at a time.
 
 ``` r
-
 library(batchit)
 
 results <- run_and_collect(
@@ -35,16 +34,16 @@ results <- run_and_collect(
   n_workers = 2
 )
 #>   [0/3] dispatching workers...
-#>   [1/3] complete  09:27:58
-#>   [2/3] complete  09:27:59
-#>   [3/3] complete  09:27:59
+#>   [1/3] complete  09:54:54
+#>   [2/3] complete  09:54:54
+#>   [3/3] complete  09:54:54
 
 results[[1]]
 #> $value
 #> [1] 4
 #> 
 #> $worker_pid
-#> [1] 7559
+#> [1] 7996
 ```
 
 batchit prints one dispatch line, and then one progress line per
@@ -55,13 +54,12 @@ Each item also reported the process id it ran in. Compare those three
 ids with this session’s id:
 
 ``` r
-
 worker_pids <- vapply(results, function(r) r$worker_pid, integer(1))
 worker_pids
-#> [1] 7559 7565 7589
+#> [1] 7996 8002 8026
 
 Sys.getpid()
-#> [1] 7529
+#> [1] 7966
 Sys.getpid() %in% worker_pids
 #> [1] FALSE
 ```
@@ -108,11 +106,11 @@ Two questions decide it.
 one item’s arguments are a large data slice. Say no when there are far
 too many items to keep as one list.
 
-| What you want back | Items | Use |
-|----|----|----|
-| each item’s return value | all in memory | [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md) |
-| nothing | all in memory | [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md) |
-| output files batchit writes | all in memory | [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md) |
+| What you want back          | Items                  | Use                                                                                                                                                        |
+|-----------------------------|------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| each item’s return value    | all in memory          | [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md)                                                             |
+| nothing                     | all in memory          | [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md)                                                                                     |
+| output files batchit writes | all in memory          | [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md)                               |
 | output files batchit writes | produced one at a time | [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md) |
 
 Lazy production is available only in combination with batchit-managed
@@ -130,7 +128,6 @@ gives up.
 Use this when you need every item’s return value.
 
 ``` r
-
 squares <- run_and_collect(
   fn = function(x) x^2,
   items = list(small = list(x = 2), medium = list(x = 3), large = list(x = 4)),
@@ -157,7 +154,6 @@ worker processes finished. The first item below sleeps for a second and
 still lands first:
 
 ``` r
-
 run_and_collect(
   fn = function(label, seconds) {
     Sys.sleep(seconds)
@@ -193,7 +189,6 @@ An assignment to a global variable inside `fn` changes that worker
 process, not the parent R session.
 
 ``` r
-
 run_dir <- file.path(tempdir(), "batchit-run")
 dir.create(run_dir, showWarnings = FALSE)
 
@@ -249,7 +244,6 @@ duplicate name, a missing name and an extra name are all errors. batchit
 saves each value to its path in the `qs2` format.
 
 ``` r
-
 write_dir <- file.path(tempdir(), "batchit-write")
 dir.create(write_dir, showWarnings = FALSE)
 
@@ -278,17 +272,16 @@ batchit wrote. The record holds one element per item, in the order of
 `items`, named by item id:
 
 ``` r
-
 str(record)
 #> List of 2
 #>  $ two  :List of 2
-#>   ..$ committed: Named chr [1:2] "/tmp/RtmpBJIFkn/batchit-write/sq_two.qs2" "/tmp/RtmpBJIFkn/batchit-write/db_two.qs2"
+#>   ..$ committed: Named chr [1:2] "/tmp/RtmpEJfqp4/batchit-write/sq_two.qs2" "/tmp/RtmpEJfqp4/batchit-write/db_two.qs2"
 #>   .. ..- attr(*, "names")= chr [1:2] "squared" "doubled"
-#>   ..$ attempt  : chr "1d69421c3a41"
+#>   ..$ attempt  : chr "1f1e59749c5a"
 #>  $ three:List of 2
-#>   ..$ committed: Named chr [1:2] "/tmp/RtmpBJIFkn/batchit-write/sq_three.qs2" "/tmp/RtmpBJIFkn/batchit-write/db_three.qs2"
+#>   ..$ committed: Named chr [1:2] "/tmp/RtmpEJfqp4/batchit-write/sq_three.qs2" "/tmp/RtmpEJfqp4/batchit-write/db_three.qs2"
 #>   .. ..- attr(*, "names")= chr [1:2] "squared" "doubled"
-#>   ..$ attempt  : chr "1d69333aea65"
+#>   ..$ attempt  : chr "1f1e25b02a21"
 ```
 
 `committed` maps each declared output name to the final path batchit
@@ -301,7 +294,6 @@ output to, and write there. batchit discards `fn`’s return value without
 examining it.
 
 ``` r
-
 staged <- run_and_write_files_atomically(
   fn = function(x) {
     qs2::qs_save(x^2, batchit::where_to_write_output("squared"))
@@ -370,7 +362,6 @@ This example does not run here, because it needs a function inside a
 package that you install yourself.
 
 ``` r
-
 # `write_one_slice()` must live in an INSTALLED package: this function loads it
 # by package name and function name, never by value. Put it in your own
 # package's R/ directory, install, and replace "yourpkg" below.
@@ -429,7 +420,6 @@ and `pkg::fun()`-qualified calls to other packages. The four fragments
 below are there to be read, so they do not run:
 
 ``` r
-
 # Allowed, own argument and base R:
 function(x) x^2
 
@@ -463,7 +453,6 @@ process refuses to run if the definition it loads does not match. Use it
 for production runs.
 
 ``` r
-
 fn <- package_function("batchit", "where_to_write_output")
 
 names(fn)
@@ -491,7 +480,6 @@ R session before dispatching, and again in the worker process. Leaving
 out `scale` here is an error, even though `scale` has a default:
 
 ``` r
-
 run_and_collect(
   fn = function(x, scale = 1) x * scale,
   items = list(list(x = 2)),
@@ -504,7 +492,6 @@ run_and_collect(
 Name `scale` in the item and the same call succeeds:
 
 ``` r
-
 run_and_collect(
   fn = function(x, scale = 1) x * scale,
   items = list(list(x = 2, scale = 10)),
@@ -585,7 +572,6 @@ in the failed slot. Work already running may finish before the call
 unwinds.
 
 ``` r
-
 run_and_collect(
   fn = function(x) stop("this item cannot run"),
   items = list(fit_03 = list(x = 1)),
@@ -618,7 +604,6 @@ item. It re-raises them in the parent R session, labelled with the item
 id:
 
 ``` r
-
 run_and_collect(
   fn = function(x) {
     warning("value looks unusual")
@@ -629,7 +614,7 @@ run_and_collect(
 )
 #>   [0/1] dispatching workers...
 #> Warning: [batch item 'fit_01'] value looks unusual
-#>   [1/1] complete  09:28:04
+#>   [1/1] complete  09:54:59
 #> [[1]]
 #> [1] 1
 ```
@@ -676,7 +661,6 @@ the destination. No workers, no items, no `fn`. It returns the
 destination path, invisibly.
 
 ``` r
-
 cars_path <- write_qs2_atomically(mtcars, file.path(tempdir(), "cars.qs2"))
 
 basename(cars_path)
