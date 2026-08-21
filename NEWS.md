@@ -1,3 +1,9 @@
+# batchit 26.8.21
+
+- **The pkgdown template package is renamed to `pptemplate`.** `DESCRIPTION`
+  `Config/Needs/website` and `_pkgdown.yml` `template: package:` both name
+  `papadopoulos-lab/pptemplate` now. The house style itself is unchanged.
+
 # batchit 26.8.6
 
 ## Licensing

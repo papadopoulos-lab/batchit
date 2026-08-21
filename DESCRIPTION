@@ -1,6 +1,6 @@
 Package: batchit
 Title: Run One R Function Across Many Worker Processes
-Version: 26.8.6
+Version: 26.8.21
 Authors@R:
     c(
       person(
@@ -45,6 +45,6 @@ Suggests:
     testthat (>= 3.0.0),
     withr
 VignetteBuilder: knitr
-Config/Needs/website: papadopoulos-lab/pkgdowntemplate
+Config/Needs/website: papadopoulos-lab/pptemplate
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.0.0

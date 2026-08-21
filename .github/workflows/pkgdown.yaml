@@ -5,7 +5,7 @@ on:
     branches: [main]
   release:
     types: [published]
-  # Lets a pkgdowntemplate change be rolled out here without a dummy commit:
+  # Lets a pptemplate change be rolled out here without a dummy commit:
   #   gh workflow run pkgdown.yaml --repo papadopoulos-lab/batchit
   workflow_dispatch:
 
