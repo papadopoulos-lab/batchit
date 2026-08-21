@@ -12,6 +12,11 @@
   `loc-limit`, then `R-CMD-check`, then `pkgdown`. The caller’s
   `loc-allowlist` names `R/batch.R`, the one file in `R/` over 1000 code
   lines.
+- **`R/batch.R` is split by role into `R/batch_validate.R`,
+  `R/batch_envelope.R`, `R/batch_execute.R`, `R/batch_result.R` and
+  `R/batch_stream.R`.** No file in `R/` is over 1000 code lines now, so
+  the caller’s `loc-allowlist` key is gone. The split moves whole
+  functions and changes no code.
 
 ## batchit 26.8.6
 
