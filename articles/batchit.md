@@ -35,16 +35,16 @@ results <- run_and_collect(
   n_workers = 2
 )
 #>   [0/3] dispatching workers...
-#>   [1/3] complete  09:35:44
-#>   [2/3] complete  09:35:44
-#>   [3/3] complete  09:35:44
+#>   [1/3] complete  09:27:58
+#>   [2/3] complete  09:27:59
+#>   [3/3] complete  09:27:59
 
 results[[1]]
 #> $value
 #> [1] 4
 #> 
 #> $worker_pid
-#> [1] 7656
+#> [1] 7559
 ```
 
 batchit prints one dispatch line, and then one progress line per
@@ -58,10 +58,10 @@ ids with this session’s id:
 
 worker_pids <- vapply(results, function(r) r$worker_pid, integer(1))
 worker_pids
-#> [1] 7656 7662 7686
+#> [1] 7559 7565 7589
 
 Sys.getpid()
-#> [1] 7626
+#> [1] 7529
 Sys.getpid() %in% worker_pids
 #> [1] FALSE
 ```
@@ -282,13 +282,13 @@ batchit wrote. The record holds one element per item, in the order of
 str(record)
 #> List of 2
 #>  $ two  :List of 2
-#>   ..$ committed: Named chr [1:2] "/tmp/RtmpmyKft5/batchit-write/sq_two.qs2" "/tmp/RtmpmyKft5/batchit-write/db_two.qs2"
+#>   ..$ committed: Named chr [1:2] "/tmp/RtmpBJIFkn/batchit-write/sq_two.qs2" "/tmp/RtmpBJIFkn/batchit-write/db_two.qs2"
 #>   .. ..- attr(*, "names")= chr [1:2] "squared" "doubled"
-#>   ..$ attempt  : chr "1dca118032e5"
+#>   ..$ attempt  : chr "1d69421c3a41"
 #>  $ three:List of 2
-#>   ..$ committed: Named chr [1:2] "/tmp/RtmpmyKft5/batchit-write/sq_three.qs2" "/tmp/RtmpmyKft5/batchit-write/db_three.qs2"
+#>   ..$ committed: Named chr [1:2] "/tmp/RtmpBJIFkn/batchit-write/sq_three.qs2" "/tmp/RtmpBJIFkn/batchit-write/db_three.qs2"
 #>   .. ..- attr(*, "names")= chr [1:2] "squared" "doubled"
-#>   ..$ attempt  : chr "1dca2adc7351"
+#>   ..$ attempt  : chr "1d69333aea65"
 ```
 
 `committed` maps each declared output name to the final path batchit
@@ -629,7 +629,7 @@ run_and_collect(
 )
 #>   [0/1] dispatching workers...
 #> Warning: [batch item 'fit_01'] value looks unusual
-#>   [1/1] complete  09:35:51
+#>   [1/1] complete  09:28:04
 #> [[1]]
 #> [1] 1
 ```

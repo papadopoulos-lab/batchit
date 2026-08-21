@@ -86,28 +86,28 @@ run_and_write_files_atomically(
   n_workers = 2
 )
 #>   [0/2] dispatching workers...
-#>   [1/2] complete  09:35:41
-#>   [2/2] complete  09:35:41
+#>   [1/2] complete  09:27:57
+#>   [2/2] complete  09:27:57
 #> $`1`
 #> $`1`$committed
 #>                                           squared 
-#> "/tmp/RtmpCi4CoX/batchit-staged-example/sq_1.rds" 
+#> "/tmp/Rtmpt0fvoC/batchit-staged-example/sq_1.rds" 
 #>                                           doubled 
-#> "/tmp/RtmpCi4CoX/batchit-staged-example/db_1.txt" 
+#> "/tmp/Rtmpt0fvoC/batchit-staged-example/db_1.txt" 
 #> 
 #> $`1`$attempt
-#> [1] "1ad742bc791c"
+#> [1] "1a767f1a1dc8"
 #> 
 #> 
 #> $`2`
 #> $`2`$committed
 #>                                           squared 
-#> "/tmp/RtmpCi4CoX/batchit-staged-example/sq_2.rds" 
+#> "/tmp/Rtmpt0fvoC/batchit-staged-example/sq_2.rds" 
 #>                                           doubled 
-#> "/tmp/RtmpCi4CoX/batchit-staged-example/db_2.txt" 
+#> "/tmp/Rtmpt0fvoC/batchit-staged-example/db_2.txt" 
 #> 
 #> $`2`$attempt
-#> [1] "1ad714cf7195"
+#> [1] "1a76310628a4"
 #> 
 #> 
 readRDS(file.path(out_dir, "sq_1.rds")) # 4
