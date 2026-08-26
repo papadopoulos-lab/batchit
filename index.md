@@ -4,27 +4,26 @@ What’s inside
 
 ### A fresh process per item
 
-One function runs once per item, up to `n_workers` at a time. Collected
-results keep the order of `items`, not the order the workers finished.
-Three of the four dispatch functions start a brand-new R process per
-item, because process exit is what reclaims memory. The streaming one
-trades that for lazy item production.
+One function runs once per item, up to `n_workers` at a time. Three of
+the four dispatch functions start a brand-new R process per item,
+because process exit is what reclaims memory.
 
 02
 
 ### Declared outputs, committed atomically
 
-Declare each item’s final output paths and batchit writes them: staged
-beside their destinations, renamed into place, marker written last. A
+Declare each item’s final output paths. batchit stages them beside their
+destinations, renames them into place, and writes the marker last. A
 failed or interrupted item never leaves a half-written file at a final
-path. What the guarantee does *not* cover is stated just as precisely.
+path.
 
 03
 
-### Dispatch the code you tested
+### Or hand the work to a scheduler
 
-Name the target by package and symbol. Each worker then hashes what it
-loaded, and refuses to run a definition that differs from the one you
-dispatched. batchit checks every item’s arguments against the formals
-twice: in the calling session, and again in the worker. A default must
-be named too.
+[`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
+describes one Slurm job.
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+turns a list of them into one bash file per job, plus a `submit.sh` that
+chains them with `–dependency=afterok`. batchit submits nothing. You run
+`submit.sh` yourself.

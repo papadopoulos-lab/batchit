@@ -8,7 +8,7 @@ It replaces the two documents that used to sit here, `PHASE6_DESIGN.md`
 and `PUBLIC_API.md`. Those described the work while it was being
 planned, so they used function names that no longer exist and specified
 a skip mechanism that was later deleted. Everything below describes
-batchit as it is now. Section 9 records the history.
+batchit as it is now. Section 10 records the history.
 
 ## 1. Doctrine: batchit holds no staleness opinion
 
@@ -32,6 +32,11 @@ The reason for the rule is division of labour. batchit dispatches and
 delivers output. Deciding what to run belongs to the consumer, which
 knows the domain. For the MHT pipeline that consumer is swereg’s
 `RegistryStudy` R6 class. Do not add a stateful batch object to batchit.
+
+The scheduler shape in section 8 holds the same line.
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+rewrites the whole chain on every call. It reads no file’s contents, so
+it decides nothing about staleness either.
 
 An **item** is one named argument set for `fn`: a named list whose names
 match `fn`’s formals. batchit hands it over through a checked `do.call`
@@ -83,7 +88,7 @@ its own data, or must a single reader produce it?
 **Each worker reads its own data.** This is the normal case. Every TTE
 stage fits it, s1, s2, s3 and skeleton creation alike, which is a
 statement about which shape suits them and not about which were
-migrated. Section 9 records what actually moved across. You pass the
+migrated. Section 10 records what actually moved across. You pass the
 complete list of items, and `fn` both loads and computes inside the
 worker.
 
@@ -129,8 +134,15 @@ Three helpers complete the surface.
   write output `name` to, so a streamed write still goes through the
   atomic commit.
 - `write_qs2_atomically(object, path, ...)` is a standalone atomic qs2
-  writer with no dispatch involved. Section 8 covers what it does not
+  writer with no dispatch involved. Section 9 covers what it does not
   promise.
+
+Two more exports belong to a different execution shape, and section 8
+covers them.
+[`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
+describes one Slurm job.
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+writes a chain of those jobs as bash. Neither takes `fn` or `items`.
 
 ## 4. Declared-output commit
 
@@ -466,14 +478,80 @@ call both are issued, and they are not redundant: `attempt` binds the
 marker and the commit record, `nonce` binds the envelope’s executed-code
 identity. `nonce` does for adhoc what `hash` does for package.
 
-## 8. What batchit does not do
+## 8. The scheduler shape
+
+batchit is the engine layer for long-running work, and it carries three
+execution shapes. Two of them run the work in child processes of the
+calling R session. The third describes the work for a scheduler and
+stops there.
+
+| Execution shape                         | Where the work runs        | Entry points                                                                                                                                                                                                                                                                                         |
+|-----------------------------------------|----------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| a fresh process per item                | a `processx` child process | [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md), [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md), [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md) |
+| a bounded queue over persistent daemons | a `mirai` daemon           | [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)                                                                                                                                           |
+| a chain of scheduler jobs               | a compute node, later      | [`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md), [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)                                                                                                                             |
+
+The third shape breaks the pattern of the first two, and the break is
+deliberate.
+[`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
+and
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+take no `fn` and no `items`, so the definition of an item in section 1
+does not reach them. They serialise no closure, hash no code, and check
+nothing against a function’s formals. There is no envelope and no
+protocol number, because nothing crosses a process boundary.
+
+`slurm_it(script, name, cpus, mem, time, ...)` builds a validated
+description of one job and returns an S3 object of class `slurm_it`. Its
+`script` is shell text, and not an R function. It writes nothing.
+
+`slurm_write(x, dir)` takes one of those objects, or a list of them. It
+writes one bash file per job, plus a `submit.sh`. List position is chain
+order: `submit.sh` gives job `i` a `--dependency=afterok` on job
+`i - 1`. It returns the written paths, and it owns `dir`. It deletes
+every `*.sh` file there before it writes. So a chain of four written
+over a chain of five leaves no orphan job file.
+
+**Nothing submits.** A person reads `submit.sh` and runs it. batchit
+exports no function that calls `sbatch`, and `R/slurm.R` starts no
+subprocess at all.
+
+Do not add a function that submits. A submission costs real cluster
+time, and a person cannot undo it. A manual step also keeps batchit
+testable off a cluster: every Slurm test drives generated text, and not
+one of them needs a scheduler.
+
+The chain is built on `--dependency=afterok`, so a job that fails MUST
+stop rather than exit 0. Every generated job body therefore runs under
+`set -euo pipefail`. That changes the caller’s `script`. A body may rely
+on a failing command continuing, or on an unset variable expanding to
+empty. Such a body behaves differently under
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+than in an interactive shell. swereg’s own generator made the same
+choice, in `R/tteplan_export_slurm.R`.
+
+`submit.sh` runs two preflight checks before its first `sbatch`. Both
+checks are tested with stub programs on `PATH`, so the tests prove the
+shell branching against a protocol the tests wrote. They prove nothing
+about the real `sinfo` and `squeue`.
+[`?slurm_write`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+lists the four things that stay unproven. Accept that limit
+deliberately. A test that needs a live cluster cannot run in CI, and the
+stub still catches a broken branch.
+
+## 9. What batchit does not do
 
 **No provenance program.** No batchit-computed fingerprints, plan
 records, provenance sidecars, `task_scope_id`, or content hashing. This
 is the shelved program section 1 forbids.
 
-**No skip.** batchit never decides to skip an item. See section 9 for
+**No skip.** batchit never decides to skip an item. See section 10 for
 the opt-in consumer skip that was built and then removed.
+
+**No submission.**
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+writes a Slurm chain and stops. A person runs `submit.sh`. Section 8
+gives the two reasons.
 
 **No thread management.** batchit sets no BLAS or `data.table` thread
 counts. A multi-threaded `fn` has to lower its own thread count when
@@ -509,7 +587,7 @@ is documented as the one place a commit temp becomes final. Its temp
 carries no dispatch attempt token, so `.batch_sweep_task_temps()` can
 never match it.
 
-## 9. History
+## 10. History
 
 **The naming migration.** The functions were once called `batch_run`,
 `batch_task`, `batch_stream`, `batch_target`, `batch_fn`, and

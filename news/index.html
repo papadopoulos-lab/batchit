@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.21</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.26</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,17 @@
       <small>Source: <a href="https://github.com/papadopoulos-lab/batchit/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="26.8.26" id="batchit-26826">batchit 26.8.26<a class="anchor" aria-label="anchor" href="#batchit-26826"></a></h2>
+<ul><li>
+<strong><code><a href="../reference/slurm_it.html">slurm_it()</a></code> and <code><a href="../reference/slurm_write.html">slurm_write()</a></code> describe a Slurm job chain and write it as bash. They submit nothing.</strong> <code><a href="../reference/slurm_it.html">slurm_it()</a></code> describes one job and validates it. <code><a href="../reference/slurm_write.html">slurm_write()</a></code> writes one bash file per job, plus a <code>submit.sh</code> driver. A person runs <code>submit.sh</code>.</li>
+<li>
+<strong><code>DESCRIPTION</code> <code>Title</code> and <code>Description</code> now name the scheduler.</strong> batchit runs long R work across worker processes or across a scheduler, and the old framing named only the worker processes.</li>
+<li>
+<strong>The generated <code>submit.sh</code> no longer claims to be the only file that reaches the scheduler.</strong> It passes each job file to <code>sbatch</code>, so a job file reaches the scheduler too. <code>submit.sh</code> is the only generated file that names the submission command.</li>
+<li>
+<strong>The tests that run a generated <code>submit.sh</code> no longer need Slurm on the machine.</strong> They stub <code>hostname</code>, <code>sinfo</code>, <code>squeue</code> and <code>sbatch</code>, so <code>R CMD check</code> passes where Slurm is not installed.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="26.8.21" id="batchit-26821">batchit 26.8.21<a class="anchor" aria-label="anchor" href="#batchit-26821"></a></h2>
 <ul><li>

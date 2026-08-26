@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Run One R Function Across Many Worker Processes • batchit</title>
+<title>Run Long R Work Across Processes or a Scheduler • batchit</title>
 <!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
 <link rel="icon" type="”image/svg+xml”" href="favicon.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
@@ -18,9 +18,9 @@
 <link href="deps/Newsreader-0.4.10/font.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Run One R Function Across Many Worker Processes">
-<meta name="description" content="Runs one R function once per item in a list of inputs, each call in its own worker process. Return values come back as a list, or are discarded when the function is called for a side effect, or the functions declared output files are written for it. Naming the function by package and symbol rather than passing it by value lets a worker hash what it loaded and refuse code that differs from what was dispatched. Every items arguments are checked against the functions formals in both the calling session and the worker. Warnings raised by an item that completes are carried back and re-raised in the calling session, labelled with that item, while an item that fails stops the call rather than returning a partial result. Output files are staged beside their destinations and renamed into place, so a failed item leaves no half-written file. Two transports are available: a fresh process per item via processx, where process exit is what reclaims memory, and a lazy producer with bounded backpressure via mirai' daemons for items that must be generated on demand.">
-<meta property="og:description" content="Runs one R function once per item in a list of inputs, each call in its own worker process. Return values come back as a list, or are discarded when the function is called for a side effect, or the functions declared output files are written for it. Naming the function by package and symbol rather than passing it by value lets a worker hash what it loaded and refuse code that differs from what was dispatched. Every items arguments are checked against the functions formals in both the calling session and the worker. Warnings raised by an item that completes are carried back and re-raised in the calling session, labelled with that item, while an item that fails stops the call rather than returning a partial result. Output files are staged beside their destinations and renamed into place, so a failed item leaves no half-written file. Two transports are available: a fresh process per item via processx, where process exit is what reclaims memory, and a lazy producer with bounded backpressure via mirai' daemons for items that must be generated on demand.">
+<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Run Long R Work Across Processes or a Scheduler">
+<meta name="description" content="Runs one R function once per item in a list of inputs, each call in its own worker process. Return values come back as a list, or are discarded when the function is called for a side effect. A third mode writes the functions declared output files for it. Naming the function by package and symbol, rather than passing it by value, lets a worker hash what it loaded. The worker then refuses code that differs from what was dispatched. batchit checks every items arguments against the functions formals, in both the calling session and the worker. An item that completes carries its warnings back, and the calling session re-raises them labelled with that item. An item that fails stops the call rather than returning a partial result. batchit stages output files beside their destinations and renames them into place, so a failed item leaves no half-written file. Two transports run the work in this sessions own child processes. One starts a fresh process per item via processx, where process exit is what reclaims memory. The other is a lazy producer with bounded backpressure over mirai daemons, for items generated on demand. Work too long for one session goes to a scheduler instead. A separate pair of functions describes a chain of Slurm jobs and writes the job scripts, plus a driver that submits them. batchit submits nothing: a person runs the driver.">
+<meta property="og:description" content="Runs one R function once per item in a list of inputs, each call in its own worker process. Return values come back as a list, or are discarded when the function is called for a side effect. A third mode writes the functions declared output files for it. Naming the function by package and symbol, rather than passing it by value, lets a worker hash what it loaded. The worker then refuses code that differs from what was dispatched. batchit checks every items arguments against the functions formals, in both the calling session and the worker. An item that completes carries its warnings back, and the calling session re-raises them labelled with that item. An item that fails stops the call rather than returning a partial result. batchit stages output files beside their destinations and renames them into place, so a failed item leaves no half-written file. Two transports run the work in this sessions own child processes. One starts a fresh process per item via processx, where process exit is what reclaims memory. The other is a lazy producer with bounded backpressure over mirai daemons, for items generated on demand. Work too long for one session goes to a scheduler instead. A separate pair of functions describes a chain of Slurm jobs and writes the job scripts, plus a driver that submits them. batchit submits nothing: a person runs the driver.">
 <meta property="og:image" content="https://papadopoulos-lab.github.io/batchit/logo.png">
 </head>
 <body>
@@ -31,7 +31,7 @@
 
     <a class="navbar-brand me-2" href="index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.21</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.26</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,12 +58,12 @@
 
 <div class="rw-hero">
   <div class="rw-hero-body">
-    <p class="overline">R package · Parallel subprocess dispatch</p>
+    <p class="overline">R package · Long-running R work</p>
     <div class="page-header">
-<img src="logo.png" class="logo" alt=""><h1>Run one R function across many worker processes.</h1>
+<img src="logo.png" class="logo" alt=""><h1>Run long R work across processes or a scheduler.</h1>
 </div>
     <div class="rw-rule"></div>
-    <p class="rw-lede">Dispatch one function over many items, each in its own worker process. Take the return values back, or let batchit write each item's output files, with a guarantee that a failed item never leaves a half-written file at its final path.
+    <p class="rw-lede">Dispatch one function over many items, each in its own worker process, and take the return values or the written output files back. Work too long for one session goes to Slurm instead: batchit writes the job chain and submits nothing.
 </p>
     <p class="rw-cta"><a class="rw-btn" href="articles/batchit.html">Get started</a> <a class="rw-btn-link" href="reference/index.html">Browse the reference →</a></p>
   </div>
@@ -83,7 +83,7 @@ What’s inside
 A fresh process per item
 </h3>
 <p>
-One function runs once per item, up to <code>n_workers</code> at a time. Collected results keep the order of <code>items</code>, not the order the workers finished. Three of the four dispatch functions start a brand-new R process per item, because process exit is what reclaims memory. The streaming one trades that for lazy item production.
+One function runs once per item, up to <code>n_workers</code> at a time. Three of the four dispatch functions start a brand-new R process per item, because process exit is what reclaims memory.
 </p>
 </div>
 <div class="rw-card">
@@ -94,7 +94,7 @@ One function runs once per item, up to <code>n_workers</code> at a time. Collect
 Declared outputs, committed atomically
 </h3>
 <p>
-Declare each item’s final output paths and batchit writes them: staged beside their destinations, renamed into place, marker written last. A failed or interrupted item never leaves a half-written file at a final path. What the guarantee does <em>not</em> cover is stated just as precisely.
+Declare each item’s final output paths. batchit stages them beside their destinations, renames them into place, and writes the marker last. A failed or interrupted item never leaves a half-written file at a final path.
 </p>
 </div>
 <div class="rw-card">
@@ -102,10 +102,10 @@ Declare each item’s final output paths and batchit writes them: staged beside 
 03
 </div>
 <h3>
-Dispatch the code you tested
+Or hand the work to a scheduler
 </h3>
 <p>
-Name the target by package and symbol. Each worker then hashes what it loaded, and refuses to run a definition that differs from the one you dispatched. batchit checks every item’s arguments against the formals twice: in the calling session, and again in the worker. A default must be named too.
+<code><a href="reference/slurm_it.html">slurm_it()</a></code> describes one Slurm job. <code><a href="reference/slurm_write.html">slurm_write()</a></code> turns a list of them into one bash file per job, plus a <code>submit.sh</code> that chains them with <code>–dependency=afterok</code>. batchit submits nothing. You run <code>submit.sh</code> yourself.
 </p>
 </div>
 </div>

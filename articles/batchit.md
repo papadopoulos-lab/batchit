@@ -16,6 +16,11 @@ Four functions do that dispatch. They share one shape. They differ on
 two axes: how each call’s arguments reach the worker process, and what
 comes back.
 
+Some work outlasts one R session, and a worker process cannot help with
+that. Two more functions describe a chain of Slurm jobs and write it as
+bash. They take no `fn` and no `items`. The section [Slurm: write a
+chain of jobs](#slurm-write-a-chain-of-jobs) covers them.
+
 Most examples in this article run when R builds the article, and show
 their real output. Two kinds do not run. The streaming example needs a
 package that you install yourself. The self-containedness fragments are
@@ -34,16 +39,16 @@ results <- run_and_collect(
   n_workers = 2
 )
 #>   [0/3] dispatching workers...
-#>   [1/3] complete  02:23:28
-#>   [2/3] complete  02:23:28
-#>   [3/3] complete  02:23:28
+#>   [1/3] complete  18:39:15
+#>   [2/3] complete  18:39:15
+#>   [3/3] complete  18:39:16
 
 results[[1]]
 #> $value
 #> [1] 4
 #> 
 #> $worker_pid
-#> [1] 7957
+#> [1] 8376
 ```
 
 batchit prints one dispatch line, and then one progress line per
@@ -56,10 +61,10 @@ ids with this session’s id:
 ``` r
 worker_pids <- vapply(results, function(r) r$worker_pid, integer(1))
 worker_pids
-#> [1] 7957 7963 7987
+#> [1] 8376 8380 8406
 
 Sys.getpid()
-#> [1] 7926
+#> [1] 8346
 Sys.getpid() %in% worker_pids
 #> [1] FALSE
 ```
@@ -275,13 +280,13 @@ batchit wrote. The record holds one element per item, in the order of
 str(record)
 #> List of 2
 #>  $ two  :List of 2
-#>   ..$ committed: Named chr [1:2] "/tmp/RtmpR7vCle/batchit-write/sq_two.qs2" "/tmp/RtmpR7vCle/batchit-write/db_two.qs2"
+#>   ..$ committed: Named chr [1:2] "/tmp/Rtmp2xw5Ap/batchit-write/sq_two.qs2" "/tmp/Rtmp2xw5Ap/batchit-write/db_two.qs2"
 #>   .. ..- attr(*, "names")= chr [1:2] "squared" "doubled"
-#>   ..$ attempt  : chr "1ef65208f61a"
+#>   ..$ attempt  : chr "209a64fd2b93"
 #>  $ three:List of 2
-#>   ..$ committed: Named chr [1:2] "/tmp/RtmpR7vCle/batchit-write/sq_three.qs2" "/tmp/RtmpR7vCle/batchit-write/db_three.qs2"
+#>   ..$ committed: Named chr [1:2] "/tmp/Rtmp2xw5Ap/batchit-write/sq_three.qs2" "/tmp/Rtmp2xw5Ap/batchit-write/db_three.qs2"
 #>   .. ..- attr(*, "names")= chr [1:2] "squared" "doubled"
-#>   ..$ attempt  : chr "1ef62bd90bc"
+#>   ..$ attempt  : chr "209a4759bbfc"
 ```
 
 `committed` maps each declared output name to the final path batchit
@@ -614,7 +619,7 @@ run_and_collect(
 )
 #>   [0/1] dispatching workers...
 #> Warning: [batch item 'fit_01'] value looks unusual
-#>   [1/1] complete  02:23:33
+#>   [1/1] complete  18:39:22
 #> [[1]]
 #> [1] 1
 ```
@@ -689,6 +694,223 @@ before you rely on it:
 - a `SIGKILL` leaves the temporary file behind, since
   [`on.exit()`](https://rdrr.io/r/base/on.exit.html) cannot run.
 
+## Slurm: write a chain of jobs
+
+[`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
+and
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+are batchit’s third execution shape.
+[`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
+describes one Slurm job, and
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+writes that description as bash. Neither takes an `fn` or an `items`
+argument, because no R function crosses to a worker here.
+
+[`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
+validates one job and returns an object. It writes nothing.
+
+``` r
+s1 <- slurm_it(
+  script = "Rscript s1_build.R",
+  name = "proj_s1",
+  cpus = 6,
+  mem = "85G",
+  time = "12:00:00"
+)
+
+class(s1)
+#> [1] "slurm_it"
+s1[["name"]]
+#> [1] "proj_s1"
+```
+
+`script` is shell text, and not an R function. batchit checks nothing in
+it against an R function’s formals, because there is no R function here.
+
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+takes one of those objects, or a list of them. It writes one bash file
+per job, plus a `submit.sh`. It returns the paths.
+
+``` r
+chain_dir <- file.path(tempdir(), "slurm-chain")
+
+paths <- slurm_write(
+  list(
+    s1,
+    slurm_it(
+      script = "Rscript s2_report.R",
+      name = "proj_s2",
+      cpus = 2,
+      mem = "8G",
+      time = "01:00:00"
+    )
+  ),
+  dir = chain_dir
+)
+
+basename(paths)
+#> [1] "proj_s1.sh" "proj_s2.sh" "submit.sh"
+```
+
+Each job file opens with the `#SBATCH` directives that
+[`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
+validated.
+
+``` r
+writeLines(head(readLines(paths[1]), 15))
+#> #!/bin/bash
+#> #SBATCH --job-name=proj_s1
+#> #SBATCH --cpus-per-task=6
+#> #SBATCH --mem=85G
+#> #SBATCH --time=12:00:00
+#> #SBATCH --output=/tmp/Rtmp2xw5Ap/slurm-chain/proj_s1_%j.out
+#> #SBATCH --error=/tmp/Rtmp2xw5Ap/slurm-chain/proj_s1_%j.err
+#> #SBATCH --requeue
+#> 
+#> # Written by batchit::slurm_write(). An edit here is lost the next time
+#> # the chain is written.
+#> #
+#> # The body stops at its first failing command, which is what a chain
+#> # built on --dependency=afterok needs.
+#> set -euo pipefail
+```
+
+Your `script` goes at the end, unchanged.
+
+``` r
+writeLines(tail(readLines(paths[1]), 3))
+#> # The job body, as the caller wrote it.
+#> Rscript s1_build.R
+```
+
+### Nothing submits
+
+batchit runs no `sbatch`, and it exports no function that does. Read
+`submit.sh`, then run it yourself.
+
+`submit.sh` is the only generated file that names `sbatch`. A job file
+runs under Slurm and knows nothing about the chain. The two chunks below
+print the whole of `submit.sh`, unfiltered.
+
+The first part is everything above the first `sbatch` call: the
+preflight.
+
+``` r
+submit <- readLines(paths[3])
+first_submission <- grep("sbatch", submit)[1]
+
+writeLines(submit[seq_len(first_submission - 1)])
+#> #!/bin/bash
+#> #
+#> # Written by batchit::slurm_write(). An edit here is lost the next time
+#> # the chain is written.
+#> #
+#> # This is the only generated file that names the submission command.
+#> set -euo pipefail
+#> 
+#> batchit_dir='/tmp/Rtmp2xw5Ap/slurm-chain'
+#> 
+#> # --- preflight ---------------------------------------------------------
+#> # Both checks run before the first submission, so a refusal costs
+#> # seconds and leaves the queue as it was.
+#> 
+#> batchit_refuse() {
+#>   printf 'batchit: REFUSED: %s\n' "$*" >&2
+#>   exit 1
+#> }
+#> 
+#> # 1. THIS node must be able to accept work. A check on any node in any
+#> #    state passes while the one node that matters is drained.
+#> if ! batchit_node="$(hostname -s)"; then
+#>   batchit_refuse 'hostname -s failed, so the node this chain would run on cannot be identified.'
+#> fi
+#> if ! batchit_state="$(sinfo -h -n "$batchit_node" -o '%T' | tr -d '*' | sort -u | paste -sd,)"; then
+#>   batchit_refuse "sinfo failed for node $batchit_node. Is slurmctld running?"
+#> fi
+#> if [ -z "$batchit_state" ]; then
+#>   batchit_refuse "sinfo reported no state for node $batchit_node. It exits 0 and prints nothing for a node it does not know, so check NodeName in slurm.conf."
+#> fi
+#> # EVERY state must be able to run work. A node drained in one partition
+#> # and idle in another arrives here as `drained,idle`. It will not run
+#> # the job, so the driver refuses.
+#> IFS=, read -ra batchit_states <<< "$batchit_state"
+#> for batchit_one in "${batchit_states[@]}"; do
+#>   case "$batchit_one" in
+#>     idle | mixed | allocated) : ;;
+#>     *)
+#>       batchit_refuse "node $batchit_node is in state '$batchit_state' and will not run work. If it is drained, fix the cause first, then: sudo scontrol update NodeName=$batchit_node State=RESUME"
+#>       ;;
+#>   esac
+#> done
+#> 
+#> # 2. Refuse a duplicate, and fail closed. A squeue that cannot answer
+#> #    leaves a second chain possible, so it is a reason to stop.
+#> if ! batchit_queued="$(squeue -h -o '%j')"; then
+#>   batchit_refuse 'squeue failed, so a duplicate submission cannot be ruled out.'
+#> fi
+#> # A here-string, and not printf | grep -q: grep -q exits at the first
+#> # match, printf takes SIGPIPE, and pipefail then reports 141 as no match.
+#> for batchit_name in 'proj_s1' 'proj_s2'; do
+#>   if grep -qxF -- "$batchit_name" <<< "$batchit_queued"; then
+#>     batchit_refuse "a job named $batchit_name is already queued or running."
+#>   fi
+#> done
+```
+
+The second part is the rest of the file, one `sbatch` call per job. List
+position is chain order, and each job after the first waits for the one
+before it to succeed.
+
+``` r
+writeLines(submit[seq(first_submission, length(submit))])
+#> batchit_jid_1="$(sbatch --parsable "$batchit_dir/proj_s1.sh" | cut -d';' -f1)"
+#> printf 'batchit_submitted %s %s\n' 'proj_s1' "$batchit_jid_1"
+#> 
+#> batchit_jid_2="$(sbatch --parsable --dependency=afterok:"$batchit_jid_1" --kill-on-invalid-dep=yes "$batchit_dir/proj_s2.sh" | cut -d';' -f1)"
+#> printf 'batchit_submitted %s %s\n' 'proj_s2' "$batchit_jid_2"
+```
+
+### `set -euo pipefail` changes what your script means
+
+Every generated job body runs under `set -euo pipefail`. The chain is
+built on `--dependency=afterok`, so a job that fails MUST stop rather
+than exit 0.
+
+That changes the meaning of your `script`. Two cases behave differently
+here than in an interactive shell:
+
+- a command that fails, where you relied on the next command running
+  anyway;
+- an unset variable, where you relied on it expanding to empty.
+
+Check your `script` under `bash -euo pipefail` before you rely on the
+chain.
+
+### What the tests of `submit.sh` do not prove
+
+`submit.sh` refuses to submit in two cases. It refuses when the node is
+in a state that cannot run work. It also refuses when a job name in the
+chain already appears in `squeue`.
+
+The driver names the node with `hostname -s`, so it checks the node
+`submit.sh` runs on. On a cluster with a separate login node, that is
+the login node.
+
+The tests drive both checks with stub `hostname`, `sinfo`, `squeue` and
+`sbatch` programs on `PATH`. So they prove the shell branching, against
+a protocol the tests wrote. Four things stay unproven, and
+[`?slurm_write`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+lists them:
+
+1.  the argument spelling that the real `sinfo` and `squeue` accept;
+2.  the output grammar that the real `sinfo` and `squeue` produce;
+3.  which users’ jobs `squeue` reports, because no option scopes the
+    check to one user;
+4.  that two `submit.sh` runs started at the same time cannot both pass.
+
+Treat the duplicate check as a guard against your own second submission,
+and not as a lock.
+
 ## Where to go next
 
 - [`?run`](https://papadopoulos-lab.github.io/batchit/reference/run.md),
@@ -703,6 +925,11 @@ before you rely on it:
   document the two helpers.
 - [`?write_qs2_atomically`](https://papadopoulos-lab.github.io/batchit/reference/write_qs2_atomically.md)
   documents the standalone atomic writer.
+- [`?slurm_it`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
+  and
+  [`?slurm_write`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+  document the Slurm chain, including the four things the preflight
+  tests do not prove.
 - The [reference
   index](https://papadopoulos-lab.github.io/batchit/reference/index.html)
   lists every exported function on one page.
