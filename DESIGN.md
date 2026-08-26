@@ -137,12 +137,14 @@ Three helpers complete the surface.
   writer with no dispatch involved. Section 9 covers what it does not
   promise.
 
-Two more exports belong to a different execution shape, and section 8
+Three more exports belong to a different execution shape, and section 8
 covers them.
 [`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
 describes one Slurm job.
 [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
-writes a chain of those jobs as bash. Neither takes `fn` or `items`.
+writes a chain of those jobs as bash.
+[`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
+runs the written driver. None of the three takes `fn` or `items`.
 
 ## 4. Declared-output commit
 
@@ -482,24 +484,21 @@ identity. `nonce` does for adhoc what `hash` does for package.
 
 batchit is the engine layer for long-running work, and it carries three
 execution shapes. Two of them run the work in child processes of the
-calling R session. The third describes the work for a scheduler and
-stops there.
+calling R session. The third describes the work for a scheduler, writes
+it as bash, and submits it on a separate call.
 
 | Execution shape                         | Where the work runs        | Entry points                                                                                                                                                                                                                                                                                         |
 |-----------------------------------------|----------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | a fresh process per item                | a `processx` child process | [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md), [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md), [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md) |
 | a bounded queue over persistent daemons | a `mirai` daemon           | [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)                                                                                                                                           |
-| a chain of scheduler jobs               | a compute node, later      | [`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md), [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)                                                                                                                             |
+| a chain of scheduler jobs               | a compute node, later      | [`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md), [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md), [`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)                                   |
 
 The third shape breaks the pattern of the first two, and the break is
-deliberate.
-[`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
-and
-[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
-take no `fn` and no `items`, so the definition of an item in section 1
-does not reach them. They serialise no closure, hash no code, and check
-nothing against a function’s formals. There is no envelope and no
-protocol number, because nothing crosses a process boundary.
+deliberate. None of the three takes an `fn` or an `items` argument. The
+definition of an item in section 1 does not reach them. They serialise
+no closure, hash no code, and check nothing against a function’s
+formals. There is no envelope and no protocol number, because no R
+object crosses to another process.
 
 `slurm_it(script, name, cpus, mem, time, ...)` builds a validated
 description of one job and returns an S3 object of class `slurm_it`. Its
@@ -512,14 +511,24 @@ order: `submit.sh` gives job `i` a `--dependency=afterok` on job
 every `*.sh` file there before it writes. So a chain of four written
 over a chain of five leaves no orphan job file.
 
-**Nothing submits.** A person reads `submit.sh` and runs it. batchit
-exports no function that calls `sbatch`, and `R/slurm.R` starts no
-subprocess at all.
+**[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+submits nothing.** It writes bash and returns paths. So `submit.sh` is a
+readable artefact, and a person can inspect the whole chain before
+anything reaches the queue.
 
-Do not add a function that submits. A submission costs real cluster
-time, and a person cannot undo it. A manual step also keeps batchit
-testable off a cluster: every Slurm test drives generated text, and not
-one of them needs a scheduler.
+**Submission is a separate explicit call.** `slurm_submit(x)` runs a
+written `submit.sh` through `system2("bash", ...)` and returns the job
+ids, named by stage. Nothing submits as a side effect of writing the
+chain.
+
+That separation carries the irreversibility argument. A submission costs
+real cluster time, and a person cannot undo it. So the call that spends
+it MUST be the one the caller typed. Do not add a `submit = TRUE`
+argument to
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md).
+Do not submit from any function whose name describes generation. Section
+10 records the reversal of the older rule, which forbade any function
+that submits.
 
 The chain is built on `--dependency=afterok`, so a job that fails MUST
 stop rather than exit 0. Every generated job body therefore runs under
@@ -548,10 +557,11 @@ is the shelved program section 1 forbids.
 **No skip.** batchit never decides to skip an item. See section 10 for
 the opt-in consumer skip that was built and then removed.
 
-**No submission.**
-[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
-writes a Slurm chain and stops. A person runs `submit.sh`. Section 8
-gives the two reasons.
+**No job monitoring.**
+[`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
+returns the job ids and stops. It does not wait for a job, does not poll
+its state, and does not cancel it. An error names the `scancel` command
+for the jobs already queued, and does not run it.
 
 **No thread management.** batchit sets no BLAS or `data.table` thread
 counts. A multi-threaded `fn` has to lower its own thread count when
@@ -588,6 +598,27 @@ carries no dispatch attempt token, so `.batch_sweep_task_temps()` can
 never match it.
 
 ## 10. History
+
+**The no-submission rule, reversed.** Section 8 once forbade any
+function that submits. It gave two grounds. A submission costs real
+cluster time that a person cannot undo. A manual step also kept every
+Slurm test runnable off a cluster.
+[`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
+reverses the rule, and the two grounds did not age alike.
+
+The testability ground no longer binds.
+`tests/testthat/helper-slurm-stubs.R` stubs `hostname` and the 19 Slurm
+client commands. It writes a refusing shim for every one a test block
+leaves unstubbed. A block that reaches an unstubbed command fails on
+every host, including a host with a healthy Slurm. The harness now holds
+the property the manual step held. Measured with no Slurm client command
+on `PATH`: 358 assertions across the four Slurm test files pass. 32 of
+those are in `test-slurm_submit.R`.
+
+The irreversibility ground still binds, and section 8 keeps it as live
+reasoning. It is why submission is a separate explicit call, and not an
+argument to
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md).
 
 **The naming migration.** The functions were once called `batch_run`,
 `batch_task`, `batch_stream`, `batch_target`, `batch_fn`, and

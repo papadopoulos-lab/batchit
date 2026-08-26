@@ -17,9 +17,10 @@ two axes: how each call’s arguments reach the worker process, and what
 comes back.
 
 Some work outlasts one R session, and a worker process cannot help with
-that. Two more functions describe a chain of Slurm jobs and write it as
-bash. They take no `fn` and no `items`. The section [Slurm: write a
-chain of jobs](#slurm-write-a-chain-of-jobs) covers them.
+that. Three more functions describe a chain of Slurm jobs, write it as
+bash, and submit it. They take no `fn` and no `items`. The section
+[Slurm: write a chain of jobs](#slurm-write-a-chain-of-jobs) covers
+them.
 
 Most examples in this article run when R builds the article, and show
 their real output. Two kinds do not run. The streaming example needs a
@@ -39,16 +40,16 @@ results <- run_and_collect(
   n_workers = 2
 )
 #>   [0/3] dispatching workers...
-#>   [1/3] complete  18:39:15
-#>   [2/3] complete  18:39:15
-#>   [3/3] complete  18:39:16
+#>   [1/3] complete  22:38:51
+#>   [2/3] complete  22:38:51
+#>   [3/3] complete  22:38:51
 
 results[[1]]
 #> $value
 #> [1] 4
 #> 
 #> $worker_pid
-#> [1] 8376
+#> [1] 8412
 ```
 
 batchit prints one dispatch line, and then one progress line per
@@ -61,10 +62,10 @@ ids with this session’s id:
 ``` r
 worker_pids <- vapply(results, function(r) r$worker_pid, integer(1))
 worker_pids
-#> [1] 8376 8380 8406
+#> [1] 8412 8418 8442
 
 Sys.getpid()
-#> [1] 8346
+#> [1] 8382
 Sys.getpid() %in% worker_pids
 #> [1] FALSE
 ```
@@ -280,13 +281,13 @@ batchit wrote. The record holds one element per item, in the order of
 str(record)
 #> List of 2
 #>  $ two  :List of 2
-#>   ..$ committed: Named chr [1:2] "/tmp/Rtmp2xw5Ap/batchit-write/sq_two.qs2" "/tmp/Rtmp2xw5Ap/batchit-write/db_two.qs2"
+#>   ..$ committed: Named chr [1:2] "/tmp/RtmpJpqbN4/batchit-write/sq_two.qs2" "/tmp/RtmpJpqbN4/batchit-write/db_two.qs2"
 #>   .. ..- attr(*, "names")= chr [1:2] "squared" "doubled"
-#>   ..$ attempt  : chr "209a64fd2b93"
+#>   ..$ attempt  : chr "20be506abd87"
 #>  $ three:List of 2
-#>   ..$ committed: Named chr [1:2] "/tmp/Rtmp2xw5Ap/batchit-write/sq_three.qs2" "/tmp/Rtmp2xw5Ap/batchit-write/db_three.qs2"
+#>   ..$ committed: Named chr [1:2] "/tmp/RtmpJpqbN4/batchit-write/sq_three.qs2" "/tmp/RtmpJpqbN4/batchit-write/db_three.qs2"
 #>   .. ..- attr(*, "names")= chr [1:2] "squared" "doubled"
-#>   ..$ attempt  : chr "209a4759bbfc"
+#>   ..$ attempt  : chr "20be78f2eb57"
 ```
 
 `committed` maps each declared output name to the final path batchit
@@ -619,7 +620,7 @@ run_and_collect(
 )
 #>   [0/1] dispatching workers...
 #> Warning: [batch item 'fit_01'] value looks unusual
-#>   [1/1] complete  18:39:22
+#>   [1/1] complete  22:38:57
 #> [[1]]
 #> [1] 1
 ```
@@ -696,14 +697,17 @@ before you rely on it:
 
 ## Slurm: write a chain of jobs
 
-[`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
-and
+[`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md),
 [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+and
+[`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
 are batchit’s third execution shape.
 [`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
-describes one Slurm job, and
+describes one Slurm job,
 [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
-writes that description as bash. Neither takes an `fn` or an `items`
+writes that description as bash, and
+[`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
+runs the written driver. None of the three takes an `fn` or an `items`
 argument, because no R function crosses to a worker here.
 
 [`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
@@ -763,8 +767,8 @@ writeLines(head(readLines(paths[1]), 15))
 #> #SBATCH --cpus-per-task=6
 #> #SBATCH --mem=85G
 #> #SBATCH --time=12:00:00
-#> #SBATCH --output=/tmp/Rtmp2xw5Ap/slurm-chain/proj_s1_%j.out
-#> #SBATCH --error=/tmp/Rtmp2xw5Ap/slurm-chain/proj_s1_%j.err
+#> #SBATCH --output=/tmp/RtmpJpqbN4/slurm-chain/proj_s1_%j.out
+#> #SBATCH --error=/tmp/RtmpJpqbN4/slurm-chain/proj_s1_%j.err
 #> #SBATCH --requeue
 #> 
 #> # Written by batchit::slurm_write(). An edit here is lost the next time
@@ -783,10 +787,14 @@ writeLines(tail(readLines(paths[1]), 3))
 #> Rscript s1_build.R
 ```
 
-### Nothing submits
+### Writing and submitting are two calls
 
-batchit runs no `sbatch`, and it exports no function that does. Read
-`submit.sh`, then run it yourself.
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+writes `submit.sh` and submits nothing.
+[`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
+runs that driver, and only when you call it. It returns the job ids as a
+named character vector, with one name per stage. Read `submit.sh`
+between the two calls.
 
 `submit.sh` is the only generated file that names `sbatch`. A job file
 runs under Slurm and knows nothing about the chain. The two chunks below
@@ -808,7 +816,7 @@ writeLines(submit[seq_len(first_submission - 1)])
 #> # This is the only generated file that names the submission command.
 #> set -euo pipefail
 #> 
-#> batchit_dir='/tmp/Rtmp2xw5Ap/slurm-chain'
+#> batchit_dir='/tmp/RtmpJpqbN4/slurm-chain'
 #> 
 #> # --- preflight ---------------------------------------------------------
 #> # Both checks run before the first submission, so a refusal costs
@@ -925,11 +933,13 @@ and not as a lock.
   document the two helpers.
 - [`?write_qs2_atomically`](https://papadopoulos-lab.github.io/batchit/reference/write_qs2_atomically.md)
   documents the standalone atomic writer.
-- [`?slurm_it`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
-  and
+- [`?slurm_it`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md),
   [`?slurm_write`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
-  document the Slurm chain, including the four things the preflight
-  tests do not prove.
+  and
+  [`?slurm_submit`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
+  document the Slurm chain.
+  [`?slurm_write`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+  lists the four things the preflight tests do not prove.
 - The [reference
   index](https://papadopoulos-lab.github.io/batchit/reference/index.html)
   lists every exported function on one page.

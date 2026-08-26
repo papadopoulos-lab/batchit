@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.26</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.27</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -108,9 +108,9 @@
         </dt>
         <dd>Atomically write an object to a qs2 file</dd>
       </dl></div><div class="section level2">
-      <h2 id="writing-a-chain-of-slurm-jobs">Writing a chain of Slurm jobs<a class="anchor" aria-label="anchor" href="#writing-a-chain-of-slurm-jobs"></a></h2>
+      <h2 id="running-a-chain-of-slurm-jobs">Running a chain of Slurm jobs<a class="anchor" aria-label="anchor" href="#running-a-chain-of-slurm-jobs"></a></h2>
 
-      <div class="section-desc"><p>The route for work too long to sit in one R session. <code><a href="../reference/slurm_it.html">slurm_it()</a></code> validates one job description. <code><a href="../reference/slurm_write.html">slurm_write()</a></code> turns a list of them into one bash file per job, plus the <code>submit.sh</code> driver. Neither function runs <code>sbatch</code>, and neither starts a worker process: you run <code>submit.sh</code> yourself.</p></div>
+      <div class="section-desc"><p>The route for work too long to sit in one R session. <code><a href="../reference/slurm_it.html">slurm_it()</a></code> validates one job description. <code><a href="../reference/slurm_write.html">slurm_write()</a></code> turns a list of them into one bash file per job, plus the <code>submit.sh</code> driver, and it submits nothing. <code><a href="../reference/slurm_submit.html">slurm_submit()</a></code> runs that driver and returns the job ids, named by stage.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -130,6 +130,13 @@
 
         </dt>
         <dd>Write a Slurm job chain</dd>
+
+        <dt>
+
+          <code><a href="slurm_submit.html">slurm_submit()</a></code>
+
+        </dt>
+        <dd>Submit a written Slurm job chain</dd>
       </dl></div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

@@ -25,5 +25,8 @@ path.
 describes one Slurm job.
 [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
 turns a list of them into one bash file per job, plus a `submit.sh` that
-chains them with `–dependency=afterok`. batchit submits nothing. You run
-`submit.sh` yourself.
+chains them with `–dependency=afterok`.
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+submits nothing.
+[`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
+runs that driver, so you read `submit.sh` first.

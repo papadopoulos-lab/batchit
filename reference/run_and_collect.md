@@ -138,9 +138,9 @@ squares <- run_and_collect(
   n_workers = 2
 )
 #>   [0/3] dispatching workers...
-#>   [1/3] complete  18:39:10
-#>   [2/3] complete  18:39:10
-#>   [3/3] complete  18:39:11
+#>   [1/3] complete  22:38:45
+#>   [2/3] complete  22:38:45
+#>   [3/3] complete  22:38:45
 squares
 #> [[1]]
 #> [1] 4

@@ -153,9 +153,9 @@ run(
   n_workers = 2
 )
 #>   [0/3] dispatching workers...
-#>   [1/3] complete  18:39:09
-#>   [2/3] complete  18:39:09
-#>   [3/3] complete  18:39:09
+#>   [1/3] complete  22:38:44
+#>   [2/3] complete  22:38:44
+#>   [3/3] complete  22:38:44
 list.files(out_dir)
 #> [1] "1.rds" "2.rds" "3.rds"
 readRDS(file.path(out_dir, "2.rds")) # 4

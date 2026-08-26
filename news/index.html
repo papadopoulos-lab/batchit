@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.26</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.27</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,15 @@
       <small>Source: <a href="https://github.com/papadopoulos-lab/batchit/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="26.8.27" id="batchit-26827">batchit 26.8.27<a class="anchor" aria-label="anchor" href="#batchit-26827"></a></h2>
+<ul><li>
+<strong><code><a href="../reference/slurm_submit.html">slurm_submit()</a></code> runs a written <code>submit.sh</code> and returns the job ids, named by stage.</strong> It reads the <code>batchit_submitted</code> lines the driver prints. <code><a href="../reference/slurm_write.html">slurm_write()</a></code> and <code><a href="../reference/slurm_submit.html">slurm_submit()</a></code> stay two calls, so a caller reads <code>submit.sh</code> between them.</li>
+<li>
+<strong>An error from <code><a href="../reference/slurm_submit.html">slurm_submit()</a></code> names every job the driver already queued.</strong> The driver runs under <code>set -euo pipefail</code>, so an <code>sbatch</code> that fails part way through a chain leaves the earlier jobs in the queue. The error carries the driver’s own message and the <code>scancel</code> command that cancels those jobs.</li>
+<li>
+<strong>The “batchit submits nothing” claim is now scoped to <code><a href="../reference/slurm_write.html">slurm_write()</a></code>.</strong> <code>README.md</code>, <code>index.md</code>, the pkgdown hero, <code>DESCRIPTION</code>, <code>DESIGN.md</code> and the vignette each stated it about the whole package, which <code><a href="../reference/slurm_submit.html">slurm_submit()</a></code> makes false.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="26.8.26" id="batchit-26826">batchit 26.8.26<a class="anchor" aria-label="anchor" href="#batchit-26826"></a></h2>
 <ul><li>

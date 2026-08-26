@@ -53,17 +53,20 @@ commit engine.
 - [`write_qs2_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/write_qs2_atomically.md)
   : Atomically write an object to a qs2 file
 
-## Writing a chain of Slurm jobs
+## Running a chain of Slurm jobs
 
 The route for work too long to sit in one R session.
 [`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
 validates one job description.
 [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
 turns a list of them into one bash file per job, plus the `submit.sh`
-driver. Neither function runs `sbatch`, and neither starts a worker
-process: you run `submit.sh` yourself.
+driver, and it submits nothing.
+[`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
+runs that driver and returns the job ids, named by stage.
 
 - [`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
   : Describe one Slurm job
 - [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
   : Write a Slurm job chain
+- [`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
+  : Submit a written Slurm job chain

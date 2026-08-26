@@ -1,5 +1,28 @@
 # Changelog
 
+## batchit 26.8.27
+
+- **[`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
+  runs a written `submit.sh` and returns the job ids, named by stage.**
+  It reads the `batchit_submitted` lines the driver prints.
+  [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+  and
+  [`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
+  stay two calls, so a caller reads `submit.sh` between them.
+- **An error from
+  [`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
+  names every job the driver already queued.** The driver runs under
+  `set -euo pipefail`, so an `sbatch` that fails part way through a
+  chain leaves the earlier jobs in the queue. The error carries the
+  driver’s own message and the `scancel` command that cancels those
+  jobs.
+- **The “batchit submits nothing” claim is now scoped to
+  [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md).**
+  `README.md`, `index.md`, the pkgdown hero, `DESCRIPTION`, `DESIGN.md`
+  and the vignette each stated it about the whole package, which
+  [`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
+  makes false.
+
 ## batchit 26.8.26
 
 - **[`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)

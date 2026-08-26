@@ -94,6 +94,15 @@ The checks reject a line break, a whitespace character and a shell
 metacharacter, each in the fields where that character would change what
 runs.
 
+## See also
+
+[`vignette("batchit")`](https://papadopoulos-lab.github.io/batchit/articles/batchit.md),
+section "Slurm: write a chain of jobs".
+
+Other slurm:
+[`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md),
+[`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
+
 ## Examples
 
 ``` r

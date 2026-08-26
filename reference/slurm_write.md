@@ -121,8 +121,12 @@ branching against a protocol the tests wrote. Four things stay unproven.
 
 ## See also
 
+[`vignette("batchit")`](https://papadopoulos-lab.github.io/batchit/articles/batchit.md),
+section "Slurm: write a chain of jobs".
+
+Other slurm:
 [`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md),
-which builds each job.
+[`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
 
 ## Examples
 
