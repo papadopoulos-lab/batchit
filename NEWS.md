@@ -1,3 +1,17 @@
+# batchit 26.8.26
+
+- **`slurm_it()` and `slurm_write()` describe a Slurm job chain and write it as
+  bash. They submit nothing.** `slurm_it()` describes one job and validates it.
+  `slurm_write()` writes one bash file per job, plus a `submit.sh` driver. A
+  person runs `submit.sh`.
+- **`DESCRIPTION` `Title` and `Description` now name the scheduler.** batchit
+  runs long R work across worker processes or across a scheduler, and the old
+  framing named only the worker processes.
+- **The generated `submit.sh` no longer claims to be the only file that reaches
+  the scheduler.** It passes each job file to `sbatch`, so a job file reaches
+  the scheduler too. `submit.sh` is the only generated file that names the
+  submission command.
+
 # batchit 26.8.21
 
 - **The pkgdown template package is renamed to `pptemplate`.** `DESCRIPTION`

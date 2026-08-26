@@ -1,8 +1,9 @@
 # batchit
 
-`batchit` runs one R function many times in parallel, each call in its own
-worker process. It then either gives you the return values back, or writes each
-call's output files for you.
+`batchit` is the engine layer for long-running R work. It runs one R function
+many times in parallel, each call in its own worker process. It then gives you
+the return values back, or writes each call's output files. For work that
+outlasts one R session, it also describes Slurm jobs and writes them as bash.
 
 Full documentation: <https://papadopoulos-lab.github.io/batchit/>
 
@@ -58,6 +59,8 @@ Three things happened:
 | Have batchit write each item's declared output files, atomically | `run_and_write_files_atomically()` |
 | The same, but the items are too many or too large to build up front | `stream_from_parent_and_write_files_atomically()` |
 | Write one object to one file atomically, with no dispatch at all | `write_qs2_atomically()` |
+| Describe one Slurm job | `slurm_it()` |
+| Write a chain of Slurm jobs as bash files | `slurm_write()` |
 
 The first four take an `fn` argument: the function to run once per item. The
 first three accept an inline function, or a function named in an installed
@@ -66,24 +69,22 @@ the definition it loaded, and refuses to run code that differs from what you
 dispatched. `stream_from_parent_and_write_files_atomically()` accepts only the
 `package_function()` form.
 
-The first three also start a brand-new R process for each item, which is the
-memory strategy: process exit is what reclaims a large allocation. The streaming
-function instead reuses a small pool of persistent `mirai` workers. It trades
-that reclamation away for the ability to build items lazily.
-
 The two file-writing functions guarantee that **a failed or interrupted item
-never leaves a half-written file at its final path**. Each item's outputs are
-staged beside their destinations, renamed into place one at a time, and a commit
-marker is written last.
+never leaves a half-written file at its final path**.
+
+`slurm_it()` and `slurm_write()` take neither `fn` nor `items`. `slurm_it()`
+describes one Slurm job. `slurm_write()` turns a list of them into one bash file
+per job, plus a `submit.sh` that chains them with `--dependency=afterok`.
+**batchit submits nothing.** You read `submit.sh`, then you run it yourself.
 
 ## Documentation
 
 - [**Get started with batchit**](https://papadopoulos-lab.github.io/batchit/articles/batchit.html):
-  all four functions with worked examples, and the rules an inline `fn` must
-  follow. It states exactly what the atomic-write guarantee does and does not
-  cover. Also available as `vignette("batchit")`.
-- [**Reference**](https://papadopoulos-lab.github.io/batchit/reference/index.html)
-  — every argument of every exported function.
+  every exported function with worked examples, the rules an inline `fn` must
+  follow, and what the atomic-write guarantee does not cover. Also available as
+  `vignette("batchit")`.
+- [**Reference**](https://papadopoulos-lab.github.io/batchit/reference/index.html):
+  every argument of every exported function.
 - [**Changelog**](https://papadopoulos-lab.github.io/batchit/news/index.html)
 
 ## Provenance
