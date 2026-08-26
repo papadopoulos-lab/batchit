@@ -11,6 +11,9 @@
   the scheduler.** It passes each job file to `sbatch`, so a job file reaches
   the scheduler too. `submit.sh` is the only generated file that names the
   submission command.
+- **The tests that run a generated `submit.sh` no longer need Slurm on the
+  machine.** They stub `hostname`, `sinfo`, `squeue` and `sbatch`, so
+  `R CMD check` passes where Slurm is not installed.
 
 # batchit 26.8.21
 

@@ -8,6 +8,10 @@
 # it, `set -e` stops the driver at a missing `sbatch`, every case exits
 # non-zero, and a refusal becomes indistinguishable from a submission.
 #
+# `slurm_stub_path()` in `helper-slurm-stubs.R` writes the stubs. It shims
+# every other scheduler command as well, so no block here can read the state
+# of the machine it runs on.
+#
 # WHAT THESE BLOCKS DO NOT PROVE. A PATH stub answers the protocol this file
 # invented. It says nothing about the argument spelling the real `sinfo` and
 # `squeue` accept, the output grammar they produce, which users' jobs `squeue`
@@ -24,21 +28,6 @@ ok_job <- function(name) {
   )
 }
 
-# Write one stub program that prints fixed text and exits with a fixed status.
-write_stub <- function(dir, name, out = "", status = 0L) {
-  path <- file.path(dir, name)
-  writeLines(
-    c(
-      "#!/bin/bash",
-      if (nzchar(out)) paste0("printf '%s\\n' ", shQuote(out, type = "sh")),
-      paste0("exit ", status)
-    ),
-    path
-  )
-  Sys.chmod(path, "0755")
-  path
-}
-
 # Build a chain, stub the scheduler, run `submit.sh`, and return its status.
 #
 # `sinfo_out` is the text the stub `sinfo` prints, with `\n` for the several
@@ -53,8 +42,6 @@ run_submit <- function(
 ) {
   tmp <- withr::local_tempdir()
   chain <- file.path(tmp, "chain")
-  stubs <- file.path(tmp, "stubs")
-  dir.create(stubs)
 
   batchit::slurm_write(lapply(job_names, ok_job), chain)
 
@@ -67,16 +54,19 @@ run_submit <- function(
     )
   }
 
-  write_stub(stubs, "hostname", "stub-node")
-  write_stub(stubs, "sinfo", sinfo_out, sinfo_status)
-  write_stub(stubs, "squeue", squeue_out, squeue_status)
-  write_stub(stubs, "sbatch", "424242")
-
   driver <- file.path(chain, "submit.sh")
   out <- file.path(tmp, "driver.out")
   err <- file.path(tmp, "driver.err")
   withr::local_envvar(
-    PATH = paste(stubs, Sys.getenv("PATH"), sep = .Platform$path.sep)
+    PATH = slurm_stub_path(
+      file.path(tmp, "stubs"),
+      list(
+        hostname = slurm_stub_fixed("stub-node"),
+        sinfo = slurm_stub_fixed(sinfo_out, sinfo_status),
+        squeue = slurm_stub_fixed(squeue_out, squeue_status),
+        sbatch = slurm_stub_fixed("424242")
+      )
+    )
   )
   status <- system2("bash", shQuote(driver), stdout = out, stderr = err)
   list(

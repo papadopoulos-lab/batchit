@@ -239,28 +239,29 @@ test_that("the driver hands afterok the job id alone", {
     file.path(tmp, "chain")
   )
 
-  # A stub on PATH stands in for the scheduler. It records its own arguments
-  # and answers in the federated form, `jobid;cluster`. The whole of that
-  # string reaching afterok: is a dependency Slurm never satisfies.
-  bin <- file.path(tmp, "bin")
-  dir.create(bin)
-  stub <- file.path(bin, "sbatch")
-  writeLines(
-    c(
-      "#!/bin/bash",
-      "printf '%s\\n' \"$*\" >> \"$SBATCH_LOG\"",
-      "printf '%s;cluster1\\n' \"$(wc -l < \"$SBATCH_LOG\")\""
-    ),
-    stub
-  )
-  Sys.chmod(stub, "0755")
+  # Stubs on PATH stand in for the scheduler. `sbatch` records its own
+  # arguments and answers in the federated form, `jobid;cluster`. The whole
+  # of that string reaching afterok: is a dependency Slurm never satisfies.
+  #
+  # The preflight runs before the first submission, so `hostname`, `sinfo`
+  # and `squeue` are stubbed as well. `helper-slurm-stubs.R` says why a
+  # driver block stubs every one of them.
   log <- file.path(tmp, "sbatch.log")
+  stub_path <- slurm_stub_path(
+    file.path(tmp, "bin"),
+    list(
+      hostname = slurm_stub_fixed("stub-node"),
+      sinfo = slurm_stub_fixed("idle"),
+      squeue = slurm_stub_fixed(""),
+      sbatch = c(
+        "printf '%s\\n' \"$*\" >> \"$SBATCH_LOG\"",
+        "printf '%s;cluster1\\n' \"$(wc -l < \"$SBATCH_LOG\")\""
+      )
+    )
+  )
 
   run <- withr::with_envvar(
-    c(
-      PATH = paste(bin, Sys.getenv("PATH"), sep = ":"),
-      SBATCH_LOG = log
-    ),
+    c(PATH = stub_path, SBATCH_LOG = log),
     run_bash(paths[[3]], tmp, "driver")
   )
 
@@ -271,6 +272,44 @@ test_that("the driver hands afterok the job id alone", {
   expect_true(grepl("--dependency=afterok:1 ", argv[[2]], fixed = TRUE))
   expect_identical(sum(grepl("cluster1", argv, fixed = TRUE)), 0L)
   expect_true("batchit_submitted proj_s2 2" %in% run[["out"]])
+})
+
+test_that("slurm_stub_path() refuses a Slurm command the caller left unstubbed", {
+  # The guard that keeps the block above hermetic. This block leaves `sinfo`
+  # out, so the shim answers in place of the host and the driver refuses.
+  #
+  # Without the shim the host answers. A block that forgets a stub then
+  # passes on a machine with Slurm installed, and fails on one without it.
+  # That is the CI failure on 508315e, and this block makes it visible
+  # on every machine.
+  tmp <- withr::local_tempdir()
+  paths <- batchit::slurm_write(
+    list(ok_job("proj_s1")),
+    file.path(tmp, "chain")
+  )
+
+  stub_path <- slurm_stub_path(
+    file.path(tmp, "bin"),
+    list(
+      hostname = slurm_stub_fixed("stub-node"),
+      squeue = slurm_stub_fixed(""),
+      sbatch = slurm_stub_fixed("424242")
+    )
+  )
+  run <- withr::with_envvar(
+    c(PATH = stub_path),
+    run_bash(paths[[2]], tmp, "unstubbed")
+  )
+  why <- paste(c("stderr:", run[["err"]], "stdout:", run[["out"]]), collapse = "\n")
+
+  expect_identical(run[["status"]], 1L, info = why)
+  expect_match(
+    paste(run[["err"]], collapse = "\n"),
+    "batchit test guard: sinfo reached the host",
+    fixed = TRUE
+  )
+  # It refused before it submitted.
+  expect_identical(run[["out"]], character(0), info = why)
 })
 
 # --- behaviour that no amount of text parsing reaches -------------------------
