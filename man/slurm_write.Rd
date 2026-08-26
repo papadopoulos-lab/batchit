@@ -133,5 +133,11 @@ basename(paths)
 unlink(dir, recursive = TRUE)
 }
 \seealso{
-\code{\link[=slurm_it]{slurm_it()}}, which builds each job.
+\code{vignette("batchit")}, section "Slurm: write a chain of
+jobs".
+
+Other slurm:
+\code{\link[=slurm_it]{slurm_it()}},
+\code{\link[=slurm_submit]{slurm_submit()}}
 }
+\concept{slurm}

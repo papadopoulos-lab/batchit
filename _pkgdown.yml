@@ -19,7 +19,7 @@ template:
         Dispatch one function over many items, each in its own worker process,
         and take the return values or the written output files back. Work too
         long for one session goes to Slurm instead: batchit writes the job
-        chain and submits nothing.
+        chain. A second call submits it.
       cta:
         primary:
           text: "Get started"
@@ -72,12 +72,13 @@ reference:
   contents:
   - write_qs2_atomically
 
-- title: Writing a chain of Slurm jobs
+- title: Running a chain of Slurm jobs
   desc: >
     The route for work too long to sit in one R session. `slurm_it()` validates
     one job description. `slurm_write()` turns a list of them into one bash file
-    per job, plus the `submit.sh` driver. Neither function runs `sbatch`, and
-    neither starts a worker process: you run `submit.sh` yourself.
+    per job, plus the `submit.sh` driver, and it submits nothing.
+    `slurm_submit()` runs that driver and returns the job ids, named by stage.
   contents:
   - slurm_it
   - slurm_write
+  - slurm_submit

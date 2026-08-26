@@ -1,3 +1,18 @@
+# batchit 26.8.26.1
+
+- **`slurm_submit()` runs a written `submit.sh` and returns the job ids, named
+  by stage.** It reads the `batchit_submitted` lines the driver prints.
+  `slurm_write()` and `slurm_submit()` stay two calls, so a caller reads
+  `submit.sh` between them.
+- **An error from `slurm_submit()` names every job the driver already queued.**
+  The driver runs under `set -euo pipefail`, so an `sbatch` that fails part way
+  through a chain leaves the earlier jobs in the queue. The error carries the
+  driver's own message and the `scancel` command that cancels those jobs.
+- **The "batchit submits nothing" claim is now scoped to `slurm_write()`.**
+  `README.md`, `index.md`, the pkgdown hero, `DESCRIPTION`, `DESIGN.md` and the
+  vignette each stated it about the whole package, which `slurm_submit()` makes
+  false.
+
 # batchit 26.8.26
 
 - **`slurm_it()` and `slurm_write()` describe a Slurm job chain and write it as

@@ -82,3 +82,12 @@ job <- slurm_it(
 job[["name"]]
 job[["cpus"]]
 }
+\seealso{
+\code{vignette("batchit")}, section "Slurm: write a chain of
+jobs".
+
+Other slurm:
+\code{\link[=slurm_submit]{slurm_submit()}},
+\code{\link[=slurm_write]{slurm_write()}}
+}
+\concept{slurm}

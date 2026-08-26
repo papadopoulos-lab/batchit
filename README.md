@@ -3,7 +3,8 @@
 `batchit` is the engine layer for long-running R work. It runs one R function
 many times in parallel, each call in its own worker process. It then gives you
 the return values back, or writes each call's output files. For work that
-outlasts one R session, it also describes Slurm jobs and writes them as bash.
+outlasts one R session, it also describes Slurm jobs, writes them as bash, and
+submits them.
 
 Full documentation: <https://papadopoulos-lab.github.io/batchit/>
 
@@ -61,6 +62,7 @@ Three things happened:
 | Write one object to one file atomically, with no dispatch at all | `write_qs2_atomically()` |
 | Describe one Slurm job | `slurm_it()` |
 | Write a chain of Slurm jobs as bash files | `slurm_write()` |
+| Submit a written chain of Slurm jobs | `slurm_submit()` |
 
 The first four take an `fn` argument: the function to run once per item. The
 first three accept an inline function, or a function named in an installed
@@ -72,10 +74,12 @@ dispatched. `stream_from_parent_and_write_files_atomically()` accepts only the
 The two file-writing functions guarantee that **a failed or interrupted item
 never leaves a half-written file at its final path**.
 
-`slurm_it()` and `slurm_write()` take neither `fn` nor `items`. `slurm_it()`
-describes one Slurm job. `slurm_write()` turns a list of them into one bash file
-per job, plus a `submit.sh` that chains them with `--dependency=afterok`.
-**batchit submits nothing.** You read `submit.sh`, then you run it yourself.
+`slurm_it()`, `slurm_write()` and `slurm_submit()` take neither `fn` nor
+`items`. `slurm_it()` describes one Slurm job. `slurm_write()` turns a list of
+them into one bash file per job, plus a `submit.sh` that chains them with
+`--dependency=afterok`. **`slurm_write()` submits nothing.** `slurm_submit()`
+runs that driver and returns the job ids. Read `submit.sh` between the two
+calls.
 
 ## Documentation
 

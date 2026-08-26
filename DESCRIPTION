@@ -1,6 +1,6 @@
 Package: batchit
 Title: Run Long R Work Across Processes or a Scheduler
-Version: 26.8.26
+Version: 26.8.26.1
 Authors@R:
     c(
       person(
@@ -26,10 +26,11 @@ Description: Runs one R function once per item in a list of inputs, each call in
     session's own child processes. One starts a fresh process per item via
     'processx', where process exit is what reclaims memory. The other is a lazy
     producer with bounded backpressure over 'mirai' daemons, for items generated
-    on demand. Work too long for one session goes to a scheduler instead. A
-    separate pair of functions describes a chain of 'Slurm' jobs and writes the
-    job scripts, plus a driver that submits them. batchit submits nothing: a
-    person runs the driver.
+    on demand. Work too long for one session goes to a scheduler instead. Three
+    functions describe a chain of 'Slurm' jobs, write the job scripts plus a
+    driver that submits them, and run that driver. The call that writes the
+    chain submits nothing. Submission is a separate call, so a person can read
+    the driver first.
 Depends: R (>= 4.1.0)
 License: MIT + file LICENSE
 URL: https://papadopoulos-lab.github.io/batchit/, https://github.com/papadopoulos-lab/batchit
