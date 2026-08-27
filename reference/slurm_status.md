@@ -134,8 +134,8 @@ an error.
 `MaxRSS` is empty for every job on Slurm 25.11.2, and a blank memory
 column reads as "the job used no memory".
 [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
-writes the real peak into each job's own `.out` file, from
-`/sys/fs/cgroup/memory.peak` with a `VmHWM` fallback. Read it there.
+writes the real peak into each job's own `.out` file, from the cgroup v2
+counter of the job's own cgroup. Read it there.
 
 ## See also
 

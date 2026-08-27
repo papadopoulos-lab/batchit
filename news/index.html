@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.28</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.29</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,15 @@
       <small>Source: <a href="https://github.com/papadopoulos-lab/batchit/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="26.8.29" id="batchit-26829">batchit 26.8.29<a class="anchor" aria-label="anchor" href="#batchit-26829"></a></h2>
+<ul><li>
+<strong>A generated Slurm job now derives its own peak-memory counter, and reports no number when it cannot read one.</strong> The job read <code>/sys/fs/cgroup/memory.peak</code>, which is the root cgroup and is not readable inside a Slurm job. Every job therefore took the <code>VmHWM</code> fallback, which measures the wrapper shell. Measured on this box: a job that held 2,000,000,000 bytes in a child R process reported <code>batchit_vmhwm_kb 4744</code>, and now reports <code>batchit_memory_peak_bytes 2048122880</code>.</li>
+<li>
+<strong>The <code>VmHWM</code> fallback is gone.</strong> A job that cannot read a counter prints <code>batchit_peak_memory_unavailable</code>. A wrong number prints under the same heading a right one uses.</li>
+<li>
+<strong><code>batchit.memory_peak_path</code> defaults to <code>NULL</code>.</strong> It named the hardcoded counter, so a set option could not be told from the default. An explicit path still wins over the derivation.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="26.8.28" id="batchit-26828">batchit 26.8.28<a class="anchor" aria-label="anchor" href="#batchit-26828"></a></h2>
 <ul><li>

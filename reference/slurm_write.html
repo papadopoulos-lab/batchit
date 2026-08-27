@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.28</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.29</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -82,10 +82,16 @@ A job file runs under Slurm and knows nothing about the chain.</p>
 <li><p>A start timestamp, before the job body.</p></li>
 <li><p>Peak memory, read on exit.</p></li>
 <li><p>An end timestamp and the exit code, from an <code>EXIT</code> trap.</p></li>
-</ol><p>The option <code>batchit.memory_peak_path</code> names the file item 3 reads. It
-defaults to the cgroup v2 counter, <code>/sys/fs/cgroup/memory.peak</code>. A job that
-cannot read that file reports <code>VmHWM</code> from <code>/proc/self/status</code> instead. Set
-the option where the cluster keeps the counter somewhere else.</p>
+</ol><p>Item 3 reads the cgroup v2 counter of the job's own cgroup. The job derives
+that path at run time from <code>/proc/self/cgroup</code>. The root counter
+<code>/sys/fs/cgroup/memory.peak</code> is not readable inside a Slurm job.</p>
+<p>A job that cannot read its counter prints <code>batchit_peak_memory_unavailable</code>.
+It reports no number. batchit reads no second counter. <code>VmHWM</code> from
+<code>/proc/self/status</code> measures the job's own shell. It read 4,744 kB against a
+payload that held 2,000,000,000 bytes in a child R process.</p>
+<p>The option <code>batchit.memory_peak_path</code> names an explicit counter and turns
+the derivation off. Set it where the cluster keeps the counter somewhere
+else.</p>
 <p>The trap captures the exit status in its first statement. So the job
 reports the status its body exited with, and not the status of the trap's
 own work.</p>

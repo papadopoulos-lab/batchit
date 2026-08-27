@@ -11,7 +11,7 @@ a written chain for that chain alone."><meta property="og:image" content="https:
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.28</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.29</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -161,8 +161,8 @@ error.</p>
 
 <p><code>MaxRSS</code> is empty for every job on Slurm 25.11.2, and a blank memory column
 reads as "the job used no memory". <code><a href="slurm_write.html">slurm_write()</a></code> writes the real peak into
-each job's own <code>.out</code> file, from <code>/sys/fs/cgroup/memory.peak</code> with a <code>VmHWM</code>
-fallback. Read it there.</p>
+each job's own <code>.out</code> file, from the cgroup v2 counter of the job's own
+cgroup. Read it there.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
