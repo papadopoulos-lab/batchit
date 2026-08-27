@@ -1,6 +1,6 @@
 # Changelog
 
-## batchit 26.8.27.1
+## batchit 26.8.28
 
 - **[`inside_slurm_job()`](https://papadopoulos-lab.github.io/batchit/reference/inside_slurm_job.md)
   reports whether Slurm started this R process.** A script that submits
