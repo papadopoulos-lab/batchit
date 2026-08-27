@@ -1,4 +1,4 @@
-# batchit 26.8.27.1
+# batchit 26.8.28
 
 - **`inside_slurm_job()` reports whether Slurm started this R process.** A
   script that submits itself needs the answer. Without it the submitting
