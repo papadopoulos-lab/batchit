@@ -61,11 +61,11 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Richard Aubrey White \email{hello@rwhite.no} (\href{https://orcid.org/0000-0002-6747-1726}{ORCID})
+\strong{Maintainer}: Richard Aubrey White \email{hello@rwhite.no} (\href{https://orcid.org/0000-0002-6747-1726}{ORCID}) [copyright holder]
 
 Authors:
 \itemize{
-  \item Richard Aubrey White \email{hello@rwhite.no} (\href{https://orcid.org/0000-0002-6747-1726}{ORCID})
+  \item Richard Aubrey White \email{hello@rwhite.no} (\href{https://orcid.org/0000-0002-6747-1726}{ORCID}) [copyright holder]
 }
 
 }

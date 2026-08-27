@@ -2,7 +2,7 @@
 # becomes executable shell in slurm_write(), so every rejection case below is
 # an injection that would otherwise reach a submitted job.
 #
-# The blocks map one-to-one onto the validation rules in R/slurm.R, so a
+# The blocks map one-to-one onto the validation rules in R/slurm_it.R, so a
 # deleted branch there fails a named block here rather than a scattered set.
 
 ok_args <- list(

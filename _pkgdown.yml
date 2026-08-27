@@ -78,7 +78,13 @@ reference:
     one job description. `slurm_write()` turns a list of them into one bash file
     per job, plus the `submit.sh` driver, and it submits nothing.
     `slurm_submit()` runs that driver and returns the job ids, named by stage.
+    `slurm_status()` reports what the live queue and the accounting database
+    say about those jobs. `inside_slurm_job()` reports whether this R process
+    runs inside a Slurm job, which is what a self-submitting script needs to
+    know.
   contents:
   - slurm_it
   - slurm_write
   - slurm_submit
+  - slurm_status
+  - inside_slurm_job
