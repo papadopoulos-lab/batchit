@@ -1,5 +1,23 @@
 # Changelog
 
+## batchit 26.8.27.1
+
+- **[`inside_slurm_job()`](https://papadopoulos-lab.github.io/batchit/reference/inside_slurm_job.md)
+  reports whether Slurm started this R process.** A script that submits
+  itself needs the answer. Without it the submitting branch runs inside
+  the job as well, and the job submits itself again.
+- **[`slurm_status()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_status.md)
+  reports what the scheduler says about a job chain.** It unions
+  `squeue`, which alone carries the pending reason, with `sacct`, which
+  alone reports a job that finished. `slurm_status(dir)` reads the job
+  names off the `.sh` files a chain wrote, so it needs no R session from
+  the submission.
+- **[`slurm_status()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_status.md)
+  errors when it cannot reach the scheduler, and never returns an empty
+  result.** `sacct` defaults to the jobs that started today and returns
+  no rows for anything older, so every call here passes `-S`. An absent
+  command, a non-zero exit and an unreadable line are each an error.
+
 ## batchit 26.8.27
 
 - **[`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)

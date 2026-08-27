@@ -64,9 +64,9 @@ Useful links:
 ## Author
 
 **Maintainer**: Richard Aubrey White <hello@rwhite.no>
-([ORCID](https://orcid.org/0000-0002-6747-1726))
+([ORCID](https://orcid.org/0000-0002-6747-1726)) \[copyright holder\]
 
 Authors:
 
 - Richard Aubrey White <hello@rwhite.no>
-  ([ORCID](https://orcid.org/0000-0002-6747-1726))
+  ([ORCID](https://orcid.org/0000-0002-6747-1726)) \[copyright holder\]

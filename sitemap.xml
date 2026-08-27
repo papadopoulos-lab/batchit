@@ -9,11 +9,13 @@
 <url><loc>https://papadopoulos-lab.github.io/batchit/news/index.html</loc></url>
 <url><loc>https://papadopoulos-lab.github.io/batchit/reference/batchit-package.html</loc></url>
 <url><loc>https://papadopoulos-lab.github.io/batchit/reference/index.html</loc></url>
+<url><loc>https://papadopoulos-lab.github.io/batchit/reference/inside_slurm_job.html</loc></url>
 <url><loc>https://papadopoulos-lab.github.io/batchit/reference/package_function.html</loc></url>
 <url><loc>https://papadopoulos-lab.github.io/batchit/reference/run.html</loc></url>
 <url><loc>https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.html</loc></url>
 <url><loc>https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.html</loc></url>
 <url><loc>https://papadopoulos-lab.github.io/batchit/reference/slurm_it.html</loc></url>
+<url><loc>https://papadopoulos-lab.github.io/batchit/reference/slurm_status.html</loc></url>
 <url><loc>https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.html</loc></url>
 <url><loc>https://papadopoulos-lab.github.io/batchit/reference/slurm_write.html</loc></url>
 <url><loc>https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.html</loc></url>

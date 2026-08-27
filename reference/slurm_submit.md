@@ -80,7 +80,9 @@ place cannot disagree with itself.
 section "Slurm: write a chain of jobs".
 
 Other slurm:
+[`inside_slurm_job()`](https://papadopoulos-lab.github.io/batchit/reference/inside_slurm_job.md),
 [`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md),
+[`slurm_status()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_status.md),
 [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md)
 
 ## Examples

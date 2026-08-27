@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.27</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.27.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -110,7 +110,7 @@
       </dl></div><div class="section level2">
       <h2 id="running-a-chain-of-slurm-jobs">Running a chain of Slurm jobs<a class="anchor" aria-label="anchor" href="#running-a-chain-of-slurm-jobs"></a></h2>
 
-      <div class="section-desc"><p>The route for work too long to sit in one R session. <code><a href="../reference/slurm_it.html">slurm_it()</a></code> validates one job description. <code><a href="../reference/slurm_write.html">slurm_write()</a></code> turns a list of them into one bash file per job, plus the <code>submit.sh</code> driver, and it submits nothing. <code><a href="../reference/slurm_submit.html">slurm_submit()</a></code> runs that driver and returns the job ids, named by stage.</p></div>
+      <div class="section-desc"><p>The route for work too long to sit in one R session. <code><a href="../reference/slurm_it.html">slurm_it()</a></code> validates one job description. <code><a href="../reference/slurm_write.html">slurm_write()</a></code> turns a list of them into one bash file per job, plus the <code>submit.sh</code> driver, and it submits nothing. <code><a href="../reference/slurm_submit.html">slurm_submit()</a></code> runs that driver and returns the job ids, named by stage. <code><a href="../reference/slurm_status.html">slurm_status()</a></code> reports what the live queue and the accounting database say about those jobs. <code><a href="../reference/inside_slurm_job.html">inside_slurm_job()</a></code> reports whether this R process runs inside a Slurm job, which is what a self-submitting script needs to know.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -137,6 +137,20 @@
 
         </dt>
         <dd>Submit a written Slurm job chain</dd>
+
+        <dt>
+
+          <code><a href="slurm_status.html">slurm_status()</a></code>
+
+        </dt>
+        <dd>Report what Slurm says about a job chain</dd>
+
+        <dt>
+
+          <code><a href="inside_slurm_job.html">inside_slurm_job()</a></code>
+
+        </dt>
+        <dd>Is this R process inside a Slurm job?</dd>
       </dl></div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

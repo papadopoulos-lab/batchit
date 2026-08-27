@@ -63,6 +63,12 @@ turns a list of them into one bash file per job, plus the `submit.sh`
 driver, and it submits nothing.
 [`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
 runs that driver and returns the job ids, named by stage.
+[`slurm_status()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_status.md)
+reports what the live queue and the accounting database say about those
+jobs.
+[`inside_slurm_job()`](https://papadopoulos-lab.github.io/batchit/reference/inside_slurm_job.md)
+reports whether this R process runs inside a Slurm job, which is what a
+self-submitting script needs to know.
 
 - [`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md)
   : Describe one Slurm job
@@ -70,3 +76,7 @@ runs that driver and returns the job ids, named by stage.
   : Write a Slurm job chain
 - [`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)
   : Submit a written Slurm job chain
+- [`slurm_status()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_status.md)
+  : Report what Slurm says about a job chain
+- [`inside_slurm_job()`](https://papadopoulos-lab.github.io/batchit/reference/inside_slurm_job.md)
+  : Is this R process inside a Slurm job?

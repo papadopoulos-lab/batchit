@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.27</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.27.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,15 @@
       <small>Source: <a href="https://github.com/papadopoulos-lab/batchit/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="26.8.27.1" id="batchit-268271">batchit 26.8.27.1<a class="anchor" aria-label="anchor" href="#batchit-268271"></a></h2>
+<ul><li>
+<strong><code><a href="../reference/inside_slurm_job.html">inside_slurm_job()</a></code> reports whether Slurm started this R process.</strong> A script that submits itself needs the answer. Without it the submitting branch runs inside the job as well, and the job submits itself again.</li>
+<li>
+<strong><code><a href="../reference/slurm_status.html">slurm_status()</a></code> reports what the scheduler says about a job chain.</strong> It unions <code>squeue</code>, which alone carries the pending reason, with <code>sacct</code>, which alone reports a job that finished. <code>slurm_status(dir)</code> reads the job names off the <code>.sh</code> files a chain wrote, so it needs no R session from the submission.</li>
+<li>
+<strong><code><a href="../reference/slurm_status.html">slurm_status()</a></code> errors when it cannot reach the scheduler, and never returns an empty result.</strong> <code>sacct</code> defaults to the jobs that started today and returns no rows for anything older, so every call here passes <code>-S</code>. An absent command, a non-zero exit and an unreadable line are each an error.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="26.8.27" id="batchit-26827">batchit 26.8.27<a class="anchor" aria-label="anchor" href="#batchit-26827"></a></h2>
 <ul><li>
