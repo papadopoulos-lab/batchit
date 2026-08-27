@@ -26,12 +26,12 @@
     )
   }
   ok <- TRUE
-  invisible(path)
+  return(invisible(path))
 }
 
 #' @noRd
 .batch_read_envelope <- function(path) {
-  qs2::qs_read(path)
+  return(qs2::qs_read(path))
 }
 
 #' Extract a condition's message without ever throwing
@@ -43,7 +43,10 @@
 #' condition from untrusted code to text.
 #' @noRd
 .batch_condition_message <- function(e) {
-  tryCatch(conditionMessage(e), error = function(e2) "<unprintable condition>")
+  return(tryCatch(
+    conditionMessage(e),
+    error = function(e2) "<unprintable condition>"
+  ))
 }
 
 #' Validate the STRUCTURE of an input envelope (not its arguments)
@@ -404,7 +407,7 @@
   if (!is.list(env[["args"]])) {
     stop(".batch envelope args is not a list", call. = FALSE)
   }
-  invisible(TRUE)
+  return(invisible(TRUE))
 }
 
 #' Build a dispatch input envelope
@@ -457,7 +460,7 @@
   # exact `[[`, never S3 dispatch, so the class is inert on the read path: no
   # package needs to be loaded to deserialize or structurally validate it
   # (DESIGN.md section 5).
-  structure(
+  return(structure(
     list(
       protocol = .BATCH_PROTOCOL,
       meta = list(
@@ -480,7 +483,7 @@
       args = args
     ),
     class = "batch_envelope"
-  )
+  ))
 }
 
 #' Print a `batch_envelope` (debugging only)
@@ -526,5 +529,5 @@ print.batch_envelope <- function(x, ...) {
   if (!is.null(meta[["dev_path"]])) {
     cat(sprintf("  dev_path: %s\n", meta[["dev_path"]]))
   }
-  invisible(x)
+  return(invisible(x))
 }

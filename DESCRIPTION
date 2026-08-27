@@ -1,6 +1,6 @@
 Package: batchit
 Title: Run Long R Work Across Processes or a Scheduler
-Version: 26.8.26.1
+Version: 26.8.27
 Authors@R:
     c(
       person(

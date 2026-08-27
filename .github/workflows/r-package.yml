@@ -15,3 +15,12 @@ jobs:
     with:
       # Pinned: RcppParallel 6.1.1 dropped a TBB symbol stringfish 0.19.0 references, so qs2 dies at dyn.load. This snapshot predates it.
       cran: https://packagemanager.posit.co/cran/__linux__/noble/2026-07-23
+
+      # 118 is the measured ceiling in R/ today. .batch_check_envelope() runs
+      # 118 against lintr's default of 15, and eight more functions sit
+      # between 17 and 101. Do not round this number up. It is exact, so the
+      # gate permits today's worst case and fails on any increase. A reduction
+      # to 15 needs a rewrite of the envelope validator, the result handler
+      # and the commit engine. That is separate work.
+      max-cyclocomp: 118
+

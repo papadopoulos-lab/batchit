@@ -98,10 +98,10 @@
   is_base <- vapply(
     candidates,
     function(nm) {
-      isTRUE(tryCatch(
+      return(isTRUE(tryCatch(
         exists(nm, envir = baseenv(), inherits = FALSE),
         error = function(e) FALSE
-      ))
+      )))
     },
     logical(1)
   )
@@ -124,7 +124,7 @@
       call. = FALSE
     )
   }
-  invisible(TRUE)
+  return(invisible(TRUE))
 }
 
 #' Rebase an accepted adhoc closure onto `baseenv()` (design section 6, mandatory)
@@ -149,7 +149,7 @@
   # constant) stay documented blind spots (design section 6), not enforced.
   attributes(fn) <- NULL
   environment(fn) <- baseenv()
-  fn
+  return(fn)
 }
 
 #' Validate one adhoc item's args against the closure's OWN formals
@@ -170,5 +170,5 @@
 ) {
   loc <- if (is.null(id)) "" else sprintf(" [item '%s']", id)
   lead <- sprintf(".batch %s-validation%s: <adhoc fn>", where, loc)
-  .batch_validate_item_against_formals(formal_names, lead, args)
+  return(.batch_validate_item_against_formals(formal_names, lead, args))
 }

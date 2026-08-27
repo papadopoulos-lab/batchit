@@ -34,7 +34,7 @@
     target$package,
     target$symbol
   )
-  .batch_validate_item_against_formals(target$formal_names, lead, args)
+  return(.batch_validate_item_against_formals(target$formal_names, lead, args))
 }
 
 #' The formal-name-schema core of item validation. Two callers share it.
@@ -99,7 +99,7 @@
       call. = FALSE
     )
   }
-  invisible(TRUE)
+  return(invisible(TRUE))
 }
 
 #' Derive stable per-item ids for `run()`/`run_and_collect()` (item names, else index)
@@ -130,7 +130,7 @@
       call. = FALSE
     )
   }
-  ids
+  return(ids)
 }
 
 #' Validate an explicit id vector for `stream_from_parent_and_write_files_atomically()`
@@ -151,7 +151,7 @@
       call. = FALSE
     )
   }
-  ids
+  return(ids)
 }
 
 #' Validate the `timeout` config -- a single positive number of seconds, or Inf
@@ -181,7 +181,7 @@
       call. = FALSE
     )
   }
-  as.numeric(timeout)
+  return(as.numeric(timeout))
 }
 
 #' Validate the `collect` flag -- a single TRUE/FALSE
@@ -193,5 +193,5 @@
       call. = FALSE
     )
   }
-  collect
+  return(collect)
 }

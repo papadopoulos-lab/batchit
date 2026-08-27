@@ -28,7 +28,7 @@
       nonce <<- gsub("[^[:alnum:]]", "", basename(tempfile(pattern = "")))
     }
     i <<- i + 1L
-    sprintf(".batch_stream_%s_%d", nonce, i)
+    return(sprintf(".batch_stream_%s_%d", nonce, i))
   }
 })
 
@@ -264,12 +264,12 @@ stream_from_parent_and_write_files_atomically <- function(
     .batch_validate_output_map(outputs[[i]], where = "parent", id = ids[i])
   }
   outputs <- lapply(seq_len(n), function(i) {
-    .batch_validate_output_paths(outputs[[i]], ids[i])
+    return(.batch_validate_output_paths(outputs[[i]], ids[i]))
   })
   markers <- vapply(
     seq_len(n),
     function(i) {
-      .batch_task_marker_path(outputs[[i]], ids[i])
+      return(.batch_task_marker_path(outputs[[i]], ids[i]))
     },
     character(1)
   )
@@ -403,13 +403,13 @@ stream_from_parent_and_write_files_atomically <- function(
     inflight[[1L]] <<- NULL
     n_done <<- n_done + 1L
     if (!is.null(p)) {
-      p(
+      return(p(
         message = if (is.null(label)) {
           as.character(item$id)
         } else {
           paste(label, item$id)
         }
-      )
+      ))
     }
   }
 
@@ -452,5 +452,5 @@ stream_from_parent_and_write_files_atomically <- function(
   }
 
   names(results) <- as.character(ids)
-  results
+  return(results)
 }

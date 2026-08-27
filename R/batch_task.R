@@ -66,7 +66,7 @@
       call. = FALSE
     )
   }
-  unname(outputs[ids])
+  return(unname(outputs[ids]))
 }
 
 #' Validate one item's output map STRUCTURE (design DESIGN.md section 4.1)
@@ -121,13 +121,13 @@
       call. = FALSE
     )
   }
-  invisible(TRUE)
+  return(invisible(TRUE))
 }
 
 #' Is `path` an absolute path (POSIX, or a Windows drive-letter path)?
 #' @noRd
 .batch_is_absolute_path <- function(path) {
-  grepl("^(/|[A-Za-z]:[\\\\/])", path)
+  return(grepl("^(/|[A-Za-z]:[\\\\/])", path))
 }
 
 #' Is `path` a symlink (dangling or not)?
@@ -142,7 +142,7 @@
 #' @noRd
 .batch_is_symlink <- function(path) {
   link <- suppressWarnings(Sys.readlink(path))
-  !is.na(link) && nzchar(link)
+  return(!is.na(link) && nzchar(link))
 }
 
 #' Validate + normalize one item's output paths (design DESIGN.md 4.1)
@@ -228,7 +228,7 @@
     }
     out[[nm]] <- norm
   }
-  out
+  return(out)
 }
 
 #' Derive an item's marker path deterministically (design DESIGN.md 4.6)
@@ -241,7 +241,7 @@
 #' @noRd
 .batch_task_marker_path <- function(normalized_map, id) {
   first_dir <- dirname(sort(unname(normalized_map))[1L])
-  file.path(first_dir, paste0(".batchit__", id))
+  return(file.path(first_dir, paste0(".batchit__", id)))
 }
 
 #' Invocation-wide output/marker collision check (design DESIGN.md 4.1, 4.6)
@@ -272,7 +272,7 @@
       call. = FALSE
     )
   }
-  invisible(TRUE)
+  return(invisible(TRUE))
 }
 
 #' A high-entropy per-dispatch attempt token
@@ -289,7 +289,7 @@
 #' session temp state).
 #' @noRd
 .batch_new_attempt_token <- function() {
-  gsub("[^[:alnum:]]", "", basename(tempfile(pattern = "")))
+  return(gsub("[^[:alnum:]]", "", basename(tempfile(pattern = ""))))
 }
 
 #' Best-effort PARENT-side sweep of one item's own commit temps
@@ -347,7 +347,7 @@
     )
     if (length(leftover) > 0L) unlink(leftover, force = TRUE)
   }
-  invisible(TRUE)
+  return(invisible(TRUE))
 }
 
 # --- child-side commit (design DESIGN.md section 4.3) ----------------------
@@ -368,7 +368,7 @@
       call. = FALSE
     )
   }
-  invisible(TRUE)
+  return(invisible(TRUE))
 }
 
 # --- standalone atomic qs2 writer -------------------------------------------
@@ -455,10 +455,16 @@ write_qs2_atomically <- function(object, path, ...) {
   # engine's single rename point and hard-codes a "batch commit:" message,
   # which a standalone save must not emit.
   if (!file.rename(tmp, path)) {
-    stop("write_qs2_atomically(): could not rename ", tmp, " -> ", path)
+    stop(
+      "write_qs2_atomically(): could not rename ",
+      tmp,
+      " -> ",
+      path,
+      call. = FALSE
+    )
   }
   ok <- TRUE
-  invisible(path)
+  return(invisible(path))
 }
 
 # --- staged_writer scoped accessor (design DESIGN.md section 4.4) ----------
@@ -485,7 +491,7 @@ write_qs2_atomically <- function(object, path, ...) {
       tmpdir = dirname(final)
     )
   }
-  stage
+  return(stage)
 }
 
 # One package-level environment holding the CURRENT staged_writer run's
@@ -515,7 +521,7 @@ write_qs2_atomically <- function(object, path, ...) {
   )
   .batch_stage_env$active <- TRUE
   .batch_stage_env$paths <- paths
-  invisible(prior)
+  return(invisible(prior))
 }
 
 #' Exit staged_writer scope, restoring the PRIOR `{active, paths}` state.
@@ -534,7 +540,7 @@ write_qs2_atomically <- function(object, path, ...) {
 ) {
   .batch_stage_env$active <- prior$active
   .batch_stage_env$paths <- prior$paths
-  invisible(NULL)
+  return(invisible(NULL))
 }
 
 #' Get the path to write one declared output to, inside a "staged_writer" function
@@ -634,7 +640,7 @@ where_to_write_output <- function(name) {
       call. = FALSE
     )
   }
-  paths[[name]]
+  return(paths[[name]])
 }
 
 #' Child-side declared-output commit (design DESIGN.md section 4.3)
@@ -850,7 +856,7 @@ where_to_write_output <- function(name) {
   }
 
   ok <- TRUE
-  list(committed = outputs, attempt = attempt)
+  return(list(committed = outputs, attempt = attempt))
 }
 
 # --- frontend: run_and_write_files_atomically() ------------------------------
@@ -1184,12 +1190,12 @@ run_and_write_files_atomically <- function(
     .batch_validate_output_map(outputs[[i]], where = "parent", id = ids[i])
   }
   outputs <- lapply(seq_len(n_items), function(i) {
-    .batch_validate_output_paths(outputs[[i]], ids[i])
+    return(.batch_validate_output_paths(outputs[[i]], ids[i]))
   })
   markers <- vapply(
     seq_len(n_items),
     function(i) {
-      .batch_task_marker_path(outputs[[i]], ids[i])
+      return(.batch_task_marker_path(outputs[[i]], ids[i]))
     },
     character(1)
   )
@@ -1224,14 +1230,14 @@ run_and_write_files_atomically <- function(
   input_paths <- vapply(
     seq_len(n_items),
     function(i) {
-      tempfile(pattern = paste0("batch_in_", i, "_"), fileext = ".qs2")
+      return(tempfile(pattern = paste0("batch_in_", i, "_"), fileext = ".qs2"))
     },
     character(1)
   )
   output_paths <- vapply(
     seq_len(n_items),
     function(i) {
-      tempfile(pattern = paste0("batch_out_", i, "_"), fileext = ".qs2")
+      return(tempfile(pattern = paste0("batch_out_", i, "_"), fileext = ".qs2"))
     },
     character(1)
   )
@@ -1240,7 +1246,7 @@ run_and_write_files_atomically <- function(
   log_paths <- vapply(
     seq_len(n_items),
     function(i) {
-      tempfile(pattern = paste0("batch_log_", i, "_"), fileext = ".log")
+      return(tempfile(pattern = paste0("batch_log_", i, "_"), fileext = ".log"))
     },
     character(1)
   )
@@ -1335,7 +1341,7 @@ run_and_write_files_atomically <- function(
       env = worker_env,
       cleanup_tree = TRUE
     )
-    list(proc = proc, idx = idx, started = Sys.time())
+    return(list(proc = proc, idx = idx, started = Sys.time()))
   }
 
   # A worker failed -- sweep any commit temps this item's own (killed or
@@ -1381,14 +1387,14 @@ run_and_write_files_atomically <- function(
     envelope <- tryCatch(
       .batch_read_envelope(path),
       error = function(e) {
-        .fail(
+        return(.fail(
           entry,
           sprintf(
             "wrote an unreadable result envelope (%s): %s",
             path,
             conditionMessage(e)
           )
-        )
+        ))
       }
     )
     insp <- if (identical(fn_kind, "package")) {
@@ -1413,7 +1419,7 @@ run_and_write_files_atomically <- function(
       .fail(entry, insp$reason)
     }
     .batch_surface_warnings(insp$warnings, ids[idx])
-    insp$value
+    return(insp$value)
   }
 
   repeat {
@@ -1472,5 +1478,5 @@ run_and_write_files_atomically <- function(
   }
 
   names(results) <- ids
-  results
+  return(results)
 }

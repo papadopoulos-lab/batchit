@@ -17,7 +17,7 @@
 #' @noRd
 .batch_fixture_sleep <- function(seconds) {
   Sys.sleep(seconds)
-  TRUE
+  return(TRUE)
 }
 
 # Sleeps, then echoes x. Lets a test force a specific COMPLETION order across
@@ -27,7 +27,7 @@
 #' @noRd
 .batch_fixture_slow_echo <- function(x, seconds) {
   Sys.sleep(seconds)
-  x
+  return(x)
 }
 
 #' @noRd
@@ -45,15 +45,15 @@
 # carry that warning back to the parent, not lose it.
 #' @noRd
 .batch_fixture_warn <- function(x) {
-  warning("fixture warning about ", x)
-  x
+  warning("fixture warning about ", x, call. = FALSE)
+  return(x)
 }
 
 # Returns a large object. Used to check that collect = FALSE drops the value
 # before it is ever put into the result envelope (the shape-A memory guarantee).
 #' @noRd
 .batch_fixture_big <- function(n) {
-  rep_len(42.0, n)
+  return(rep_len(42.0, n))
 }
 
 # Writes ~n_kb KB to EACH of stdout and stderr. Exercises the deadlock class that
@@ -67,7 +67,7 @@
     cat(line, "\n", sep = "", file = stdout())
     cat(line, "\n", sep = "", file = stderr())
   }
-  invisible(NULL)
+  return(invisible(NULL))
 }
 
 # --- Phase 6' Unit 1 fixtures: declared-output commit (run_and_write_files_atomically()) --------
@@ -80,19 +80,19 @@
 # "primary"/"secondary").
 #' @noRd
 .batch_fixture_task_ok <- function(x) {
-  list(primary = x, secondary = x * 10)
+  return(list(primary = x, secondary = x * 10))
 }
 
 # Missing a declared name ("secondary" never returned).
 #' @noRd
 .batch_fixture_task_missing_name <- function(x) {
-  list(primary = x)
+  return(list(primary = x))
 }
 
 # An UNDECLARED extra name alongside the two declared ones.
 #' @noRd
 .batch_fixture_task_extra_name <- function(x) {
-  list(primary = x, secondary = x * 10, surprise = "unexpected")
+  return(list(primary = x, secondary = x * 10, surprise = "unexpected"))
 }
 
 # Errors before returning anything -- no output could ever have been prepared.
@@ -106,7 +106,7 @@
 # declared names at once.
 #' @noRd
 .batch_fixture_task_empty <- function(x) {
-  list()
+  return(list())
 }
 
 # Sleeps `seconds` (well past any short test timeout), THEN returns the
@@ -117,7 +117,7 @@
 #' @noRd
 .batch_fixture_task_slow <- function(x, seconds) {
   Sys.sleep(seconds)
-  list(primary = x, secondary = x * 10)
+  return(list(primary = x, secondary = x * 10))
 }
 
 # Writes a file at `path` as a SIDE EFFECT, then returns. Exists purely to
@@ -129,7 +129,7 @@
 #' @noRd
 .batch_fixture_side_effect_writer <- function(path) {
   writeLines("ran", path)
-  list(a = "ran")
+  return(list(a = "ran"))
 }
 
 # --- Phase 6' Unit 2 fixtures: declared-output commit, staged_writer style --
@@ -148,14 +148,14 @@
 .batch_fixture_task_staged_ok <- function(x) {
   qs2::qs_save(x, where_to_write_output("primary"))
   qs2::qs_save(x * 10, where_to_write_output("secondary"))
-  list(this_return_value_is_ignored_by_staged_writer = TRUE)
+  return(list(this_return_value_is_ignored_by_staged_writer = TRUE))
 }
 
 # Writes only ONE of the two declared outputs -- "forgets" secondary.
 #' @noRd
 .batch_fixture_task_staged_missing <- function(x) {
   qs2::qs_save(x, where_to_write_output("primary"))
-  invisible(NULL)
+  return(invisible(NULL))
 }
 
 # Writes NEITHER declared output -- the "wrote nothing at all" case, distinct
@@ -165,7 +165,7 @@
 # fail loud, with zero renames and no marker.
 #' @noRd
 .batch_fixture_task_staged_writes_nothing <- function(x) {
-  invisible(NULL)
+  return(invisible(NULL))
 }
 
 # Calls where_to_write_output() with a name that is NOT one of this item's
@@ -174,7 +174,7 @@
 #' @noRd
 .batch_fixture_task_staged_bad_name <- function(x) {
   where_to_write_output("no_such_declared_output")
-  invisible(NULL)
+  return(invisible(NULL))
 }
 
 # Sleeps `seconds` (well past any short test timeout), THEN streams both
@@ -187,7 +187,7 @@
   Sys.sleep(seconds)
   qs2::qs_save(x, where_to_write_output("primary"))
   qs2::qs_save(x * 10, where_to_write_output("secondary"))
-  invisible(NULL)
+  return(invisible(NULL))
 }
 
 # Writes ONE stage file, then errors BEFORE .batch_commit_task() is reached --
@@ -196,5 +196,5 @@
 #' @noRd
 .batch_fixture_task_staged_partial_boom <- function(x) {
   qs2::qs_save(x, where_to_write_output("primary"))
-  stop("staged target detonated after writing one stage")
+  stop("staged target detonated after writing one stage", call. = FALSE)
 }

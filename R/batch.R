@@ -196,7 +196,7 @@ package_function <- function(package, symbol, version = NULL) {
       call. = FALSE
     )
   }
-  structure(
+  return(structure(
     list(
       package = package,
       symbol = symbol,
@@ -211,7 +211,7 @@ package_function <- function(package, symbol, version = NULL) {
       formal_names = fmls
     ),
     class = "package_function"
-  )
+  ))
 }
 
 # --- bounded log tail --------------------------------------------------------
@@ -279,7 +279,7 @@ package_function <- function(package, symbol, version = NULL) {
     lines <- utils::tail(lines, n)
   }
 
-  paste(
+  return(paste(
     c(
       if (clipped) {
         sprintf("... (tail of %s; %s bytes total)", path, format(size))
@@ -287,7 +287,7 @@ package_function <- function(package, symbol, version = NULL) {
       lines
     ),
     collapse = "\n"
-  )
+  ))
 }
 
 # --- worker-script + dev-path resolution -------------------------------------
@@ -300,7 +300,7 @@ package_function <- function(package, symbol, version = NULL) {
 #' loose), and names the runner the child must load for `.batch_execute`.
 #' @noRd
 .batch_runner_package <- function() {
-  utils::packageName(environment(.batch_runner_package)) %||% "batchit"
+  return(utils::packageName(environment(.batch_runner_package)) %||% "batchit")
 }
 
 #' Validate a consumer dev path, or pass NULL through
@@ -371,7 +371,7 @@ package_function <- function(package, symbol, version = NULL) {
       call. = FALSE
     )
   }
-  dev_path
+  return(dev_path)
 }
 
 #' Locate the runner's inst/batch_worker.R (always from the RUNNER package)
@@ -395,7 +395,7 @@ package_function <- function(package, symbol, version = NULL) {
       call. = FALSE
     )
   }
-  script
+  return(script)
 }
 
 # --- shape A frontends: run() and run_and_collect() --------------------------
@@ -511,7 +511,7 @@ run <- function(
   label = NULL,
   timeout = .BATCH_DEFAULT_TIMEOUT
 ) {
-  .batch_run_impl(
+  return(.batch_run_impl(
     fn,
     items,
     n_workers,
@@ -521,7 +521,7 @@ run <- function(
     label = label,
     timeout = timeout,
     .caller = "run"
-  )
+  ))
 }
 
 #' Run a function once per item, in a fresh worker process, and collect the results
@@ -613,7 +613,7 @@ run_and_collect <- function(
   label = NULL,
   timeout = .BATCH_DEFAULT_TIMEOUT
 ) {
-  .batch_run_impl(
+  return(.batch_run_impl(
     fn,
     items,
     n_workers,
@@ -623,5 +623,5 @@ run_and_collect <- function(
     label = label,
     timeout = timeout,
     .caller = "run_and_collect"
-  )
+  ))
 }

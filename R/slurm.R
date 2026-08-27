@@ -98,7 +98,7 @@
   if (length(x) == 0L) {
     return("<empty>")
   }
-  paste(encodeString(as.character(x), quote = "\""), collapse = ", ")
+  return(paste(encodeString(as.character(x), quote = "\""), collapse = ", "))
 }
 
 #' Stop unless a value is one non-empty, non-NA string.
@@ -122,7 +122,7 @@
     )
   }
   .slurm_it_assert_nonempty(x, field)
-  invisible(x)
+  return(invisible(x))
 }
 
 #' Stop when a value carries no character a command could use.
@@ -147,7 +147,7 @@
       "argument, or as a job body that runs nothing and exits 0."
     )
   }
-  invisible(x)
+  return(invisible(x))
 }
 
 #' Stop unless a value is one non-NA `TRUE` or `FALSE`.
@@ -165,7 +165,7 @@
       .slurm_it_show(x)
     )
   }
-  invisible(x)
+  return(invisible(x))
 }
 
 #' Resolve one scalar to the text a directive will carry.
@@ -191,9 +191,9 @@
     )
   }
   if (is.numeric(x)) {
-    format(x, scientific = FALSE, trim = TRUE)
+    return(format(x, scientific = FALSE, trim = TRUE))
   } else {
-    x
+    return(x)
   }
 }
 
@@ -222,7 +222,7 @@
       why
     )
   }
-  invisible(x)
+  return(invisible(x))
 }
 
 #' Stop when a value would escape its line in generated text.
@@ -243,7 +243,7 @@
       "value would run as a command."
     )
   }
-  invisible(x)
+  return(invisible(x))
 }
 
 #' Stop when a value would break a `#SBATCH` directive at a space.
@@ -264,7 +264,7 @@
       "Slurm would read the rest as a separate option."
     )
   }
-  invisible(x)
+  return(invisible(x))
 }
 
 #' Stop unless a value is a fully named character vector with no NA.
@@ -308,7 +308,7 @@
   if (any(is.na(x))) {
     .slurm_it_stop("`", field, "` MUST hold no NA value.")
   }
-  invisible(x)
+  return(invisible(x))
 }
 
 #' Find the reserved `sbatch` keys one name would reach.
@@ -329,7 +329,7 @@
   if (nchar(key) < 2L) {
     return(character(0))
   }
-  .SLURM_IT_RESERVED_SBATCH[startsWith(.SLURM_IT_RESERVED_SBATCH, key)]
+  return(.SLURM_IT_RESERVED_SBATCH[startsWith(.SLURM_IT_RESERVED_SBATCH, key)])
 }
 
 # --- the constructor ---------------------------------------------------------
@@ -504,7 +504,7 @@ slurm_it <- function(
     )
   }
 
-  structure(
+  return(structure(
     list(
       script = script,
       name = name,
@@ -517,7 +517,7 @@ slurm_it <- function(
       sbatch = sbatch
     ),
     class = "slurm_it"
-  )
+  ))
 }
 
 # --- slurm_write(): the description becomes executable shell ------------------
@@ -568,7 +568,7 @@ slurm_it <- function(
   )
   .slurm_write_assert_string(path, "batchit.rscript_path")
   .slurm_it_assert_one_line(path, "batchit.rscript_path")
-  path
+  return(path)
 }
 
 # --- validation helpers ------------------------------------------------------
@@ -603,7 +603,7 @@ slurm_it <- function(
       "` MUST hold at least one character that is not whitespace."
     )
   }
-  invisible(x)
+  return(invisible(x))
 }
 
 #' Stop when a directory path would break a `#SBATCH` directive.
@@ -626,7 +626,7 @@ slurm_it <- function(
       "whitespace character."
     )
   }
-  invisible(x)
+  return(invisible(x))
 }
 
 #' Normalise the first argument to a list of jobs, and check the set.
@@ -677,7 +677,7 @@ slurm_it <- function(
       ".sh` in the same directory, and the job would overwrite it."
     )
   }
-  jobs
+  return(jobs)
 }
 
 # --- the generated text ------------------------------------------------------
@@ -736,7 +736,7 @@ slurm_it <- function(
       ""
     )
   }
-  lines
+  return(lines)
 }
 
 #' Build the text of one job file.
@@ -811,7 +811,7 @@ slurm_it <- function(
     strsplit(job[["script"]], "\n", fixed = TRUE)[[1]],
     ""
   )
-  c(header, preamble, gate, body)
+  return(c(header, preamble, gate, body))
 }
 
 #' Build the chain tokens for one position in the chain.
@@ -827,10 +827,10 @@ slurm_it <- function(
   if (i <= 1L) {
     return(character(0))
   }
-  c(
+  return(c(
     paste0("--dependency=afterok:\"$batchit_jid_", i - 1L, "\""),
     "--kill-on-invalid-dep=yes"
-  )
+  ))
 }
 
 #' Build the text of the driver.
@@ -884,7 +884,7 @@ slurm_it <- function(
       ""
     )
   }
-  lines
+  return(lines)
 }
 
 # --- the writer --------------------------------------------------------------
@@ -1056,7 +1056,7 @@ slurm_write <- function(x, dir) {
 
   out <- c(job_paths, driver_path)
   Sys.chmod(out, "0755")
-  invisible(out)
+  return(invisible(out))
 }
 
 # --- the preflight the driver runs before its first sbatch --------------------
@@ -1121,7 +1121,7 @@ slurm_write <- function(x, dir) {
     character(1)
   )
   states <- paste(.SLURM_WRITE_NODE_STATES_OK, collapse = " | ")
-  c(
+  return(c(
     "# --- preflight ---------------------------------------------------------",
     "# Both checks run before the first submission, so a refusal costs",
     "# seconds and leaves the queue as it was.",
@@ -1192,7 +1192,7 @@ slurm_write <- function(x, dir) {
     "  fi",
     "done",
     ""
-  )
+  ))
 }
 
 # --- the submitter -----------------------------------------------------------
@@ -1288,7 +1288,7 @@ slurm_write <- function(x, dir) {
       ". Write the chain with `slurm_write()` first."
     )
   }
-  driver
+  return(driver)
 }
 
 #' Read the job ids out of the driver's standard output.
@@ -1305,7 +1305,7 @@ slurm_write <- function(x, dir) {
   fields <- fields[lengths(fields) == 3L]
   ids <- vapply(fields, function(one) one[[3L]], character(1))
   names(ids) <- vapply(fields, function(one) one[[2L]], character(1))
-  ids
+  return(ids)
 }
 
 #' Build the message of a failed submission.
@@ -1345,7 +1345,7 @@ slurm_write <- function(x, dir) {
   } else {
     c("The driver's own message follows.", err)
   }
-  paste(c(headline, said), collapse = "\n")
+  return(paste(c(headline, said), collapse = "\n"))
 }
 
 #' Submit a written Slurm job chain
@@ -1448,5 +1448,5 @@ slurm_submit <- function(x) {
       .slurm_submit_failure(status, ids, readLines(err, warn = FALSE))
     )
   }
-  ids
+  return(ids)
 }

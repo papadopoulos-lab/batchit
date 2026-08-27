@@ -27,10 +27,10 @@
 #' @noRd
 .batch_hash_function <- function(fn) {
   stopifnot(is.function(fn))
-  digest::digest(
+  return(digest::digest(
     list(body = body(fn), formals = formals(fn)),
     algo = "xxhash64"
-  )
+  ))
 }
 
 #' Usable core count, never `NA`
@@ -50,7 +50,7 @@
   if (length(n) != 1L || is.na(n) || !is.finite(n) || n < 1L) {
     return(as.integer(fallback))
   }
-  as.integer(n)
+  return(as.integer(n))
 }
 
 #' Validate a worker count, loudly
@@ -88,5 +88,5 @@
       call. = FALSE
     )
   }
-  as.integer(n_workers)
+  return(as.integer(n_workers))
 }

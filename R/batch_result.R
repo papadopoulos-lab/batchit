@@ -57,7 +57,7 @@
   # -- a classed object with a throwing `[[`/`format` method, a field that errors
   # on access -- becomes a failure reason, so it flows through the caller's
   # uniform .fail() path rather than crashing the pool.
-  tryCatch(
+  return(tryCatch(
     .batch_inspect_result_impl(
       envelope,
       expected_id,
@@ -67,15 +67,15 @@
       expected_nonce
     ),
     error = function(e) {
-      list(
+      return(list(
         ok = FALSE,
         reason = paste0(
           "malformed result envelope: ",
           .batch_condition_message(e)
         )
-      )
+      ))
     }
-  )
+  ))
 }
 
 #' @noRd
@@ -272,12 +272,12 @@
     }
   }
 
-  list(
+  return(list(
     ok = TRUE,
     reason = NULL,
     value = envelope[["value"]],
     warnings = warnings
-  )
+  ))
 }
 
 #' Re-emit a completed item's captured warnings in the parent, tagged by id
@@ -286,5 +286,5 @@
   for (w in warnings) {
     warning(sprintf("[batch item '%s'] %s", id, w), call. = FALSE)
   }
-  invisible(NULL)
+  return(invisible(NULL))
 }

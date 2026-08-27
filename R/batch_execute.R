@@ -42,7 +42,7 @@
       call. = FALSE
     )
   }
-  target
+  return(target)
 }
 
 #' Execute one envelope in the child and build the result envelope
@@ -195,7 +195,7 @@
       }
     },
     error = function(e) {
-      list(
+      return(list(
         status = "error",
         value = NULL,
         error = list(
@@ -207,11 +207,11 @@
         ),
         warnings = character(),
         target = NULL
-      )
+      ))
     }
   )
 
-  list(
+  return(list(
     protocol = .BATCH_PROTOCOL,
     id = id,
     status = outcome$status,
@@ -219,7 +219,7 @@
     error = outcome$error,
     warnings = outcome$warnings,
     target = outcome$target
-  )
+  ))
 }
 
 # --- shape A: fresh subprocess per item, via processx ------------------------
@@ -404,14 +404,14 @@
   input_paths <- vapply(
     seq_len(n_items),
     function(i) {
-      tempfile(pattern = paste0("batch_in_", i, "_"), fileext = ".qs2")
+      return(tempfile(pattern = paste0("batch_in_", i, "_"), fileext = ".qs2"))
     },
     character(1)
   )
   output_paths <- vapply(
     seq_len(n_items),
     function(i) {
-      tempfile(pattern = paste0("batch_out_", i, "_"), fileext = ".qs2")
+      return(tempfile(pattern = paste0("batch_out_", i, "_"), fileext = ".qs2"))
     },
     character(1)
   )
@@ -424,7 +424,7 @@
   log_paths <- vapply(
     seq_len(n_items),
     function(i) {
-      tempfile(pattern = paste0("batch_log_", i, "_"), fileext = ".log")
+      return(tempfile(pattern = paste0("batch_log_", i, "_"), fileext = ".log"))
     },
     character(1)
   )
@@ -501,7 +501,7 @@
       env = worker_env,
       cleanup_tree = TRUE
     )
-    list(proc = proc, idx = idx, started = Sys.time())
+    return(list(proc = proc, idx = idx, started = Sys.time()))
   }
 
   # A worker failed -- surface its log tail, then stop (the loud error path;
@@ -541,14 +541,14 @@
     envelope <- tryCatch(
       .batch_read_envelope(path),
       error = function(e) {
-        .fail(
+        return(.fail(
           entry,
           sprintf(
             "wrote an unreadable result envelope (%s): %s",
             path,
             conditionMessage(e)
           )
-        )
+        ))
       }
     )
     insp <- if (identical(fn_kind, "package")) {
@@ -565,7 +565,7 @@
       .fail(entry, insp$reason)
     }
     .batch_surface_warnings(insp$warnings, ids[idx])
-    insp$value
+    return(insp$value)
   }
 
   repeat {
@@ -630,5 +630,5 @@
     if (length(active) > 0L) Sys.sleep(0.1)
   }
 
-  if (collect) results else invisible(NULL)
+  if (collect) return(results) else return(invisible(NULL))
 }

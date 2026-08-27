@@ -1,4 +1,4 @@
-# batchit 26.8.26.1
+# batchit 26.8.27
 
 - **`slurm_submit()` runs a written `submit.sh` and returns the job ids, named
   by stage.** It reads the `batchit_submitted` lines the driver prints.
