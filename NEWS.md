@@ -1,3 +1,19 @@
+# batchit 26.8.29
+
+- **A generated Slurm job now derives its own peak-memory counter, and reports
+  no number when it cannot read one.** The job read
+  `/sys/fs/cgroup/memory.peak`, which is the root cgroup and is not readable
+  inside a Slurm job. Every job therefore took the `VmHWM` fallback, which
+  measures the wrapper shell. Measured on this box: a job that held
+  2,000,000,000 bytes in a child R process reported `batchit_vmhwm_kb 4744`,
+  and now reports `batchit_memory_peak_bytes 2048122880`.
+- **The `VmHWM` fallback is gone.** A job that cannot read a counter prints
+  `batchit_peak_memory_unavailable`. A wrong number prints under the same
+  heading a right one uses.
+- **`batchit.memory_peak_path` defaults to `NULL`.** It named the hardcoded
+  counter, so a set option could not be told from the default. An explicit
+  path still wins over the derivation.
+
 # batchit 26.8.28
 
 - **`inside_slurm_job()` reports whether Slurm started this R process.** A

@@ -27,11 +27,6 @@
 # MUST stay in the same file as `.SLURM_WRITE_DRIVER_NAME`, below it.
 .SLURM_SUBMIT_DRIVER_FILE <- paste0(.SLURM_WRITE_DRIVER_NAME, ".sh")
 
-# The counter a job reads for peak memory, under cgroup v2. The option
-# `batchit.memory_peak_path` overrides it, for a cluster that keeps the counter
-# somewhere else.
-.SLURM_WRITE_MEMORY_PEAK_PATH <- "/sys/fs/cgroup/memory.peak"
-
 #' Name the `Rscript` the version gate runs.
 #'
 #' `R.home("bin")` names the R that writes the chain. A bare `Rscript` names
@@ -224,6 +219,61 @@
   return(lines)
 }
 
+#' Build the shell lines that record peak memory.
+#'
+#' The job reads the cgroup v2 counter of its own cgroup. It derives that path
+#' at run time from `/proc/self/cgroup`, because the root counter
+#' `/sys/fs/cgroup/memory.peak` is not readable inside a Slurm job.
+#'
+#' A job that cannot read a counter prints `batchit_peak_memory_unavailable`
+#' and reports no number. There is no fallback to `VmHWM`, which measures the
+#' job's own shell. A job that runs its work in a child process then reports a
+#' few thousand kilobytes for work that held gigabytes. That wrong number
+#' prints under the same heading a right one uses.
+#'
+#' `awk` exits 2 when `/proc/self/cgroup` is absent. The job runs under
+#' `set -e`, so `|| true` is what stops that from killing the job before its
+#' body runs.
+#'
+#' @param memory_peak_path Character(1), an explicit counter from the option
+#'   `batchit.memory_peak_path`, or NULL to derive the path.
+#' @return Character vector of shell lines.
+#' @noRd
+.slurm_write_memory_peak_lines <- function(memory_peak_path) {
+  if (is.null(memory_peak_path)) {
+    assign_path <- c(
+      "# The counter of this job's own cgroup. The root counter",
+      "# /sys/fs/cgroup/memory.peak is not readable inside a Slurm job.",
+      paste0(
+        "batchit_cgroup=$(awk -F: '$1 == \"0\" { print $3 }' ",
+        "/proc/self/cgroup 2>/dev/null || true)"
+      ),
+      "if [ -n \"$batchit_cgroup\" ]; then",
+      "  batchit_memory_peak_path=\"/sys/fs/cgroup${batchit_cgroup}/memory.peak\"",
+      "else",
+      "  batchit_memory_peak_path=\"\"",
+      "fi"
+    )
+  } else {
+    assign_path <- paste0(
+      "batchit_memory_peak_path=",
+      shQuote(memory_peak_path, type = "sh")
+    )
+  }
+  return(c(
+    assign_path,
+    "",
+    "batchit_record_peak_memory() {",
+    "  if [ -r \"$batchit_memory_peak_path\" ]; then",
+    "    printf 'batchit_memory_peak_bytes %s\\n' \\",
+    "      \"$(cat -- \"$batchit_memory_peak_path\")\"",
+    "  else",
+    "    printf 'batchit_peak_memory_unavailable\\n'",
+    "  fi",
+    "}"
+  ))
+}
+
 #' Build the text of one job file.
 #'
 #' `exclusive = FALSE` emits no line at all, which is the whole of the false
@@ -232,7 +282,8 @@
 #'
 #' @param job One `slurm_it` object.
 #' @param dir Character(1), the absolute directory the chain writes into.
-#' @param memory_peak_path Character(1), the counter the job reads on exit.
+#' @param memory_peak_path Character(1) or NULL, as
+#'   `.slurm_write_memory_peak_lines()` takes it.
 #' @return Character vector of shell lines.
 #' @noRd
 .slurm_write_job_text <- function(job, dir, memory_peak_path) {
@@ -265,19 +316,7 @@
     "",
     "printf 'batchit_start %s\\n' \"$(date -Iseconds)\"",
     "",
-    paste0("batchit_memory_peak_path=", shQuote(memory_peak_path, type = "sh")),
-    "",
-    "batchit_record_peak_memory() {",
-    "  if [ -r \"$batchit_memory_peak_path\" ]; then",
-    "    printf 'batchit_memory_peak_bytes %s\\n' \\",
-    "      \"$(cat -- \"$batchit_memory_peak_path\")\"",
-    "  elif [ -r /proc/self/status ]; then",
-    "    printf 'batchit_vmhwm_kb %s\\n' \\",
-    "      \"$(awk '/^VmHWM:/ { print $2 }' /proc/self/status)\"",
-    "  else",
-    "    printf 'batchit_peak_memory_unavailable\\n'",
-    "  fi",
-    "}",
+    .slurm_write_memory_peak_lines(memory_peak_path),
     "",
     "batchit_on_exit() {",
     "  batchit_status=$?",
@@ -394,10 +433,18 @@
 #' 3. Peak memory, read on exit.
 #' 4. An end timestamp and the exit code, from an `EXIT` trap.
 #'
-#' The option `batchit.memory_peak_path` names the file item 3 reads. It
-#' defaults to the cgroup v2 counter, `/sys/fs/cgroup/memory.peak`. A job that
-#' cannot read that file reports `VmHWM` from `/proc/self/status` instead. Set
-#' the option where the cluster keeps the counter somewhere else.
+#' Item 3 reads the cgroup v2 counter of the job's own cgroup. The job derives
+#' that path at run time from `/proc/self/cgroup`. The root counter
+#' `/sys/fs/cgroup/memory.peak` is not readable inside a Slurm job.
+#'
+#' A job that cannot read its counter prints `batchit_peak_memory_unavailable`.
+#' It reports no number. batchit reads no second counter. `VmHWM` from
+#' `/proc/self/status` measures the job's own shell. It read 4,744 kB against a
+#' payload that held 2,000,000,000 bytes in a child R process.
+#'
+#' The option `batchit.memory_peak_path` names an explicit counter and turns
+#' the derivation off. Set it where the cluster keeps the counter somewhere
+#' else.
 #'
 #' The trap captures the exit status in its first statement. So the job
 #' reports the status its body exited with, and not the status of the trap's
@@ -491,11 +538,10 @@ slurm_write <- function(x, dir) {
   jobs <- .slurm_write_jobs(x)
   .slurm_write_assert_string(dir, "dir")
   .slurm_write_assert_no_whitespace(dir, "`dir`")
-  memory_peak_path <- getOption(
-    "batchit.memory_peak_path",
-    .SLURM_WRITE_MEMORY_PEAK_PATH
-  )
-  .slurm_write_assert_string(memory_peak_path, "batchit.memory_peak_path")
+  memory_peak_path <- getOption("batchit.memory_peak_path")
+  if (!is.null(memory_peak_path)) {
+    .slurm_write_assert_string(memory_peak_path, "batchit.memory_peak_path")
+  }
 
   if (!dir.exists(dir)) {
     made <- dir.create(dir, recursive = TRUE, showWarnings = FALSE)

@@ -370,20 +370,20 @@ test_that("a satisfied require_r_package lets the job body run", {
 
 # --- peak memory, one branch at a time ---------------------------------------
 
-test_that("a job that cannot read the counter reports VmHWM", {
+test_that("a job that cannot read the counter reports no number", {
   tmp <- withr::local_tempdir()
   absent <- file.path(tmp, "absent-counter")
   expect_false(file.exists(absent))
 
   withr::local_options(batchit.memory_peak_path = absent)
   paths <- batchit::slurm_write(
-    list(ok_job("fallback")),
+    list(ok_job("unreadable")),
     file.path(tmp, "chain")
   )
-  run <- run_bash(paths[[1]], tmp, "fallback")
+  run <- run_bash(paths[[1]], tmp, "unreadable")
 
   expect_identical(run[["status"]], 0L)
-  expect_true(any(grepl("^batchit_vmhwm_kb [0-9]+$", run[["out"]])))
+  expect_true("batchit_peak_memory_unavailable" %in% run[["out"]])
   expect_identical(
     sum(grepl("batchit_memory_peak_bytes", run[["out"]], fixed = TRUE)),
     0L
@@ -400,32 +400,96 @@ test_that("a job that can read the counter reports its value", {
     list(ok_job("primary")),
     file.path(tmp, "chain")
   )
+  lines <- readLines(paths[[1]], warn = FALSE)
   run <- run_bash(paths[[1]], tmp, "primary")
 
   expect_identical(run[["status"]], 0L)
   expect_true("batchit_memory_peak_bytes 123456789" %in% run[["out"]])
   expect_true(
-    paste0("batchit_memory_peak_path='", counter, "'") %in%
-      readLines(paths[[1]], warn = FALSE)
+    paste0("batchit_memory_peak_path='", counter, "'") %in% lines
   )
-  expect_identical(
-    sum(grepl("batchit_vmhwm_kb", run[["out"]], fixed = TRUE)),
-    0L
-  )
+
+  # The explicit counter replaces the derivation. A job that carried both
+  # would read whichever line the shell assigned last.
+  expect_false(any(grepl("/proc/self/cgroup", lines, fixed = TRUE)))
 })
 
-test_that("the default job reads the cgroup v2 counter", {
+test_that("the default job derives the counter of its own cgroup", {
   tmp <- withr::local_tempdir()
   paths <- batchit::slurm_write(list(ok_job("proj_s1")), file.path(tmp, "chain"))
   lines <- readLines(paths[[1]], warn = FALSE)
 
   # The two branch tests above each set `batchit.memory_peak_path`, so this is
   # what ties the branches back to the path a real job reads. No option is set
-  # here, so the job carries the default.
+  # here, so the job derives its own.
   expect_null(getOption("batchit.memory_peak_path"))
+  expect_true(any(grepl(
+    "batchit_cgroup=$(awk -F: '$1 == \"0\" { print $3 }' /proc/self/cgroup",
+    lines,
+    fixed = TRUE
+  )))
   expect_true(
+    "  batchit_memory_peak_path=\"/sys/fs/cgroup${batchit_cgroup}/memory.peak\"" %in%
+      lines
+  )
+
+  # The root counter is not readable inside a Slurm job, measured on this
+  # box: job 45 reported `root NOT READABLE`. A job that assigned it would
+  # report the wrapper shell instead of the work.
+  expect_false(
     "batchit_memory_peak_path='/sys/fs/cgroup/memory.peak'" %in% lines
   )
+})
+
+test_that("a job whose cgroup cannot be derived reports no number", {
+  # `awk` exits 2 when /proc/self/cgroup is absent, and prints nothing when
+  # the file carries no unified `0::` line. This stub is both cases at once.
+  # The job runs under `set -e`, so it also proves the `|| true` keeps a
+  # failing `awk` from killing the job before its body runs.
+  tmp <- withr::local_tempdir()
+  bin <- file.path(tmp, "bin")
+  dir.create(bin)
+  slurm_stub_write(bin, "awk", "exit 2")
+
+  paths <- batchit::slurm_write(
+    list(ok_job("nocgroup")),
+    file.path(tmp, "chain")
+  )
+  withr::local_envvar(
+    PATH = paste(bin, Sys.getenv("PATH"), sep = .Platform$path.sep)
+  )
+  run <- run_bash(paths[[1]], tmp, "nocgroup")
+
+  expect_identical(run[["status"]], 0L)
+  expect_true("batchit_peak_memory_unavailable" %in% run[["out"]])
+  expect_identical(
+    sum(grepl("batchit_memory_peak_bytes", run[["out"]], fixed = TRUE)),
+    0L
+  )
+})
+
+test_that("no generated file mentions VmHWM, under either emitted shape", {
+  # `VmHWM` measures the shell that reads it. Job 46 on this box reported
+  # `batchit_vmhwm_kb 4744` for a body that held 2,000,000,000 bytes in a
+  # child R process. A wrong number prints under the same heading a right one
+  # uses, so no job may fall back to it.
+  tmp <- withr::local_tempdir()
+  derived <- batchit::slurm_write(
+    list(ok_job("proj_s1"), ok_job("proj_s2")),
+    file.path(tmp, "derived")
+  )
+  withr::local_options(batchit.memory_peak_path = file.path(tmp, "counter"))
+  explicit <- batchit::slurm_write(
+    list(ok_job("proj_s1")),
+    file.path(tmp, "explicit")
+  )
+
+  for (path in c(derived, explicit)) {
+    expect_false(
+      any(grepl("VmHWM", readLines(path, warn = FALSE), fixed = TRUE)),
+      info = path
+    )
+  }
 })
 
 # --- rejections --------------------------------------------------------------

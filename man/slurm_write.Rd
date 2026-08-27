@@ -43,10 +43,18 @@ Four items reach every job file, and no argument controls them.
 \item An end timestamp and the exit code, from an \code{EXIT} trap.
 }
 
-The option \code{batchit.memory_peak_path} names the file item 3 reads. It
-defaults to the cgroup v2 counter, \verb{/sys/fs/cgroup/memory.peak}. A job that
-cannot read that file reports \code{VmHWM} from \verb{/proc/self/status} instead. Set
-the option where the cluster keeps the counter somewhere else.
+Item 3 reads the cgroup v2 counter of the job's own cgroup. The job derives
+that path at run time from \verb{/proc/self/cgroup}. The root counter
+\verb{/sys/fs/cgroup/memory.peak} is not readable inside a Slurm job.
+
+A job that cannot read its counter prints \code{batchit_peak_memory_unavailable}.
+It reports no number. batchit reads no second counter. \code{VmHWM} from
+\verb{/proc/self/status} measures the job's own shell. It read 4,744 kB against a
+payload that held 2,000,000,000 bytes in a child R process.
+
+The option \code{batchit.memory_peak_path} names an explicit counter and turns
+the derivation off. Set it where the cluster keeps the counter somewhere
+else.
 
 The trap captures the exit status in its first statement. So the job
 reports the status its body exited with, and not the status of the trap's

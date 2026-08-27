@@ -106,8 +106,8 @@ error.
 
 \code{MaxRSS} is empty for every job on Slurm 25.11.2, and a blank memory column
 reads as "the job used no memory". \code{\link[=slurm_write]{slurm_write()}} writes the real peak into
-each job's own \code{.out} file, from \verb{/sys/fs/cgroup/memory.peak} with a \code{VmHWM}
-fallback. Read it there.
+each job's own \code{.out} file, from the cgroup v2 counter of the job's own
+cgroup. Read it there.
 }
 
 \examples{

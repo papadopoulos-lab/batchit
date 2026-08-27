@@ -34,7 +34,7 @@
 # job on this machine, although `jobacct_gather/linux` is configured, and that
 # is a defect in Slurm 25.11.2. A blank memory column reads as "the job used no
 # memory". `slurm_write()` writes the real peak into each job's own `.out`
-# file, from `/sys/fs/cgroup/memory.peak` with a `VmHWM` fallback.
+# file, from the cgroup v2 counter of the job's own cgroup.
 
 # --- what the two commands are asked for -------------------------------------
 
@@ -470,8 +470,8 @@
 #' @section There is no memory column:
 #' `MaxRSS` is empty for every job on Slurm 25.11.2, and a blank memory column
 #' reads as "the job used no memory". [slurm_write()] writes the real peak into
-#' each job's own `.out` file, from `/sys/fs/cgroup/memory.peak` with a `VmHWM`
-#' fallback. Read it there.
+#' each job's own `.out` file, from the cgroup v2 counter of the job's own
+#' cgroup. Read it there.
 #'
 #' @param dir The directory [slurm_write()] wrote a chain into, or `NULL` for
 #'   the overview. A directory reports that chain's own jobs, and it adds the
