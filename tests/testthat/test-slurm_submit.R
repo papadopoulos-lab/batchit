@@ -119,6 +119,23 @@ test_that("slurm_submit() keeps chain order in the ids it returns", {
   expect_identical(ids, c(s3 = "5512", s1 = "5513", s2 = "5514"))
 })
 
+test_that("slurm_submit() echoes the driver's submitted lines", {
+  # The driver writes them to a temporary file that the call deletes. Without
+  # the echo an interactive caller sees no submission at all, only the ids the
+  # call returns.
+  printed <- capture.output(ids <- run_submit(c("proj_s1", "proj_s2")))
+
+  expect_identical(ids, c(proj_s1 = "5512", proj_s2 = "5513"))
+  expect_true(
+    any(grepl("batchit_submitted proj_s1 5512", printed, fixed = TRUE)),
+    info = paste(printed, collapse = "\n")
+  )
+  expect_true(
+    any(grepl("batchit_submitted proj_s2 5513", printed, fixed = TRUE)),
+    info = paste(printed, collapse = "\n")
+  )
+})
+
 # --- 2. the three shapes `x` accepts -----------------------------------------
 
 test_that("slurm_submit() accepts the paths, the directory and the driver", {

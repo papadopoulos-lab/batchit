@@ -175,6 +175,10 @@
 #' Nothing reads `sbatch`'s own output. The driver pipes that output through
 #' `cut -d';' -f1`, because a federated cluster writes `jobid;cluster` there.
 #'
+#' `slurm_submit()` writes those lines to its own standard output before it
+#' parses them. The driver writes to a temporary file that this call deletes,
+#' so without the echo an interactive caller sees no submission at all.
+#'
 #' @section What an error carries:
 #' A driver that exits non-zero stops this call. The error carries the
 #' driver's standard error verbatim, because that text holds the diagnosis
@@ -241,6 +245,10 @@ slurm_submit <- function(x) {
   status <- as.integer(
     system2("bash", shQuote(driver), stdout = out, stderr = err)
   )
+
+  # The driver's standard output went to a temporary file, and this call
+  # deletes it. The echo is what an interactive caller sees.
+  writeLines(readLines(out, warn = FALSE))
 
   ids <- .slurm_submit_ids(readLines(out, warn = FALSE))
   if (!identical(status, 0L)) {

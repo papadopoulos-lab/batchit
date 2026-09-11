@@ -81,6 +81,15 @@ asked proves nothing about a version.
 \verb{R CMD check} exports \code{R_TESTS}, and every subprocess inherits it. So this
 matters to a package that tests a generated job under \verb{R CMD check}. A
 production Slurm job carries no \code{R_TESTS}, so the unset costs nothing there.
+
+The gate prints the version it read, as \verb{batchit: <package> <version>}. The
+job log then names the version the work ran under, and not only the version
+a refusal wanted.
+
+The job then puts the directory of that interpreter first on \code{PATH}, and it
+does so after the gate. A bare \code{Rscript} in the body is therefore the
+binary the gate checked. The gate itself still reads the \code{PATH} the job
+started with, so a dummy \code{Rscript} first on that \code{PATH} cannot reach it.
 }
 
 \section{What \code{submit.sh} checks before it submits}{

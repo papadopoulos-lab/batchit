@@ -340,3 +340,82 @@ test_that("the version gate runs under a leaked R_TESTS", {
   expect_true(file.exists(marker), info = why)
   expect_false(any(grepl("startup.Rs", readLines(err, warn = FALSE))), info = why)
 })
+
+test_that("the version gate prints the version it read", {
+  # A gate that only refuses leaves the accepted version out of the job log.
+  # The log then cannot say which version the work ran under.
+  tmp <- withr::local_tempdir()
+  installed <- as.character(utils::packageVersion("stats"))
+  paths <- batchit::slurm_write(
+    list(batchit::slurm_it(
+      script = "true",
+      name = "gated",
+      cpus = 1,
+      mem = "1G",
+      time = "00:01:00",
+      require_r_package = stats::setNames(installed, "stats")
+    )),
+    file.path(tmp, "chain")
+  )
+
+  out <- file.path(tmp, "gated.out")
+  err <- file.path(tmp, "gated.err")
+  status <- system2("bash", shQuote(paths[[1]]), stdout = out, stderr = err)
+  printed <- readLines(out, warn = FALSE)
+  why <- paste(c("stdout:", printed, "stderr:", readLines(err, warn = FALSE)),
+    collapse = "\n"
+  )
+
+  expect_identical(status, 0L, info = why)
+  # The job ran the gate, so the version is the one the gate observed and not
+  # a literal this block wrote into the script.
+  expect_true(
+    any(grepl(paste("batchit: stats", installed), printed, fixed = TRUE)),
+    info = why
+  )
+})
+
+test_that("the job body runs the R the gate checked, not a dummy on PATH", {
+  # `tools:::add_dummies()` puts a dummy `Rscript` first on PATH for the whole
+  # of `R CMD check`. A bare `Rscript` in a job body resolves against that
+  # PATH. This stub exits 0 and answers `dummy`, so the body runs to the end
+  # either way and the marker says which binary answered.
+  tmp <- withr::local_tempdir()
+  marker <- file.path(tmp, "marker")
+  stubs <- file.path(tmp, "stubs")
+  dir.create(stubs)
+  writeLines(
+    c("#!/bin/bash", "printf 'dummy'", "exit 0"),
+    file.path(stubs, "Rscript")
+  )
+  Sys.chmod(file.path(stubs, "Rscript"), "0755")
+
+  installed <- as.character(utils::packageVersion("stats"))
+  paths <- batchit::slurm_write(
+    list(batchit::slurm_it(
+      script = paste0("Rscript -e 'cat(\"real\")' > ", shQuote(marker)),
+      name = "gated",
+      cpus = 1,
+      mem = "1G",
+      time = "00:01:00",
+      require_r_package = stats::setNames(installed, "stats")
+    )),
+    file.path(tmp, "chain")
+  )
+
+  withr::local_envvar(
+    PATH = paste(stubs, Sys.getenv("PATH"), sep = .Platform$path.sep)
+  )
+  out <- file.path(tmp, "gated.out")
+  err <- file.path(tmp, "gated.err")
+  status <- system2("bash", shQuote(paths[[1]]), stdout = out, stderr = err)
+  why <- paste(
+    c("stderr:", readLines(err, warn = FALSE), "stdout:",
+      readLines(out, warn = FALSE)),
+    collapse = "\n"
+  )
+
+  expect_identical(status, 0L, info = why)
+  expect_true(file.exists(marker), info = why)
+  expect_identical(readLines(marker, warn = FALSE), "real", info = why)
+})

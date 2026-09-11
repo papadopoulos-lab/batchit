@@ -1,3 +1,17 @@
+# batchit 26.9.10
+
+- **A generated job puts the gate's R first on `PATH` before the body runs.**
+  The gate names one interpreter by an absolute path, and a bare `Rscript` in
+  the body named whichever one came first on the node's `PATH`. The gate then
+  said nothing about the R that ran the work. The export comes after the gate,
+  so a dummy `Rscript` first on `PATH` still cannot reach the gate.
+- **The version gate prints the version it read**, as
+  `batchit: <package> <version>`. The job log named the version only when the
+  gate refused.
+- **`slurm_submit()` echoes the driver's `batchit_submitted` lines.** The
+  driver writes them to a temporary file that the call deletes, so an
+  interactive caller saw no submission at all.
+
 # batchit 26.8.29
 
 - **A generated Slurm job now derives its own peak-memory counter, and reports

@@ -27,10 +27,13 @@
 # MUST stay in the same file as `.SLURM_WRITE_DRIVER_NAME`, below it.
 .SLURM_SUBMIT_DRIVER_FILE <- paste0(.SLURM_WRITE_DRIVER_NAME, ".sh")
 
-#' Name the `Rscript` the version gate runs.
+#' Name the `Rscript` the version gate runs, and the body after it.
 #'
 #' `R.home("bin")` names the R that writes the chain. A bare `Rscript` names
 #' whichever one comes first on the node's `PATH`.
+#'
+#' The job puts the directory of this path first on `PATH` before the body
+#' runs. So a bare `Rscript` in the body is the binary the gate checked.
 #'
 #' `R CMD check` makes that difference visible. `tools:::add_dummies()` puts a
 #' directory first on `PATH`. The directory holds an `Rscript` that prints a
@@ -168,6 +171,10 @@
 #' done. A job that ran under the wrong package version costs more than a job
 #' that did not run: its output looks complete.
 #'
+#' The gate prints the version it read, as `batchit: <package> <version>`. A
+#' gate that only refuses leaves the accepted version out of the job log, so
+#' the log cannot say which version the work ran under.
+#'
 #' Each package name and each version reaches a single-quoted shell word.
 #' `slurm_it()` accepts letters, digits, periods and hyphens in these two
 #' fields and nothing else, so neither can close that quote.
@@ -198,9 +205,11 @@
       paste0(
         "if ! env -u R_TESTS ",
         rscript,
-        " -e 'stopifnot(utils::packageVersion(\"",
+        " -e 'v <- utils::packageVersion(\"",
         pkg,
-        "\") == package_version(\"",
+        "\"); cat(\"batchit: ",
+        pkg,
+        "\", as.character(v), \"\\n\"); stopifnot(v == package_version(\"",
         ver,
         "\"))'; then"
       ),
@@ -217,6 +226,28 @@
     )
   }
   return(lines)
+}
+
+#' Build the line that puts the gate's R first on `PATH`.
+#'
+#' The gate names one interpreter by an absolute path. A bare `Rscript` in the
+#' job body names whichever one comes first on the node's `PATH`. The two are
+#' then different binaries, and the gate says nothing about the R that ran the
+#' work.
+#'
+#' The line comes after the gate. So the gate still reads the `PATH` the job
+#' started with, and a dummy `Rscript` first on that `PATH` cannot reach it.
+#'
+#' @return Character vector of shell lines.
+#' @noRd
+.slurm_write_path_lines <- function() {
+  bin <- dirname(.slurm_write_rscript_path())
+  return(c(
+    "# The body runs the R the gate checked, and not whichever Rscript the",
+    "# node's PATH names first.",
+    paste0("export PATH=", shQuote(bin, type = "sh"), ":\"$PATH\""),
+    ""
+  ))
 }
 
 #' Build the shell lines that record peak memory.
@@ -335,7 +366,7 @@
     strsplit(job[["script"]], "\n", fixed = TRUE)[[1]],
     ""
   )
-  return(c(header, preamble, gate, body))
+  return(c(header, preamble, gate, .slurm_write_path_lines(), body))
 }
 
 #' Build the chain tokens for one position in the chain.
@@ -469,6 +500,15 @@
 #' `R CMD check` exports `R_TESTS`, and every subprocess inherits it. So this
 #' matters to a package that tests a generated job under `R CMD check`. A
 #' production Slurm job carries no `R_TESTS`, so the unset costs nothing there.
+#'
+#' The gate prints the version it read, as `batchit: <package> <version>`. The
+#' job log then names the version the work ran under, and not only the version
+#' a refusal wanted.
+#'
+#' The job then puts the directory of that interpreter first on `PATH`, and it
+#' does so after the gate. A bare `Rscript` in the body is therefore the
+#' binary the gate checked. The gate itself still reads the `PATH` the job
+#' started with, so a dummy `Rscript` first on that `PATH` cannot reach it.
 #'
 #' @section What `submit.sh` checks before it submits:
 #' `submit.sh` runs two checks. A refusal writes `batchit: REFUSED:` to

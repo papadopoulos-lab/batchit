@@ -48,6 +48,10 @@ batchit_submitted proj_s2 5513
 
 Nothing reads \code{sbatch}'s own output. The driver pipes that output through
 \verb{cut -d';' -f1}, because a federated cluster writes \verb{jobid;cluster} there.
+
+\code{slurm_submit()} writes those lines to its own standard output before it
+parses them. The driver writes to a temporary file that this call deletes,
+so without the echo an interactive caller sees no submission at all.
 }
 
 \section{What an error carries}{

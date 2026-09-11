@@ -368,6 +368,61 @@ test_that("a satisfied require_r_package lets the job body run", {
   expect_true(file.exists(marker))
 })
 
+# --- the PATH the body runs under --------------------------------------------
+
+test_that("the PATH export sits after the gate and before the body", {
+  # Order is the whole of it. Before the gate, the export would put the gate's
+  # own R first on PATH, and the gate would stop proving which R it asked.
+  tmp <- withr::local_tempdir()
+  paths <- batchit::slurm_write(
+    list(ok_job(
+      "gated",
+      script = "echo body",
+      require_r_package = c(stats = "1.0")
+    )),
+    file.path(tmp, "chain")
+  )
+  lines <- readLines(paths[[1]], warn = FALSE)
+
+  export <- grep("^export PATH=", lines)
+  gate <- grep("packageVersion", lines)
+  body <- which(lines == "echo body")
+
+  expect_length(export, 1L)
+  expect_length(gate, 1L)
+  expect_length(body, 1L)
+  expect_lt(gate, export)
+  expect_lt(export, body)
+  expect_identical(
+    lines[[export]],
+    paste0("export PATH=", shQuote(R.home("bin"), type = "sh"), ":\"$PATH\"")
+  )
+})
+
+test_that("a job that names no package exports the PATH as well", {
+  # The export is not the gate's. A body that calls R needs the same binary
+  # whether or not the job pinned a version.
+  tmp <- withr::local_tempdir()
+  paths <- batchit::slurm_write(list(ok_job("plain")), file.path(tmp, "chain"))
+  lines <- readLines(paths[[1]], warn = FALSE)
+
+  expect_identical(sum(grepl("packageVersion", lines, fixed = TRUE)), 0L)
+  expect_length(grep("^export PATH=", lines), 1L)
+})
+
+test_that("batchit.rscript_path decides the directory the job exports", {
+  withr::local_options(batchit.rscript_path = "/opt/R/4.5.2/bin/Rscript")
+  tmp <- withr::local_tempdir()
+  paths <- batchit::slurm_write(
+    list(ok_job("proj_s1")),
+    file.path(tmp, "chain")
+  )
+  lines <- readLines(paths[[1]], warn = FALSE)
+
+  expect_true("export PATH='/opt/R/4.5.2/bin':\"$PATH\"" %in% lines)
+  expect_identical(system2("bash", c("-n", shQuote(paths[[1]]))), 0L)
+})
+
 # --- peak memory, one branch at a time ---------------------------------------
 
 test_that("a job that cannot read the counter reports no number", {
