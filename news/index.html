@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.29</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.9.10</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,15 @@
       <small>Source: <a href="https://github.com/papadopoulos-lab/batchit/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="26.9.10" id="batchit-26910">batchit 26.9.10<a class="anchor" aria-label="anchor" href="#batchit-26910"></a></h2>
+<ul><li>
+<strong>A generated job puts the gate’s R first on <code>PATH</code> before the body runs.</strong> The gate names one interpreter by an absolute path, and a bare <code>Rscript</code> in the body named whichever one came first on the node’s <code>PATH</code>. The gate then said nothing about the R that ran the work. The export comes after the gate, so a dummy <code>Rscript</code> first on <code>PATH</code> still cannot reach the gate.</li>
+<li>
+<strong>The version gate prints the version it read</strong>, as <code>batchit: &lt;package&gt; &lt;version&gt;</code>. The job log named the version only when the gate refused.</li>
+<li>
+<strong><code><a href="../reference/slurm_submit.html">slurm_submit()</a></code> echoes the driver’s <code>batchit_submitted</code> lines.</strong> The driver writes them to a temporary file that the call deletes, so an interactive caller saw no submission at all.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="26.8.29" id="batchit-26829">batchit 26.8.29<a class="anchor" aria-label="anchor" href="#batchit-26829"></a></h2>
 <ul><li>

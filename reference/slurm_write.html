@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.29</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.9.10</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -115,6 +115,13 @@ asked proves nothing about a version.</p>
 <p><code>R CMD check</code> exports <code>R_TESTS</code>, and every subprocess inherits it. So this
 matters to a package that tests a generated job under <code>R CMD check</code>. A
 production Slurm job carries no <code>R_TESTS</code>, so the unset costs nothing there.</p>
+<p>The gate prints the version it read, as <code>batchit: &lt;package&gt; &lt;version&gt;</code>. The
+job log then names the version the work ran under, and not only the version
+a refusal wanted.</p>
+<p>The job then puts the directory of that interpreter first on <code>PATH</code>, and it
+does so after the gate. A bare <code>Rscript</code> in the body is therefore the
+binary the gate checked. The gate itself still reads the <code>PATH</code> the job
+started with, so a dummy <code>Rscript</code> first on that <code>PATH</code> cannot reach it.</p>
     </div>
     <div class="section level2">
     <h2 id="what-submit-sh-checks-before-it-submits">What <code>submit.sh</code> checks before it submits<a class="anchor" aria-label="anchor" href="#what-submit-sh-checks-before-it-submits"></a></h2>

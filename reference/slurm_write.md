@@ -91,6 +91,15 @@ this matters to a package that tests a generated job under
 `R CMD check`. A production Slurm job carries no `R_TESTS`, so the unset
 costs nothing there.
 
+The gate prints the version it read, as `batchit: <package> <version>`.
+The job log then names the version the work ran under, and not only the
+version a refusal wanted.
+
+The job then puts the directory of that interpreter first on `PATH`, and
+it does so after the gate. A bare `Rscript` in the body is therefore the
+binary the gate checked. The gate itself still reads the `PATH` the job
+started with, so a dummy `Rscript` first on that `PATH` cannot reach it.
+
 ## What `submit.sh` checks before it submits
 
 `submit.sh` runs two checks. A refusal writes `batchit: REFUSED:` to

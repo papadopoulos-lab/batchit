@@ -56,6 +56,11 @@ Nothing reads `sbatch`'s own output. The driver pipes that output
 through `cut -d';' -f1`, because a federated cluster writes
 `jobid;cluster` there.
 
+`slurm_submit()` writes those lines to its own standard output before it
+parses them. The driver writes to a temporary file that this call
+deletes, so without the echo an interactive caller sees no submission at
+all.
+
 ## What an error carries
 
 A driver that exits non-zero stops this call. The error carries the

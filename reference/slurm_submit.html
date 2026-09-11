@@ -9,7 +9,7 @@ driver submitted. The names of the returned vector are the stage names."><meta p
 
     <a class="navbar-brand me-2" href="../index.html">batchit</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.8.29</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">26.9.10</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -83,6 +83,9 @@ those lines:</p>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a>batchit_submitted proj_s2 <span class="dv">5513</span></span></code></pre><p></p></div>
 <p>Nothing reads <code>sbatch</code>'s own output. The driver pipes that output through
 <code>cut -d';' -f1</code>, because a federated cluster writes <code>jobid;cluster</code> there.</p>
+<p><code>slurm_submit()</code> writes those lines to its own standard output before it
+parses them. The driver writes to a temporary file that this call deletes,
+so without the echo an interactive caller sees no submission at all.</p>
     </div>
     <div class="section level2">
     <h2 id="what-an-error-carries">What an error carries<a class="anchor" aria-label="anchor" href="#what-an-error-carries"></a></h2>
