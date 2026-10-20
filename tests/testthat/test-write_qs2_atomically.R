@@ -40,10 +40,18 @@ test_that("a rename failure against a real non-empty directory preserves it", {
   dir.create(path)
   file.create(file.path(path, "occupant.txt"))
 
-  # `file.rename()`'s own warning propagates -- it is not swallowed.
+  # `file.rename()`'s own warning propagates -- it is not swallowed. The
+  # reason in it comes from the operating system. Linux gives strerror(),
+  # "Is a directory". Windows gives a system message, so the block matches the
+  # prefix that R writes on that platform.
+  reason <- if (.Platform$OS.type == "windows") {
+    "cannot rename file"
+  } else {
+    "Is a directory"
+  }
   expect_warning(
     expect_error(write_qs2_atomically(list(new = TRUE), path), "could not rename"),
-    "Is a directory"
+    reason
   )
 
   expect_true(dir.exists(path))

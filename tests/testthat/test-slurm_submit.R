@@ -86,6 +86,8 @@ run_submit <- function(
     driver = paths[[length(paths)]],
     stop("unknown shape")
   )
+  # `slurm_submit()` runs the driver under bash, and the stubs are bash.
+  skip_without_bash()
   batchit::slurm_submit(x)
 }
 

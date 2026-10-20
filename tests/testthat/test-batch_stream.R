@@ -222,11 +222,15 @@ test_that("stream_from_parent_and_write_files_atomically() validates each produc
   # A producer that yields an item missing the target's formal is rejected in
   # the parent, before it is ever dispatched to a daemon.
   producer <- function(id) list()  # .batch_fixture_task_ok needs `x`
+  root <- local_test_dir()
   expect_error(
     batchit::stream_from_parent_and_write_files_atomically(
       mk(".batch_fixture_task_ok"),
       ids = "a", producer = producer,
-      outputs = list(a = c(primary = "/tmp/p.qs2", secondary = "/tmp/s.qs2")),
+      outputs = list(a = c(
+        primary = file.path(root, "p.qs2"),
+        secondary = file.path(root, "s.qs2")
+      )),
       n_workers = 1L, dev_path = dev_tree
     ),
     "not supplied"
@@ -332,7 +336,10 @@ test_that("stream_from_parent_and_write_files_atomically() surfaces a wedged/slo
 # --- 11: dispatch-time validation, before doing any work ---------------------
 
 test_that("stream_from_parent_and_write_files_atomically() validates ids, outputs, style, config and dev_path before doing any work", {
-  ok_outputs_1 <- list(a = c(primary = "/tmp/p.qs2", secondary = "/tmp/s.qs2"))
+  root <- local_test_dir()
+  ok_pair <- c(primary = file.path(root, "p.qs2"), secondary = file.path(root, "s.qs2"))
+  ok_pair_2 <- c(primary = file.path(root, "p2.qs2"), secondary = file.path(root, "s2.qs2"))
+  ok_outputs_1 <- list(a = ok_pair)
   # `fn` must be a package_function() descriptor
   expect_error(
     batchit::stream_from_parent_and_write_files_atomically(
@@ -343,16 +350,14 @@ test_that("stream_from_parent_and_write_files_atomically() validates ids, output
   expect_error(
     batchit::stream_from_parent_and_write_files_atomically(mk(".batch_fixture_task_ok"),
       ids = c("a", "a"), producer = function(id) list(x = 1L),
-      outputs = list(c(primary = "/tmp/p.qs2", secondary = "/tmp/s.qs2"),
-        c(primary = "/tmp/p2.qs2", secondary = "/tmp/s2.qs2")),
+      outputs = list(ok_pair, ok_pair_2),
       n_workers = 1L),
     "unique")
   # NA / empty id
   expect_error(
     batchit::stream_from_parent_and_write_files_atomically(mk(".batch_fixture_task_ok"),
       ids = c("a", NA), producer = function(id) list(x = 1L),
-      outputs = list(c(primary = "/tmp/p.qs2", secondary = "/tmp/s.qs2"),
-        c(primary = "/tmp/p2.qs2", secondary = "/tmp/s2.qs2")),
+      outputs = list(ok_pair, ok_pair_2),
       n_workers = 1L),
     "non-empty, non-NA")
   # timeout validated as a scalar, not silently disabled
@@ -378,7 +383,7 @@ test_that("stream_from_parent_and_write_files_atomically() validates ids, output
     batchit::stream_from_parent_and_write_files_atomically(mk(".batch_fixture_task_ok"),
       ids = character(0), producer = function(id) list(x = 1L),
       outputs = list(), n_workers = 1L,
-      dev_path = "/no/such/tree"),
+      dev_path = file.path(root, "no", "such", "tree")),
     "does not exist")
 })
 

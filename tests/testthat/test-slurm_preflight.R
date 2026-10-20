@@ -45,6 +45,7 @@ run_submit <- function(
 
   batchit::slurm_write(lapply(job_names, ok_job), chain)
 
+  skip_without_bash()
   # Every generated file MUST parse. `bash -n` proves syntax and nothing else.
   for (sh in list.files(chain, pattern = "\\.sh$", full.names = TRUE)) {
     testthat::expect_identical(
@@ -249,6 +250,7 @@ test_that("the option batchit.rscript_path names the interpreter", {
   gate <- grep("packageVersion", readLines(paths[[1]]), value = TRUE)
 
   expect_match(gate, "'/opt/R/4.5.2/bin/Rscript'", fixed = TRUE)
+  skip_without_bash()
   expect_identical(system2("bash", c("-n", shQuote(paths[[1]]))), 0L)
 })
 
@@ -257,6 +259,7 @@ test_that("the version gate ignores a dummy Rscript on PATH", {
   # first on PATH for the whole of `R CMD check`. Matching the spelling of the
   # generated line would not prove the gate survives it, so this block drives
   # the mechanism.
+  skip_without_bash()
   tmp <- withr::local_tempdir()
   marker <- file.path(tmp, "marker")
   stubs <- file.path(tmp, "stubs")
@@ -305,6 +308,7 @@ test_that("the version gate ignores a dummy Rscript on PATH", {
 test_that("the version gate runs under a leaked R_TESTS", {
   # This block sets R_TESTS itself, so it reproduces the failure under
   # `pkgload::load_all()` as well as under `R CMD check`.
+  skip_without_bash()
   tmp <- withr::local_tempdir()
   marker <- file.path(tmp, "marker")
   installed <- as.character(utils::packageVersion("stats"))
@@ -344,6 +348,7 @@ test_that("the version gate runs under a leaked R_TESTS", {
 test_that("the version gate prints the version it read", {
   # A gate that only refuses leaves the accepted version out of the job log.
   # The log then cannot say which version the work ran under.
+  skip_without_bash()
   tmp <- withr::local_tempdir()
   installed <- as.character(utils::packageVersion("stats"))
   paths <- batchit::slurm_write(
@@ -380,6 +385,7 @@ test_that("the job body runs the R the gate checked, not a dummy on PATH", {
   # of `R CMD check`. A bare `Rscript` in a job body resolves against that
   # PATH. This stub exits 0 and answers `dummy`, so the body runs to the end
   # either way and the marker says which binary answered.
+  skip_without_bash()
   tmp <- withr::local_tempdir()
   marker <- file.path(tmp, "marker")
   stubs <- file.path(tmp, "stubs")

@@ -550,8 +550,16 @@ test_that("run_and_write_files_atomically()'s result is the commit record (commi
 
   rec <- r[[1]]
   expect_setequal(names(rec), c("committed", "attempt"))
-  expect_identical(unname(rec$committed[["primary"]]), normalizePath(out1, mustWork = FALSE))
-  expect_identical(unname(rec$committed[["secondary"]]), normalizePath(out2, mustWork = FALSE))
+  # `winslash = "/"` is the form the package returns. The default `\` differs
+  # from it on Windows only.
+  expect_identical(
+    unname(rec$committed[["primary"]]),
+    normalizePath(out1, winslash = "/", mustWork = FALSE)
+  )
+  expect_identical(
+    unname(rec$committed[["secondary"]]),
+    normalizePath(out2, winslash = "/", mustWork = FALSE)
+  )
   expect_true(is.character(rec$attempt) && nzchar(rec$attempt))
   # the raw computed value (999999 * 10 = 9999990) must not appear anywhere
   # in the record itself
@@ -562,7 +570,11 @@ test_that("run_and_write_files_atomically()'s result is the commit record (commi
 
 test_that(".batch_inspect_result() rejects a commit record with the WRONG attempt token or a substituted output map", {
   tgt <- list(package = "batchit", symbol = "s", hash = "H")
-  dispatched_outputs <- c(primary = "/tmp/x_primary.qs2", secondary = "/tmp/x_secondary.qs2")
+  root <- local_test_dir()
+  dispatched_outputs <- c(
+    primary = file.path(root, "x_primary.qs2"),
+    secondary = file.path(root, "x_secondary.qs2")
+  )
   good <- list(protocol = PROTO, id = "1", status = "ok",
     warnings = character(),
     target = list(package = "batchit", symbol = "s", hash = "H"),
@@ -578,7 +590,10 @@ test_that(".batch_inspect_result() rejects a commit record with the WRONG attemp
   expect_match(r1$reason, "attempt")
 
   substituted <- good
-  substituted$value$committed <- c(primary = "/tmp/EVIL.qs2", secondary = "/tmp/x_secondary.qs2")
+  substituted$value$committed <- c(
+    primary = file.path(root, "EVIL.qs2"),
+    secondary = file.path(root, "x_secondary.qs2")
+  )
   r2 <- batchit:::.batch_inspect_result(substituted, "1", tgt,
     expected_outputs = dispatched_outputs, expected_attempt = "tok-abc")
   expect_false(r2$ok)
@@ -591,7 +606,11 @@ test_that(".batch_inspect_result() rejects a commit record with an EXTRA field (
   # run_and_write_files_atomically() (only a small commit record ever
   # crosses back).
   tgt <- list(package = "batchit", symbol = "s", hash = "H")
-  dispatched_outputs <- c(primary = "/tmp/x_primary.qs2", secondary = "/tmp/x_secondary.qs2")
+  root <- local_test_dir()
+  dispatched_outputs <- c(
+    primary = file.path(root, "x_primary.qs2"),
+    secondary = file.path(root, "x_secondary.qs2")
+  )
   smuggled <- list(protocol = PROTO, id = "1", status = "ok",
     warnings = character(),
     target = list(package = "batchit", symbol = "s", hash = "H"),
@@ -605,7 +624,11 @@ test_that(".batch_inspect_result() rejects a commit record with an EXTRA field (
 
 test_that(".batch_inspect_result() rejects a commit record MISSING a required field", {
   tgt <- list(package = "batchit", symbol = "s", hash = "H")
-  dispatched_outputs <- c(primary = "/tmp/x_primary.qs2", secondary = "/tmp/x_secondary.qs2")
+  root <- local_test_dir()
+  dispatched_outputs <- c(
+    primary = file.path(root, "x_primary.qs2"),
+    secondary = file.path(root, "x_secondary.qs2")
+  )
   missing_attempt <- list(protocol = PROTO, id = "1", status = "ok",
     warnings = character(),
     target = list(package = "batchit", symbol = "s", hash = "H"),
@@ -806,37 +829,44 @@ test_that("run_and_write_files_atomically() style = \"staged_writer\": a timeout
 # --- supplementary: dispatch-time validation ---------------------------------
 
 test_that("run_and_write_files_atomically(): an unknown style is rejected", {
+  root <- local_test_dir()
   expect_error(
     batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"), items = list(list(x = 1L)),
-      outputs = list(c(primary = "/tmp/x.qs2", secondary = "/tmp/y.qs2")),
+      outputs = list(c(primary = file.path(root, "x.qs2"), secondary = file.path(root, "y.qs2"))),
       style = "bogus", n_workers = 1L),
     "unknown style"
   )
 })
 
 test_that("run_and_write_files_atomically(): `outputs` length must match `items`", {
+  root <- local_test_dir()
   expect_error(
     batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"),
       items = list(list(x = 1L), list(x = 2L)),
-      outputs = list(c(primary = "/tmp/x.qs2", secondary = "/tmp/y.qs2")),
+      outputs = list(c(primary = file.path(root, "x.qs2"), secondary = file.path(root, "y.qs2"))),
       n_workers = 1L),
     "same length"
   )
 })
 
 test_that("run_and_write_files_atomically(): a non-absolute output path is rejected", {
+  root <- local_test_dir()
   expect_error(
     batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"), items = list(list(x = 1L)),
-      outputs = list(c(primary = "relative/path.qs2", secondary = "/tmp/y.qs2")),
+      outputs = list(c(primary = "relative/path.qs2", secondary = file.path(root, "y.qs2"))),
       n_workers = 1L),
     "absolute"
   )
 })
 
 test_that("run_and_write_files_atomically(): an output path whose parent directory does not exist is rejected", {
+  root <- local_test_dir()
   expect_error(
     batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"), items = list(list(x = 1L)),
-      outputs = list(c(primary = "/no/such/dir/x.qs2", secondary = "/tmp/y.qs2")),
+      outputs = list(c(
+        primary = file.path(root, "no", "such", "dir", "x.qs2"),
+        secondary = file.path(root, "y.qs2")
+      )),
       n_workers = 1L),
     "does not exist"
   )
@@ -896,9 +926,10 @@ test_that("run_and_write_files_atomically(): an empty item list returns an empty
 })
 
 test_that("run_and_write_files_atomically(): a given-but-wrong dev_path errors EVEN for an empty workload", {
+  missing_tree <- file.path(local_test_dir(), "no", "such", "tree")
   expect_error(
     batchit::run_and_write_files_atomically(mk(".batch_fixture_task_ok"), items = list(), outputs = list(),
-      n_workers = 1L, dev_path = "/no/such/tree"),
+      n_workers = 1L, dev_path = missing_tree),
     "does not exist"
   )
 })

@@ -1,5 +1,8 @@
 # `slurm_status()` runs `squeue` and `sacct`. Nothing here needs Slurm.
 #
+# The stubs are bash scripts. So every block that reaches them starts with
+# `skip_without_bash()` from `helper-portability.R`, and skips on Windows.
+#
 # Every block builds its `PATH` with `slurm_stub_path()` from
 # `helper-slurm-stubs.R`. That helper refuses every scheduler command a block
 # left unstubbed, so a block cannot reach the host. Read the top of that file
@@ -143,6 +146,7 @@ write_chain <- function(dir, job_names) {
 # --- 1. the overview unions the two sources -----------------------------------
 
 test_that("slurm_status() unions the live queue and the accounting database", {
+  skip_without_bash()
   local_scheduler(
     squeue = slurm_stub_fixed(
       squeue_row("90", "alice", "proj_s1", "PENDING", "0:00", "Resources")
@@ -171,6 +175,7 @@ test_that("slurm_status() unions the live queue and the accounting database", {
 })
 
 test_that("slurm_status() reports a live job the accounting query missed", {
+  skip_without_bash()
   # Two queries against two stores can disagree. A row that only `squeue`
   # returns MUST still reach the caller. A function that intersected the two
   # would report a shorter queue than the scheduler holds.
@@ -187,6 +192,7 @@ test_that("slurm_status() reports a live job the accounting query missed", {
 # --- 2. a job in both sources appears once, and takes the live row ------------
 
 test_that("a job in both sources appears once and takes the squeue row", {
+  skip_without_bash()
   # Job 90 is RUNNING, so both commands report it. Three fields separate the
   # two rows: the reason, the exit code and the elapsed time. A result that
   # took the `sacct` row would lose the reason, which is the column the live
@@ -212,6 +218,7 @@ test_that("a job in both sources appears once and takes the squeue row", {
 # --- 3. `sacct` is always given `-S` ------------------------------------------
 
 test_that("slurm_status() gives sacct a start time, so a chain is visible", {
+  skip_without_bash()
   # The stub answers only when it sees `-S`. A `slurm_status()` that dropped
   # the flag would come back empty here, and an empty result reads as
   # "nothing is running".
@@ -225,6 +232,7 @@ test_that("slurm_status() gives sacct a start time, so a chain is visible", {
 })
 
 test_that("the overview asks the accounting database for the last 7 days", {
+  skip_without_bash()
   tmp <- withr::local_tempdir()
   argfile <- file.path(tmp, "sacct-args")
   local_scheduler(sacct = stub_recording(argfile))
@@ -240,6 +248,7 @@ test_that("the overview asks the accounting database for the last 7 days", {
 # --- 4. an unanswerable scheduler is an error, never an empty result ----------
 
 test_that("a failing sacct raises an error that names the command", {
+  skip_without_bash()
   local_scheduler(
     sacct = c(
       "printf 'sacct: error: Problem talking to the database\\n' >&2",
@@ -256,6 +265,7 @@ test_that("a failing sacct raises an error that names the command", {
 })
 
 test_that("a failing squeue raises an error that names the command", {
+  skip_without_bash()
   local_scheduler(
     squeue = c(
       "printf 'squeue: error: Unable to contact slurm controller\\n' >&2",
@@ -269,6 +279,7 @@ test_that("a failing squeue raises an error that names the command", {
 })
 
 test_that("an absent sacct raises an error rather than reporting no jobs", {
+  skip_without_bash()
   # A `PATH` that holds `squeue` and nothing else. This is the machine with no
   # Slurm, and a zero-row answer there would read as a quiet queue.
   dir <- withr::local_tempdir()
@@ -281,6 +292,7 @@ test_that("an absent sacct raises an error rather than reporting no jobs", {
 })
 
 test_that("a line the parser cannot read raises an error", {
+  skip_without_bash()
   local_scheduler(sacct = slurm_stub_fixed("16|ricwh321|nftest"))
   msg <- status_error(batchit::slurm_status())
   expect_match(msg, "cannot read", fixed = TRUE)
@@ -292,6 +304,7 @@ test_that("a line the parser cannot read raises an error", {
 # --- 5. an empty window is not an error --------------------------------------
 
 test_that("an empty window returns zero rows and every column", {
+  skip_without_bash()
   # Both stubs answer and hold no job. `x$state` on this result MUST be
   # character(0), so a caller can subset it without a guard.
   local_scheduler()
@@ -309,6 +322,7 @@ test_that("an empty window returns zero rows and every column", {
 })
 
 test_that("an empty last field reaches the caller as an empty string", {
+  skip_without_bash()
   # `strsplit()` drops a trailing empty field. A line ending in the separator
   # would otherwise look short, and the call would refuse output it can
   # read.
@@ -325,6 +339,7 @@ test_that("an empty last field reaches the caller as an empty string", {
 # --- 6. the directory form ----------------------------------------------------
 
 test_that("the directory form reads the job names from *.sh, not submit.sh", {
+  skip_without_bash()
   # The names reach `squeue`, which is the source that sees a job before it
   # starts. `sacct` is asked for job ids instead, and section 7 drives that.
   tmp <- withr::local_tempdir()
@@ -343,6 +358,7 @@ test_that("the directory form reads the job names from *.sh, not submit.sh", {
 })
 
 test_that("the directory form starts the window at the oldest .sh mtime", {
+  skip_without_bash()
   # Not a constant, and not today. The chain's own scripts say when it was
   # written, and that is the only date left once the submitting session ends.
   tmp <- withr::local_tempdir()
@@ -366,6 +382,7 @@ test_that("the directory form starts the window at the oldest .sh mtime", {
 })
 
 test_that("a log older than the scripts moves the window back to that log", {
+  skip_without_bash()
   # A chain rewritten after it ran carries new script times and old logs. A
   # window that started at the newest script would hide the run those logs
   # name, and `sacct` reports an empty window rather than an error.
@@ -388,6 +405,7 @@ test_that("a log older than the scripts moves the window back to that log", {
 })
 
 test_that("sacct is asked for parsable output, so a job name survives", {
+  skip_without_bash()
   # The default table truncates a job name to ten characters and marks it with
   # `+`, so `batchit_inside` arrives as `batchit_i+`.
   tmp <- withr::local_tempdir()
@@ -398,6 +416,7 @@ test_that("sacct is asked for parsable output, so a job name survives", {
 })
 
 test_that("the directory form adds the out and err paths of each job", {
+  skip_without_bash()
   tmp <- withr::local_tempdir()
   chain <- file.path(tmp, "chain")
   write_chain(chain, c("proj_s1", "proj_s2"))
@@ -428,17 +447,20 @@ test_that("the directory form adds the out and err paths of each job", {
       "err"
     )
   )
+  # `winslash = "/"` is the form the package returns. The default `\` differs
+  # from it on Windows only.
   expect_identical(
     x[["out"]],
-    c(normalizePath(file.path(chain, "proj_s1_5512.out")), NA)
+    c(normalizePath(file.path(chain, "proj_s1_5512.out"), winslash = "/"), NA)
   )
   expect_identical(
     x[["err"]],
-    c(normalizePath(file.path(chain, "proj_s1_5512.err")), NA)
+    c(normalizePath(file.path(chain, "proj_s1_5512.err"), winslash = "/"), NA)
   )
 })
 
 test_that("the overview carries no out or err column", {
+  skip_without_bash()
   local_scheduler(
     sacct = slurm_stub_fixed(
       sacct_row("16", "bob", "nftest", "COMPLETED", "0:0", "00:00:01")
@@ -470,6 +492,7 @@ test_that("the directory form rejects a value that names no chain", {
 })
 
 test_that("the live queue is asked before the accounting database", {
+  skip_without_bash()
   # `slurm_status()` holds each answer in a local. R evaluates an argument when
   # the callee first touches it, so a nested call would leave the order to
   # `.slurm_status_union()`.
@@ -494,6 +517,7 @@ test_that("the live queue is asked before the accounting database", {
 # --- 7. the directory form identifies a job by the id on disk ----------------
 
 test_that("the directory form returns only the runs whose logs are on disk", {
+  skip_without_bash()
   # The chain was written once and submitted twice. Job 41 ran on Monday and
   # job 57 ran on Wednesday, so this directory holds a log for each.
   #
@@ -524,6 +548,7 @@ test_that("the directory form returns only the runs whose logs are on disk", {
 })
 
 test_that("the directory form gives sacct the job ids, not the job names", {
+  skip_without_bash()
   tmp <- withr::local_tempdir()
   chain <- file.path(tmp, "chain")
   write_chain(chain, "proj_s1")
@@ -541,6 +566,7 @@ test_that("the directory form gives sacct the job ids, not the job names", {
 })
 
 test_that("the id query still gives sacct a start time", {
+  skip_without_bash()
   # `sacct -j` obeys the same today-only default as `sacct --name=`. A job id
   # is exact and still invisible without `-S`. The stub answers only when it
   # sees the flag, so a dropped flag comes back empty here.
@@ -559,6 +585,7 @@ test_that("the id query still gives sacct a start time", {
 })
 
 test_that("an array task id and a heterogeneous id survive the parse", {
+  skip_without_bash()
   # Both the job name and the job id hold `_`. A split on the last `_` reads
   # the array task `0` and calls it the job.
   tmp <- withr::local_tempdir()
@@ -576,6 +603,7 @@ test_that("an array task id and a heterogeneous id survive the parse", {
 })
 
 test_that("the longer job name claims a log that both names prefix", {
+  skip_without_bash()
   # `proj` and `proj_s1` both prefix `proj_s1_57.out`. Under the shorter name
   # the id reads `s1_57`, which names no job.
   tmp <- withr::local_tempdir()
@@ -593,6 +621,7 @@ test_that("the longer job name claims a log that both names prefix", {
 })
 
 test_that("a queued job with no log file still reaches the caller", {
+  skip_without_bash()
   # `proj_s1` started and left a log. `proj_s2` waits on it, so nothing on
   # disk names job 58 and only the live queue holds it. A directory form that
   # read the logs alone would report a chain of one job.
@@ -618,6 +647,7 @@ test_that("a queued job with no log file still reaches the caller", {
 })
 
 test_that("a chain that started no job asks the accounting database nothing", {
+  skip_without_bash()
   # No log file, so no job id exists to ask for. A name query would answer
   # with a previous run, and there is no id here to tell it apart.
   tmp <- withr::local_tempdir()
@@ -654,6 +684,7 @@ test_that("a chain that started no job asks the accounting database nothing", {
 # --- 8. neither command reports memory ---------------------------------------
 
 test_that("slurm_status() reports no memory column", {
+  skip_without_bash()
   # `MaxRSS` is empty for every job on Slurm 25.11.2, and a blank memory column
   # reads as "the job used no memory". The real peak is in the job's own .out
   # file, which `slurm_write()` puts there.

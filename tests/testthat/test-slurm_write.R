@@ -28,6 +28,7 @@ ok_job <- function(name, ...) {
 # stdout and stderr go to separate files. Two redirections to one file each
 # open it with truncation, and the two streams then overwrite each other.
 run_bash <- function(path, tmp, tag) {
+  skip_without_bash()
   out <- file.path(tmp, paste0(tag, ".out"))
   err <- file.path(tmp, paste0(tag, ".err"))
   status <- system2("bash", shQuote(path), stdout = out, stderr = err)
@@ -62,6 +63,10 @@ test_that("slurm_write() writes one file for each job, plus the driver", {
   expect_length(out, 3L)
   expect_identical(basename(out), c("proj_s1.sh", "proj_s2.sh", "submit.sh"))
   expect_true(all(file.exists(out)))
+  testthat::skip_if(
+    .Platform$OS.type == "windows",
+    "Windows has no POSIX execute bit, so Sys.chmod() cannot set mode 755"
+  )
   expect_identical(
     unname(as.character(file.mode(out))),
     rep("755", 3L)
@@ -125,6 +130,7 @@ test_that("no job file names the submission command", {
 })
 
 test_that("every generated file is syntactically valid bash", {
+  skip_without_bash()
   tmp <- withr::local_tempdir()
   paths <- batchit::slurm_write(
     list(
@@ -420,6 +426,7 @@ test_that("batchit.rscript_path decides the directory the job exports", {
   lines <- readLines(paths[[1]], warn = FALSE)
 
   expect_true("export PATH='/opt/R/4.5.2/bin':\"$PATH\"" %in% lines)
+  skip_without_bash()
   expect_identical(system2("bash", c("-n", shQuote(paths[[1]]))), 0L)
 })
 

@@ -274,18 +274,20 @@ test_that("run_and_write_files_atomically() with a bare closure (adhoc) + style 
 
 test_that("run_and_write_files_atomically() with a bare closure (adhoc): a bad closure is rejected at DISPATCH, before any worker runs", {
   bad <- function(x) x + some_outer_free_variable
+  root <- local_test_dir()
   expect_error(
     batchit::run_and_write_files_atomically(bad, items = list(list(x = 1L)),
-      outputs = list(c(primary = "/tmp/whatever_a.qs2")),
+      outputs = list(c(primary = file.path(root, "whatever_a.qs2"))),
       n_workers = 1L),
     "some_outer_free_variable"
   )
 })
 
 test_that("run_and_write_files_atomically(): `fn` that is neither a package_function() nor a function is rejected", {
+  root <- local_test_dir()
   expect_error(
     batchit::run_and_write_files_atomically("not a target or a function",
-      items = list(list(x = 1L)), outputs = list(c(primary = "/tmp/x.qs2")),
+      items = list(list(x = 1L)), outputs = list(c(primary = file.path(root, "x.qs2"))),
       n_workers = 1L),
     "package_function\\(\\)|bare closure"
   )

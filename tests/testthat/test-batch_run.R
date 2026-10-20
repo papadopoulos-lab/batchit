@@ -329,16 +329,19 @@ test_that(".batch_check_envelope() rejects an unknown TOP-LEVEL envelope field",
 })
 
 test_that(".batch_check_envelope() enforces the outputs<->style/marker/attempt/collect exclusivity", {
+  root <- local_test_dir()
   base_meta <- list(fn_kind = "package", package = "batchit", symbol = "s",
     hash = "h", id = "1", runner_package = "batchit")
   # outputs present -> collect forbidden
   with_outputs <- list(protocol = PROTO, meta = c(base_meta, list(
-    outputs = c(a = "/tmp/a.qs2"), marker = "/tmp/.batchit__1", style = "return",
+    outputs = c(a = file.path(root, "a.qs2")),
+    marker = file.path(root, ".batchit__1"), style = "return",
     attempt = "tok", collect = TRUE)), args = list())
   expect_error(batchit:::.batch_check_envelope(with_outputs), "collect")
   # outputs present, collect absent, style/marker/attempt present -> ok
   ok_task <- list(protocol = PROTO, meta = c(base_meta, list(
-    outputs = c(a = "/tmp/a.qs2"), marker = "/tmp/.batchit__1", style = "return",
+    outputs = c(a = file.path(root, "a.qs2")),
+    marker = file.path(root, ".batchit__1"), style = "return",
     attempt = "tok")), args = list())
   expect_true(batchit:::.batch_check_envelope(ok_task))
   # outputs ABSENT -> style/marker/attempt forbidden
@@ -360,21 +363,25 @@ test_that(".batch_check_envelope() re-validates output/marker PATH SHAPE on the 
       attempt = "tok"), extra)
   }
   wrap <- function(meta) list(protocol = PROTO, meta = meta, args = list())
+  # `dir` is in the normalised form the parent dispatches. `absent` names a
+  # directory that does not exist under it.
+  dir <- local_test_dir()
+  absent <- file.path(dir, "no", "such", "dir")
+  ok_marker <- file.path(dir, ".batchit__1")
 
   # non-absolute output path
   rel_out <- wrap(base_meta(list(
-    outputs = c(a = "relative/x.qs2"), marker = "/tmp/.batchit__1")))
+    outputs = c(a = "relative/x.qs2"), marker = ok_marker)))
   expect_error(batchit:::.batch_check_envelope(rel_out), "absolute")
 
   # output whose PARENT DIRECTORY does not exist
   bad_parent <- wrap(base_meta(list(
-    outputs = c(a = "/no/such/dir/x.qs2"), marker = "/tmp/.batchit__1")))
+    outputs = c(a = file.path(absent, "x.qs2")), marker = ok_marker)))
   expect_error(batchit:::.batch_check_envelope(bad_parent), "does not exist")
 
   # output that is an existing DIRECTORY
-  dir <- withr::local_tempdir()
   as_dir <- wrap(base_meta(list(
-    outputs = c(a = dir), marker = "/tmp/.batchit__1")))
+    outputs = c(a = dir), marker = ok_marker)))
   expect_error(batchit:::.batch_check_envelope(as_dir), "directory")
 
   # a path that is absolute but NOT ALREADY in normalizePath() form (contains
@@ -387,7 +394,7 @@ test_that(".batch_check_envelope() re-validates output/marker PATH SHAPE on the 
   file.create(file.path(dir, "x.qs2"))
   unnormalized <- wrap(base_meta(list(
     outputs = c(a = file.path(dir, "..", basename(dir), "x.qs2")),
-    marker = "/tmp/.batchit__1")))
+    marker = ok_marker)))
   expect_error(batchit:::.batch_check_envelope(unnormalized), "normalized")
 
   # marker: non-absolute
@@ -397,7 +404,8 @@ test_that(".batch_check_envelope() re-validates output/marker PATH SHAPE on the 
 
   # marker: parent directory does not exist
   bad_marker_parent <- wrap(base_meta(list(
-    outputs = c(a = file.path(dir, "x.qs2")), marker = "/no/such/dir/.batchit__1")))
+    outputs = c(a = file.path(dir, "x.qs2")),
+    marker = file.path(absent, ".batchit__1"))))
   expect_error(batchit:::.batch_check_envelope(bad_marker_parent), "does not exist")
 
   # a fully valid envelope still passes
@@ -412,7 +420,7 @@ test_that(".batch_check_envelope() accepts \"return\" AND \"staged_writer\", and
   # A bad style must be rejected HERE (structurally, before .batch_execute()
   # ever calls do.call()) -- not only later, deep inside the branch that runs
   # after the target executes.
-  dir <- withr::local_tempdir()
+  dir <- local_test_dir()
   base_meta <- function(style) list(fn_kind = "package", package = "batchit",
     symbol = "s", hash = "h", id = "1", runner_package = "batchit",
     outputs = c(a = file.path(dir, "x.qs2")), marker = file.path(dir, ".batchit__1"),
@@ -627,7 +635,8 @@ test_that("the REAL worker validates envelope structure BEFORE loading any code"
   rscript <- file.path(R.home("bin"), "Rscript")
   meta <- list(package = "batchit", package = "batchit",
     symbol = ".batch_fixture_echo", hash = "x", id = "1", collect = TRUE,
-    runner_package = "batchit", dev_path = "/nonexistent/would/fail/to/load")
+    runner_package = "batchit",
+    dev_path = file.path(local_test_dir(), "nonexistent", "would", "fail", "to", "load"))
   env <- list(protocol = 1L, meta = meta, args = list(x = 1L))
   inp <- withr::local_tempfile(fileext = ".qs2")
   outp <- withr::local_tempfile(fileext = ".qs2")
@@ -692,7 +701,8 @@ test_that("the REAL worker uses EXACT field extraction (no `$` partial-match ste
   skip_if_not(have_tree, "package source tree not available")
   worker <- file.path(dev_tree, "inst", "batch_worker.R")
   rscript <- file.path(R.home("bin"), "Rscript")
-  meta <- list(dev_path_payload = "/attacker/tree/would/be/loaded",
+  meta <- list(
+    dev_path_payload = file.path(local_test_dir(), "attacker", "tree", "would", "be", "loaded"),
     fn_kind = "package", package = "batchit", symbol = ".batch_fixture_echo",
     hash = "x", id = "1", collect = TRUE, runner_package = "batchit")
   env <- list(protocol = PROTO, meta = meta, args = list(x = 1L))
@@ -750,9 +760,10 @@ test_that("collect = FALSE drops the target value before it enters the envelope"
 
 test_that("a given-but-wrong dev_path errors EVEN for an empty workload", {
   # An early return must not skip input validation.
+  missing_tree <- file.path(local_test_dir(), "no", "such", "tree")
   expect_error(
     batchit::run_and_collect(mk(".batch_fixture_echo"), items = list(),
-      n_workers = 1L, dev_path = "/no/such/tree"),
+      n_workers = 1L, dev_path = missing_tree),
     "does not exist")
 })
 

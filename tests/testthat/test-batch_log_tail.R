@@ -12,8 +12,10 @@ test_that(".batch_log_tail() is bounded and survives non-text worker output", {
   on.exit(unlink(dir, recursive = TRUE), add = TRUE)
   p <- function(nm) file.path(dir, nm)
 
-  # small file: returned whole, nothing dropped
-  writeLines(c("a", "b", "real-error-here"), p("small.log"))
+  # small file: returned whole, nothing dropped. writeBin() writes `\n` on
+  # every OS. writeLines() writes `\r\n` on Windows, and those bytes are
+  # a different input.
+  writeBin(charToRaw("a\nb\nreal-error-here\n"), p("small.log"))
   expect_equal(batchit:::.batch_log_tail(p("small.log")), "a\nb\nreal-error-here")
 
   # missing / empty: nothing to say, and no error

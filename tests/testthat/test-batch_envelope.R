@@ -46,10 +46,12 @@ test_that(".batch_input_envelope() returns a classed, printable batch_envelope -
 })
 
 test_that("print.batch_envelope() summarises an adhoc / declared-output-commit envelope", {
+  root <- local_test_dir()
   env <- batchit:::.batch_input_envelope(
     target = NULL, dev_path = "~/some/dev/path", runner = "batchit",
     id = "item-7", args = list(x = 1), fn_kind = "adhoc",
-    outputs = c(primary = "/tmp/out.qs2"), marker = "/tmp/.batchit__1",
+    outputs = c(primary = file.path(root, "out.qs2")),
+    marker = file.path(root, ".batchit__1"),
     style = "return", attempt = "tok1", fn = function(x) x, nonce = "nonce-abc")
 
   expect_true(inherits(env, "batch_envelope"))

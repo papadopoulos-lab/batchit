@@ -4,6 +4,9 @@
   helper, with `winslash = "/"`.** On Windows the two sides used different
   separators, so the child rejected the marker as
   `not already absolute/normalized`.
+- **The tests no longer assume a POSIX host.** A path a test touches sits in a
+  temporary directory, not `/tmp`. A block that needs bash or the POSIX
+  execute bit skips on Windows and gives the reason.
 
 # batchit 26.9.10
 
