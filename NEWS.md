@@ -1,3 +1,10 @@
+# batchit 26.10.20
+
+- **The parent and the child normalise output paths and the marker with one
+  helper, with `winslash = "/"`.** On Windows the two sides used different
+  separators, so the child rejected the marker as
+  `not already absolute/normalized`.
+
 # batchit 26.9.10
 
 - **A generated job puts the gate's R first on `PATH` before the body runs.**

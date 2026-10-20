@@ -377,10 +377,9 @@
     # paths) and could reject an otherwise-valid envelope for the wrong
     # reason; the CHILD's own commit sequence (`.batch_commit_task()`)
     # unconditionally removes and replaces whatever sits at the marker path.
-    norm_marker <- file.path(
-      normalizePath(dirname(marker), mustWork = FALSE),
-      basename(marker)
-    )
+    # `.batch_normalize_parent()` is the normaliser the parent used, so a
+    # marker the parent derived compares identical here on every platform.
+    norm_marker <- .batch_normalize_parent(marker)
     if (!identical(marker, norm_marker)) {
       stop(
         sprintf(

@@ -130,6 +130,24 @@
   return(grepl("^(/|[A-Za-z]:[\\\\/])", path))
 }
 
+#' Normalise the parent directory of `path`, and keep its leaf unresolved
+#'
+#' The one normaliser for every path that the parent derives and the child
+#' re-validates: output paths and the marker. Both sides MUST call it, so both
+#' produce the same string. `winslash = "/"` matters on Windows, where
+#' `dirname()` returns `/` separators and `normalizePath()` returns `\` by
+#' default.
+#'
+#' It resolves only the parent. A symlink at the leaf stays unresolved, so the
+#' symlink checks can reject it.
+#' @noRd
+.batch_normalize_parent <- function(path) {
+  return(file.path(
+    normalizePath(dirname(path), winslash = "/", mustWork = FALSE),
+    basename(path)
+  ))
+}
+
 #' Is `path` a symlink (dangling or not)?
 #'
 #' `Sys.readlink()` returns `NA`, not `""`, for a path that does not exist at
@@ -153,7 +171,7 @@
 #' either absent, or an existing non-directory, non-symlink file. A directory,
 #' a symlink, or a dangling symlink is rejected, never silently overwritten.
 #' Returns the SAME named character vector, with every path replaced by its
-#' `normalizePath(mustWork = FALSE)` form. The marker derivation and the
+#' `.batch_normalize_parent()` form. The marker derivation and the
 #' invocation-wide collision check both key off that form.
 #'
 #' Known gap: only directory vs. symlink vs. "everything else" is
@@ -200,7 +218,7 @@
     # leaf is caught below rather than silently followed. normalizePath() on the
     # whole path would resolve `alias.qs2 -> real.qs2` and commit to the target,
     # defeating the "reject existing symlink destinations" rule.
-    norm <- file.path(normalizePath(parent, mustWork = FALSE), basename(path))
+    norm <- .batch_normalize_parent(path)
     # Symlink check FIRST and independent of file.exists(): a DANGLING symlink
     # fails file.exists() but must still be rejected, not silently accepted as
     # "absent, safe to create".
