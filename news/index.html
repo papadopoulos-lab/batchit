@@ -36,6 +36,8 @@
 <h2 class="pkg-version" data-toc-text="26.10.20" id="batchit-261020">batchit 26.10.20<a class="anchor" aria-label="anchor" href="#batchit-261020"></a></h2>
 <ul><li>
 <strong>The parent and the child normalise output paths and the marker with one helper, with <code>winslash = "/"</code>.</strong> On Windows the two sides used different separators, so the child rejected the marker as <code>not already absolute/normalized</code>.</li>
+<li>
+<strong>The tests no longer assume a POSIX host.</strong> A path a test touches sits in a temporary directory, not <code>/tmp</code>. A block that needs bash or the POSIX execute bit skips on Windows and gives the reason.</li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="26.9.10" id="batchit-26910">batchit 26.9.10<a class="anchor" aria-label="anchor" href="#batchit-26910"></a></h2>

@@ -244,29 +244,29 @@ result <- run_and_write_files_atomically(
   n_workers = 2
 )
 #>   [0/2] dispatching workers...
-#>   [1/2] complete  07:41:12
-#>   [2/2] complete  07:41:12
+#>   [1/2] complete  08:52:40
+#>   [2/2] complete  08:52:40
 result
 #> $`1`
 #> $`1`$committed
 #>                                           squared 
-#> "/tmp/RtmpY9npF4/batchit-return-example/sq_1.qs2" 
+#> "/tmp/RtmpMrOyFS/batchit-return-example/sq_1.qs2" 
 #>                                           doubled 
-#> "/tmp/RtmpY9npF4/batchit-return-example/db_1.qs2" 
+#> "/tmp/RtmpMrOyFS/batchit-return-example/db_1.qs2" 
 #> 
 #> $`1`$attempt
-#> [1] "1bb6a4831bd"
+#> [1] "1bad5797d75d"
 #> 
 #> 
 #> $`2`
 #> $`2`$committed
 #>                                           squared 
-#> "/tmp/RtmpY9npF4/batchit-return-example/sq_2.qs2" 
+#> "/tmp/RtmpMrOyFS/batchit-return-example/sq_2.qs2" 
 #>                                           doubled 
-#> "/tmp/RtmpY9npF4/batchit-return-example/db_2.qs2" 
+#> "/tmp/RtmpMrOyFS/batchit-return-example/db_2.qs2" 
 #> 
 #> $`2`$attempt
-#> [1] "1bb64caebdee"
+#> [1] "1bad72dfe2a2"
 #> 
 #> 
 qs2::qs_read(file.path(out_dir, "sq_1.qs2")) # 4
