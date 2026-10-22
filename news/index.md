@@ -1,5 +1,11 @@
 # Changelog
 
+## batchit 26.10.22
+
+- **A worker log tail drops the `\r` of a Windows line ending.** A log
+  written in text mode on Windows showed a trailing `\r` on every line
+  of a failure report.
+
 ## batchit 26.10.20
 
 - **The parent and the child normalise output paths and the marker with

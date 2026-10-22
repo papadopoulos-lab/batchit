@@ -17,13 +17,13 @@ Source:
 [`DESCRIPTION`](https://github.com/papadopoulos-lab/batchit/blob/main/DESCRIPTION)
 
 White RA (2026). *batchit: Run Long R Work Across Processes or a
-Scheduler*. R package version 26.10.20,
+Scheduler*. R package version 26.10.22,
 <https://papadopoulos-lab.github.io/batchit/>.
 
     @Manual{,
       title = {batchit: Run Long R Work Across Processes or a Scheduler},
       author = {Richard Aubrey White},
       year = {2026},
-      note = {R package version 26.10.20},
+      note = {R package version 26.10.22},
       url = {https://papadopoulos-lab.github.io/batchit/},
     }
