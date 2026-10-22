@@ -18,6 +18,11 @@ test_that(".batch_log_tail() is bounded and survives non-text worker output", {
   writeBin(charToRaw("a\nb\nreal-error-here\n"), p("small.log"))
   expect_equal(batchit:::.batch_log_tail(p("small.log")), "a\nb\nreal-error-here")
 
+  # CRLF: a worker log written in text mode on Windows. The `\r` is a line
+  # ending, not part of the message, so it must not reach the failure report.
+  writeBin(charToRaw("a\r\nb\r\nreal-error-here\r\n"), p("crlf.log"))
+  expect_equal(batchit:::.batch_log_tail(p("crlf.log")), "a\nb\nreal-error-here")
+
   # missing / empty: nothing to say, and no error
   expect_equal(batchit:::.batch_log_tail(p("nope.log")), "")
   file.create(p("empty.log"))

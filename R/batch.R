@@ -268,6 +268,8 @@ package_function <- function(package, symbol, version = NULL) {
     return("")
   }
 
+  # A log written in text mode on Windows ends each line with `\r\n`.
+  txt <- gsub("\r\n", "\n", txt, fixed = TRUE)
   lines <- strsplit(txt, "\n", fixed = TRUE)[[1]]
   # A mid-line seek makes the first fragment partial; drop it rather than report
   # a truncated line as though it were real output.
