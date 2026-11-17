@@ -97,19 +97,19 @@ process exit is what reclaims that item’s memory. The streaming function
 reuses a small pool of persistent `mirai` daemons instead, and gives
 that property up.
 
-| Function                                                                    | Delivery                                           |
-|-----------------------------------------------------------------------------|----------------------------------------------------|
-| `run(fn, items, n_workers, ...)`                                            | runs each item, returns nothing                    |
-| `run_and_collect(fn, items, n_workers, ...)`                                | returns a list of values, in item order, NULL-safe |
-| `run_and_write_files_atomically(fn, items, outputs, style, n_workers, ...)` | each item commits its output files                 |
+| Function | Delivery |
+|----|----|
+| `run(fn, items, n_workers, ...)` | runs each item, returns nothing |
+| `run_and_collect(fn, items, n_workers, ...)` | returns a list of values, in item order, NULL-safe |
+| `run_and_write_files_atomically(fn, items, outputs, style, n_workers, ...)` | each item commits its output files |
 
 **One reader produces the data.** This is the specialist, for a single
 sequential source too large for each worker to read independently. The
 55 GB `LMED` file is the case it exists for, and `save_rawbatch` is its
 only consumer.
 
-| Function                                                                                           |
-|----------------------------------------------------------------------------------------------------|
+| Function |
+|----|
 | `stream_from_parent_and_write_files_atomically(fn, ids, producer, outputs, style, n_workers, ...)` |
 
 `producer` is a callback, `function(id)` returning that item’s argument
@@ -193,9 +193,9 @@ between validation and rename is a documented boundary.
 `style` is required exactly when `outputs` is present, and forbidden
 otherwise.
 
-| style           | the target does                                                                         | the worker does                                                                                                                                       |
-|-----------------|-----------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `return`        | returns `list(<name> = <value>, ...)`, whose names are exactly the declared names       | serializes each value with qs2 to a unique temp in the destination directory, in declaration order                                                    |
+| style | the target does | the worker does |
+|----|----|----|
+| `return` | returns `list(<name> = <value>, ...)`, whose names are exactly the declared names | serializes each value with qs2 to a unique temp in the destination directory, in declaration order |
 | `staged_writer` | writes each output to `where_to_write_output(<name>)` and returns nothing worth keeping | computes each output’s attempt-scoped staging temp before `do.call`, enters scope so the accessor can answer, then treats the staged file as the temp |
 
 The `return` codec is always qs2. The spec has no arbitrary writer
@@ -487,11 +487,11 @@ execution shapes. Two of them run the work in child processes of the
 calling R session. The third describes the work for a scheduler, writes
 it as bash, and submits it on a separate call.
 
-| Execution shape                         | Where the work runs        | Entry points                                                                                                                                                                                                                                                                                         |
-|-----------------------------------------|----------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| a fresh process per item                | a `processx` child process | [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md), [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md), [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md) |
-| a bounded queue over persistent daemons | a `mirai` daemon           | [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)                                                                                                                                           |
-| a chain of scheduler jobs               | a compute node, later      | [`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md), [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md), [`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md)                                   |
+| Execution shape | Where the work runs | Entry points |
+|----|----|----|
+| a fresh process per item | a `processx` child process | [`run()`](https://papadopoulos-lab.github.io/batchit/reference/run.md), [`run_and_collect()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_collect.md), [`run_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/run_and_write_files_atomically.md) |
+| a bounded queue over persistent daemons | a `mirai` daemon | [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md) |
+| a chain of scheduler jobs | a compute node, later | [`slurm_it()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_it.md), [`slurm_write()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_write.md), [`slurm_submit()`](https://papadopoulos-lab.github.io/batchit/reference/slurm_submit.md) |
 
 The third shape breaks the pattern of the first two, and the break is
 deliberate. None of the three takes an `fn` or an `items` argument. The

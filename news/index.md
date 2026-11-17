@@ -1,5 +1,16 @@
 # Changelog
 
+## batchit 26.10.23
+
+- **The mirai-injected names are declared in the one function that uses
+  them.**
+  [`stream_from_parent_and_write_files_atomically()`](https://papadopoulos-lab.github.io/batchit/reference/stream_from_parent_and_write_files_atomically.md)
+  sets `.consumer`, `.dev`, `.env` and `.runner` to `NULL` at its top,
+  and the package-wide
+  [`utils::globalVariables()`](https://rdrr.io/r/utils/globalVariables.html)
+  call is gone
+  ([\#2](https://github.com/papadopoulos-lab/batchit/issues/2)).
+
 ## batchit 26.10.22
 
 - **A worker log tail drops the `\r` of a Windows line ending.** A log
