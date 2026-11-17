@@ -151,6 +151,8 @@ stream_from_parent_and_write_files_atomically <- function(
   label = NULL,
   timeout = .BATCH_DEFAULT_TIMEOUT
 ) {
+  # mirai injects these names into the quoted worker blocks below.
+  .consumer <- .dev <- .env <- .runner <- NULL # nolint
   if (!inherits(fn, "package_function")) {
     stop(
       "stream_from_parent_and_write_files_atomically(): `fn` must come from package_function()",
