@@ -3,7 +3,7 @@ pkgdown: 2.2.1
 pkgdown_sha: ~
 articles:
   batchit: batchit.html
-last_built: 2026-11-17T20:23Z
+last_built: 2026-11-17T21:34Z
 urls:
   reference: https://papadopoulos-lab.github.io/batchit/reference
   article: https://papadopoulos-lab.github.io/batchit/articles

@@ -40,16 +40,16 @@ results <- run_and_collect(
   n_workers = 2
 )
 #>   [0/3] dispatching workers...
-#>   [1/3] complete  20:23:15
-#>   [2/3] complete  20:23:15
-#>   [3/3] complete  20:23:15
+#>   [1/3] complete  21:35:04
+#>   [2/3] complete  21:35:04
+#>   [3/3] complete  21:35:04
 
 results[[1]]
 #> $value
 #> [1] 4
 #> 
 #> $worker_pid
-#> [1] 8311
+#> [1] 8330
 ```
 
 batchit prints one dispatch line, and then one progress line per
@@ -62,10 +62,10 @@ ids with this session’s id:
 ``` r
 worker_pids <- vapply(results, function(r) r$worker_pid, integer(1))
 worker_pids
-#> [1] 8311 8314 8341
+#> [1] 8330 8333 8360
 
 Sys.getpid()
-#> [1] 8281
+#> [1] 8300
 Sys.getpid() %in% worker_pids
 #> [1] FALSE
 ```
@@ -281,13 +281,13 @@ batchit wrote. The record holds one element per item, in the order of
 str(record)
 #> List of 2
 #>  $ two  :List of 2
-#>   ..$ committed: Named chr [1:2] "/tmp/RtmpWPeiDL/batchit-write/sq_two.qs2" "/tmp/RtmpWPeiDL/batchit-write/db_two.qs2"
+#>   ..$ committed: Named chr [1:2] "/tmp/RtmpTV5AME/batchit-write/sq_two.qs2" "/tmp/RtmpTV5AME/batchit-write/db_two.qs2"
 #>   .. ..- attr(*, "names")= chr [1:2] "squared" "doubled"
-#>   ..$ attempt  : chr "2059254de127"
+#>   ..$ attempt  : chr "206c60e853e4"
 #>  $ three:List of 2
-#>   ..$ committed: Named chr [1:2] "/tmp/RtmpWPeiDL/batchit-write/sq_three.qs2" "/tmp/RtmpWPeiDL/batchit-write/db_three.qs2"
+#>   ..$ committed: Named chr [1:2] "/tmp/RtmpTV5AME/batchit-write/sq_three.qs2" "/tmp/RtmpTV5AME/batchit-write/db_three.qs2"
 #>   .. ..- attr(*, "names")= chr [1:2] "squared" "doubled"
-#>   ..$ attempt  : chr "205963e3ba1d"
+#>   ..$ attempt  : chr "206c3e6e2d91"
 ```
 
 `committed` maps each declared output name to the final path batchit
@@ -620,7 +620,7 @@ run_and_collect(
 )
 #>   [0/1] dispatching workers...
 #> Warning: [batch item 'fit_01'] value looks unusual
-#>   [1/1] complete  20:23:19
+#>   [1/1] complete  21:35:11
 #> [[1]]
 #> [1] 1
 ```
@@ -767,8 +767,8 @@ writeLines(head(readLines(paths[1]), 15))
 #> #SBATCH --cpus-per-task=6
 #> #SBATCH --mem=85G
 #> #SBATCH --time=12:00:00
-#> #SBATCH --output=/tmp/RtmpWPeiDL/slurm-chain/proj_s1_%j.out
-#> #SBATCH --error=/tmp/RtmpWPeiDL/slurm-chain/proj_s1_%j.err
+#> #SBATCH --output=/tmp/RtmpTV5AME/slurm-chain/proj_s1_%j.out
+#> #SBATCH --error=/tmp/RtmpTV5AME/slurm-chain/proj_s1_%j.err
 #> #SBATCH --requeue
 #> 
 #> # Written by batchit::slurm_write(). An edit here is lost the next time
@@ -816,7 +816,7 @@ writeLines(submit[seq_len(first_submission - 1)])
 #> # This is the only generated file that names the submission command.
 #> set -euo pipefail
 #> 
-#> batchit_dir='/tmp/RtmpWPeiDL/slurm-chain'
+#> batchit_dir='/tmp/RtmpTV5AME/slurm-chain'
 #> 
 #> # --- preflight ---------------------------------------------------------
 #> # Both checks run before the first submission, so a refusal costs
